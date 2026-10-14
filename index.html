@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Allures et zones — indice d'endurance</title>
+<style>
+  :root { --fond:#f6f7f9; --carte:#fff; --texte:#1c2330; --discret:#5d6878; --accent:#1f6feb; --bord:#d9dee7; --alerte:#9a6700; --alerte-fond:#fff8e1; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#0f1419; --carte:#171d25; --texte:#e6ebf2; --discret:#9aa6b6; --accent:#58a6ff; --bord:#2a3340; --alerte:#e3b341; --alerte-fond:#2a2310; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: .95em; }
+  .intro { color: var(--discret); margin: 0 0 20px; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .note { color: var(--discret); font-size: .88em; margin: 10px 0 0; }
+  .sous { color: var(--discret); font-size: .8em; }
+  ul.note { margin: 4px 0 0; padding-left: 20px; }
+  .masque { display: none; }
+  input, select, button { font: inherit; color: var(--texte); background: var(--fond); border: 1px solid var(--bord); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+  input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { cursor: pointer; }
+  .sec { color: var(--accent); }
+  .pri { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ligne { display: grid; grid-template-columns: 1.1fr 1.3fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .option { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; align-items: end; }
+  .option label { font-size: .9em; color: var(--discret); display: grid; gap: 4px; }
+  .erreur, .avert { color: var(--alerte); background: var(--alerte-fond); border-radius: 6px; padding: 8px 12px; margin: 12px 0 0; }
+  .avert { margin: 0 0 8px; }
+  .tableau { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
+  th { color: var(--discret); font-weight: 600; font-size: .85em; }
+  .num { text-align: right; }
+  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .chiffre { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; }
+  .chiffre .label { color: var(--discret); font-size: .85em; }
+  .chiffre .valeur { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .barre { display: flex; border-radius: 8px; overflow: hidden; height: 44px; }
+  .segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; min-width: 0; }
+  .barre-allures { display: flex; margin-top: 6px; }
+  .barre-allures > div { text-align: center; font-size: .78em; color: var(--discret); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .echelle { position: relative; height: 20px; margin-top: 6px; font-size: .78em; color: var(--discret); }
+  .echelle span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .zones-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 14px; }
+  .zone-carte { border: 1px solid var(--bord); border-left: 6px solid var(--c); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .zone-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+  .zone-allure { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; margin: 6px 0 8px; }
+  .zone-allure .sous { font-size: .6em; font-weight: 400; }
+  .zone-ligne { font-size: .92em; margin-top: 6px; }
+  .zone-etiquette { display: block; color: var(--discret); font-size: .78em; text-transform: uppercase; letter-spacing: .04em; }
+  fieldset { border: 1px solid var(--bord); border-radius: 8px; margin: 14px 0 0; padding: 12px; }
+  legend { padding: 0 6px; color: var(--discret); }
+  .champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+  .champs label { font-size: .9em; color: var(--discret); display: grid; gap: 4px; }
+  .coche { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  h3 { font-size: 1rem; margin: 0 0 6px; }
+  .profil { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Allures et zones d'entraînement</h1>
+  <p class="intro">Indice d'endurance de Péronnet et Thibault. Saisissez vos temps sur différentes distances (compétitions ou tests) : l'appli estime votre VMA (vitesse maximale aérobie) et votre indice d'endurance, puis en déduit les allures selon la durée et les zones d'entraînement. Tout se calcule dans votre navigateur.</p>
+
+  <section class="carte">
+    <h2>1. Vos performances</h2>
+    <form id="formulaire" novalidate>
+      <div id="lignes"></div>
+      <div class="actions">
+        <button type="button" class="sec" id="ajouter">+ Ajouter une performance</button>
+        <button type="button" class="sec" id="vider">Tout effacer</button>
+      </div>
+      <div class="option">
+        <label>VMA connue (km/h, facultatif)
+          <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5">
+        </label>
+        <p class="note" style="margin:0">Renseignez-la si vous la connaissez (test de laboratoire ou terrain) : une seule performance suffit alors. Sans elle, il faut au moins deux durées différentes.</p>
+      </div>
+      <fieldset>
+        <legend>Profil (facultatif)</legend>
+        <p class="note">Utilisé seulement si vos chronos ou votre VMA ne suffisent pas, et pour comparer avec vos résultats.</p>
+        <div class="champs">
+          <label>Volume hebdo (km)<input type="number" id="p-volume" min="0" step="1" placeholder="ex. 40"></label>
+          <label>Séances par semaine<input type="number" id="p-frequence" min="0" step="1" placeholder="ex. 3"></label>
+          <label>Années de pratique régulière<input type="number" id="p-experience" min="0" step="0.5" placeholder="ex. 5"></label>
+          <label>Âge<input type="number" id="p-age" min="10" max="100" step="1" placeholder="ex. 40"></label>
+        </div>
+        <label class="coche"><input type="checkbox" id="p-reprise"> Reprise après blessure ou pratique occasionnelle</label>
+      </fieldset>
+      <div class="actions" style="margin-top:14px"><button type="submit" class="pri">Calculer le profil</button></div>
+      <div id="erreur" class="erreur masque" role="alert"></div>
+    </form>
+    <datalist id="distances">
+      <option value="800"></option><option value="1500"></option><option value="3000"></option><option value="5000"></option>
+      <option value="10000"></option><option value="21097"></option><option value="42195"></option>
+    </datalist>
+    <p class="note">Temps acceptés : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales. Les valeurs proposées sont un exemple : remplacez-les par les vôtres.</p>
+  </section>
+
+  <div id="resultats" class="masque">
+    <section class="carte">
+      <h2>2. Synthèse</h2>
+      <div class="chiffres" id="synthese"></div>
+      <p class="note" id="source"></p>
+      <div id="profil"></div>
+      <p class="note">L'allure à 1 h est l'indicateur le plus pertinent pour relier la vitesse et l'endurance : elle combine la VMA (la vitesse maximale) et l'indice d'endurance (la capacité à la tenir dans le temps). C'est la référence des zones d'entraînement.</p>
+      <div id="avertissements"></div>
+    </section>
+
+    <section class="carte">
+      <h2>3. Performances utilisées</h2>
+      <div class="tableau"><table>
+        <thead><tr><th>Distance</th><th class="num">Temps</th><th class="num">Vitesse</th><th class="num">Allure</th><th class="num">% VMA</th><th class="num">% modèle</th></tr></thead>
+        <tbody id="tb-perf"></tbody>
+      </table></div>
+      <p class="note">« % modèle » est la valeur prédite par le modèle à la même durée : un écart faible indique des performances cohérentes entre elles.</p>
+    </section>
+
+    <section class="carte">
+      <h2>4. Chronos prédictifs</h2>
+      <div class="tableau"><table>
+        <thead><tr><th>Distance</th><th class="num">Temps prédit</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th></tr></thead>
+        <tbody id="tb-predict"></tbody>
+      </table></div>
+      <p class="note">Temps que le modèle prévoit à partir de vos performances. La fiabilité dépend de l'extrapolation de la distance hors de vos données :</p>
+      <ul class="note">
+        <li><strong>Élevée</strong> : jusqu'à 10 % d'extrapolation.</li>
+        <li><strong>Moyenne</strong> : de 10 à 60 %.</li>
+        <li><strong>Faible</strong> : de 60 à 120 %.</li>
+        <li><strong>Très faible</strong> : de 120 à 200 %.</li>
+        <li><strong>Fantaisiste</strong> : au-delà de 200 %, trop incertain.</li>
+      </ul>
+    </section>
+
+    <section class="carte">
+      <h2>5. Allures selon la durée</h2>
+      <div class="tableau"><table>
+        <thead><tr><th>Durée</th><th class="num">% VMA</th><th class="num">Vitesse</th><th class="num">Allure</th><th class="num">Distance</th></tr></thead>
+        <tbody id="tb-allures"></tbody>
+      </table></div>
+      <p class="note">Allure en min/km. Distance = distance parcourue à cette allure pendant la durée indiquée.</p>
+    </section>
+
+    <section class="carte">
+      <h2>6. Zones d'entraînement</h2>
+      <div class="barre" id="barre" role="img" aria-label="Barre des 6 zones d'entraînement"></div>
+      <div class="barre-allures" id="barre-allures"></div>
+      <div class="echelle" id="echelle"></div>
+      <p class="note">Largeur des zones proportionnelle à la plage de % de l'allure 1 h. Sous chaque zone : allure (min/km).</p>
+      <div class="zones-grille" id="zones-grille"></div>
+      <p class="note">Zones définies en pourcentage de votre allure à 1 h (vitesse tenable 60 min selon le modèle), converties en allures. Ces allures valent pour un terrain plat : sur terrain technique et en montée, réduisez-les. Elles sont indicatives : adaptez-les à votre expérience et à votre ressenti.</p>
+    </section>
+  </div>
+</main>
+
+<script src="endurance.js"></script>
+<script>
+(function () {
+  'use strict';
+  const E = window.Endurance;
+  const $ = (sel) => document.querySelector(sel);
+  const COULEURS = ['#6b7f99', '#4e8fd9', '#2f9e8f', '#5aa04a', '#e0a100', '#d9542b'];
+  const ECHELLE_MIN = 50, ECHELLE_MAX = 130; // échelle de la barre ; les zones ouvertes s'arrêtent aux bornes
+  const EXEMPLE = [[5000, '18:30'], [10000, '39:00']];
+  const NOMS = { 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
+  const lignes = $('#lignes');
+
+  const f1 = (x) => (Number.isFinite(x) ? x.toFixed(1).replace('.', ',') : '—');
+  const f2 = (x) => (Number.isFinite(x) ? x.toFixed(2).replace('.', ',') : '—');
+  const fDist = (m) => (m >= 1000 ? `${f2(m / 1000)} km` : `${Math.round(m)} m`);
+  const chiffre = (label, valeur, sous) => `<div class="chiffre"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous || ''}</div></div>`;
+
+  function ajouterLigne(d = '', t = '') {
+    const div = document.createElement('div');
+    div.className = 'ligne';
+    div.innerHTML = `
+      <input class="dist" type="number" min="1" step="1" list="distances" placeholder="Distance (m)" aria-label="Distance en mètres" value="${d}">
+      <input class="temps" type="text" placeholder="Temps (ex. 18:30)" aria-label="Temps" value="${t}">
+      <button type="button" class="suppr" aria-label="Supprimer cette performance">✕</button>`;
+    div.querySelector('.suppr').addEventListener('click', () => {
+      div.remove();
+      if (!lignes.children.length) ajouterLigne();
+    });
+    lignes.appendChild(div);
+  }
+
+  function lirePerformances() {
+    const erreurs = [], perfs = [];
+    [...lignes.querySelectorAll('.ligne')].forEach((l, i) => {
+      const distance = Number(l.querySelector('.dist').value);
+      const brut = l.querySelector('.temps').value;
+      const temps = E.parseTemps(brut);
+      if (!brut.trim() && !distance) return; // ligne vide ignorée
+      if (!(distance > 0)) erreurs.push(`Ligne ${i + 1} : distance manquante ou invalide.`);
+      if (Number.isNaN(temps)) erreurs.push(`Ligne ${i + 1} : temps invalide (ex. 18:30 ou 1:27:00).`);
+      if (distance > 0 && !Number.isNaN(temps)) perfs.push({ distance, temps });
+    });
+    return { perfs, erreurs };
+  }
+
+  /* Zones */
+  const allureZone = (z) => {
+    if (z.pMin === null) return `plus lent que ${E.formatAllure(z.allureRapide)}`;
+    if (z.pMax === null) return `plus rapide que ${E.formatAllure(z.allureLente)}`;
+    return `${E.formatAllure(z.allureRapide)} – ${E.formatAllure(z.allureLente)}`;
+  };
+  const allureCourte = (z) => {
+    if (z.pMin === null) return `> ${E.formatAllure(z.allureRapide)}`;
+    if (z.pMax === null) return `< ${E.formatAllure(z.allureLente)}`;
+    return `${E.formatAllure(z.allureRapide)}–${E.formatAllure(z.allureLente)}`;
+  };
+  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
+
+  function rendreBarre(res) {
+    const zones = E.zones(res);
+    const bornes = (z) => [z.pMin ?? ECHELLE_MIN, z.pMax ?? ECHELLE_MAX];
+    $('#barre').innerHTML = zones.map((z, i) => {
+      const [lo, hi] = bornes(z);
+      return `<div class="segment" style="flex:${hi - lo};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`;
+    }).join('');
+    $('#barre-allures').innerHTML = zones.map(z => {
+      const [lo, hi] = bornes(z);
+      return `<div style="flex:${hi - lo}">${allureCourte(z)}</div>`;
+    }).join('');
+    $('#echelle').innerHTML = zones.filter(z => z.pMin !== null).map(z => `
+      <span style="left:${((z.pMin - ECHELLE_MIN) / (ECHELLE_MAX - ECHELLE_MIN) * 100).toFixed(2)}%">${z.pMin} %</span>`).join('');
+  }
+
+  function rendre(res) {
+    $('#resultats').classList.remove('masque');
+    const vRef = E.vitesseReference(res);
+    const endurance = res.IE >= -6 ? 'très bonne endurance' : res.IE >= -9 ? 'endurance correcte' : 'endurance à développer';
+    const ajustement = res.r2 !== null ? 'R² de la régression' : res.performances.length === 2 ? '2 performances : ajustement exact' : 'VMA fournie';
+    $('#synthese').innerHTML = [
+      chiffre('VMA', `${f1(res.vvo2Kmh)} km/h`, `allure ${E.formatAllure(res.allureVvo2)} /km`),
+      chiffre('Allure 1 h (référence des zones)', `${f1(vRef * 60 / 1000)} km/h`, `allure ${E.formatAllure(1000 / vRef)} /km`),
+      chiffre("Indice d'endurance", f1(res.IE), endurance),
+      chiffre("Qualité de l'ajustement", res.r2 === null ? '—' : f2(res.r2), ajustement),
+      chiffre('Performances retenues', String(res.performances.length), '')
+    ].join('');
+
+    $('#source').textContent = `Calcul fondé sur : ${res.source}.`;
+    $('#profil').innerHTML = res.estimation.renseigne ? profilHtml(res) : '';
+    $('#avertissements').innerHTML = res.avertissements.map(a => `<p class="avert">${a}</p>`).join('');
+
+    $('#tb-perf').innerHTML = res.performances.map(p => `
+      <tr><td>${fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td><td class="num">${f1(p.vitesseKmh)} km/h</td>
+      <td class="num">${E.formatAllure(p.allureMinKm)}</td><td class="num">${f1(p.pctVvo2)} %</td><td class="num">${f1(p.pctModele)} %</td></tr>`).join('');
+
+    $('#tb-predict').innerHTML = E.tablePredictions(res).map(p => `
+      <tr><td>${NOMS[p.distance] || fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td>
+      <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td><td>${p.fiabilite}</td></tr>`).join('');
+
+    $('#tb-allures').innerHTML = E.tableDurees(res).map(d => `
+      <tr><td>${E.formatDuree(d.duree)}</td><td class="num">${f1(d.pct)} %</td><td class="num">${f1(d.vitesseKmh)} km/h</td>
+      <td class="num">${E.formatAllure(d.allureMinKm)}</td><td class="num">${fDist(d.distanceKm * 1000)}</td></tr>`).join('');
+
+    $('#zones-grille').innerHTML = E.zones(res).map((z, i) => `
+      <article class="zone-carte" style="--c:${COULEURS[i]}">
+        <header class="zone-tete"><strong>${z.id} · ${z.nom}</strong><span class="sous">${plageZone(z)} de l'allure 1 h</span></header>
+        <div class="zone-allure">${allureZone(z)} <span class="sous">/km</span></div>
+        <div class="zone-ligne"><span class="zone-etiquette">Objectif</span>${z.objectif}</div>
+        <div class="zone-ligne"><span class="zone-etiquette">Comment l'utiliser</span>${z.utilisation}</div>
+      </article>`).join('');
+
+    rendreBarre(res);
+  }
+
+  /** Estimation par le profil : détail des facteurs et comparaison avec le calcul */
+  function profilHtml(res) {
+    const e = res.estimation;
+    const utilise = res.source === 'une performance et le profil' || res.source === 'VMA et profil';
+    const lignes = [`<li>Point de départ, coureur moyen : ${f1(e.base)}</li>`]
+      .concat(e.details.map(d => `<li>${d.label} (${d.valeur}) : ${d.effet > 0 ? '+' : ''}${f1(d.effet)}</li>`));
+    return `<div class="profil">
+      <h3>Estimation par le profil</h3>
+      <p>Indice d'endurance estimé : <strong>${f1(e.IE)}</strong> (± ${f1(e.incertitude)})${utilise ? ' : utilisé pour ce calcul' : `, contre ${f1(res.IE)} calculé à partir de vos chronos`}.</p>
+      <ul class="note">${lignes.join('')}</ul>
+      <p class="note">Ces coefficients sont des hypothèses, à valider avec des données réelles. Un indice plus proche de 0 traduit une meilleure endurance.</p>
+    </div>`;
+  }
+
+  function lireProfil() {
+    return {
+      volume: $('#p-volume').value, frequence: $('#p-frequence').value,
+      experience: $('#p-experience').value, age: $('#p-age').value, reprise: $('#p-reprise').checked
+    };
+  }
+
+  function calculer() {
+    $('#erreur').classList.add('masque');
+    const { perfs, erreurs } = lirePerformances();
+    const afficherErreur = (msg) => { $('#erreur').textContent = msg; $('#erreur').classList.remove('masque'); };
+    if (erreurs.length) return afficherErreur(erreurs.join(' '));
+    const vvo2 = Number($('#vvo2').value);
+    try {
+      rendre(E.calibrerComplet(perfs, vvo2 > 0 ? vvo2 : null, lireProfil()));
+    } catch (err) {
+      $('#resultats').classList.add('masque');
+      afficherErreur(err.message);
+    }
+  }
+
+  EXEMPLE.forEach(([d, t]) => ajouterLigne(d, t));
+  $('#ajouter').addEventListener('click', () => ajouterLigne());
+  $('#vider').addEventListener('click', () => { lignes.innerHTML = ''; ajouterLigne(); });
+  $('#formulaire').addEventListener('submit', (e) => { e.preventDefault(); calculer(); });
+  calculer();
+})();
+</script>
+</body>
+</html>
