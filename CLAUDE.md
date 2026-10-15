@@ -33,16 +33,25 @@ Il n'y a pas de build, pas de gestionnaire de paquets, pas de tests versionnés.
   Z4 90–100 ; Z5 100–120 ; Z6 > 120. Textes d'objectif et d'usage dans `ZONES_DEF`.
 - **Fiabilité d'une prédiction** selon l'extrapolation de la distance hors de la plage saisie
   (`SEUILS_FIABILITE`) : Élevée ≤ 10 % ; Moyenne ≤ 60 % ; Faible ≤ 120 % ; Très faible ≤ 200 % ;
-  Fantaisiste au-delà. Sans performance, « Indicative ».
-- **Contrôles** : vitesses hors 4–30 km/h bloquent le calcul ; doublons, incohérences
-  (k ≥ 0), écart > 2 points de % VMA et performance plus rapide que la VMA donnée sont des alertes.
-  Les alertes ne modifient pas la fiabilité.
+  Fantaisiste au-delà. Si les données sont incohérentes (`coherenceFaible`), la fiabilité baisse d'un cran. Une VMA connue compte comme un chrono sur 6 min. Sans performance ni VMA connue, « Indicative ».
+- **Contrôles** : vitesses hors 4–30 km/h et indice ≥ 0 bloquent le calcul ; doublons, indice sous −14
+  (`IE_HABITUEL`) et performance plus rapide que la VMA donnée sont des alertes. **Cohérence** : (1) une vitesse qui augmente quand la
+  distance augmente est signalée par paire ; (2) une contre-performance est une performance hors de
+  la tendance (> 2 points de % VMA) dont le retrait rend les autres cohérentes (≥ 4 points au total).
+  Sans contre-performance identifiable, les points hors tendance sont « à vérifier ». Une
+  incohérence reste dans le calcul, mais abaisse la fiabilité d'un cran (`coherenceFaible`).
 - **Profil** (`estimerIE`) : point de départ −8 (coureur moyen), effets par volume, fréquence,
-  expérience, âge et reprise (`PALIERS`, `EFFET_REPRISE`), incertitude ±1,5 plus 0,5 par facteur
+  expérience, âge et reprise (`ANCRES` interpolés linéairement, `EFFET_REPRISE`), incertitude ±1,5 plus 0,5 par facteur
   manquant. Bornes −14 à −2. Les coefficients sont des **hypothèses**, à valider avec des données réelles.
   L'effet « âge » en particulier est discutable : la VO2max diminue avec l'âge.
-- **Repli** (`calibrerComplet`) : ≥ 2 durées différentes → calcul normal ; une seule
-  performance → VMA déduite du profil ; VMA seule → indice du profil ; rien → erreur.
+- **Repli** (`calibrerComplet`) : la VMA compte comme une donnée (chrono sur 6 min). Une seule
+  donnée (une performance, ou la VMA seule) ne suffit que si le profil est renseigné : la VMA est
+  alors déduite du profil, ou l'indice vient du profil. Profil vide → refusé. Deux données ou plus →
+  calcul normal ; rien → erreur.
+- **Usage du profil** : il ne sert aux prédictions que si les données sont insuffisantes (repli ci-dessus)
+  ou incohérentes (`coherenceFaible` avec profil renseigné : l'indice d'endurance vient alors du profil,
+  la VMA reste celle des données). Si les chronos sont cohérents, le profil est affiché mais non utilisé
+  (`profilUtilise`).
 - Indice d'endurance : **plus proche de 0 = meilleure endurance**. Repères affichés :
   ≥ −6 très bonne, ≥ −9 correcte, sinon à développer.
 
@@ -75,6 +84,6 @@ certaines sessions : utiliser le chemin complet.
 
 ## Points ouverts
 
-- Valider les coefficients du profil (`PALIERS`) et la pertinence de l'effet âge.
+- Valider les coefficients du profil (`ANCRES`) et la pertinence de l'effet âge.
 - Vérifier l'affichage sur téléphone (cartes de zones, barre, tableaux).
 - Les tests de non-régression ne sont pas dans le projet : les ajouter si le projet doit évoluer.

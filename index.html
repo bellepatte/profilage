@@ -5,86 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Allures et zones — indice d'endurance</title>
 <style>
-  :root { --fond:#f6f7f9; --carte:#fff; --texte:#1c2330; --discret:#5d6878; --accent:#1f6feb; --bord:#d9dee7; --alerte:#9a6700; --alerte-fond:#fff8e1; }
+  :root { --fond:#eef1f5; --carte:#fff; --texte:#18202c; --discret:#4a5568; --accent:#1f6feb; --accent-doux:#e8f0fe; --bord:#c4ccd8; --bord-fort:#8a96a8; --entete:#f1f4f8; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#0f1419; --carte:#171d25; --texte:#e6ebf2; --discret:#9aa6b6; --accent:#58a6ff; --bord:#2a3340; --alerte:#e3b341; --alerte-fond:#2a2310; }
+    :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#3a4656; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; }
   }
+  .doute { color: var(--rouge); font-weight: 700; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px 12px 32px; }
+  h1 { font-size: 1.35rem; margin: 0 0 2px; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); color: var(--texte); }
   code { font-family: ui-monospace, Consolas, monospace; font-size: .95em; }
-  .intro { color: var(--discret); margin: 0 0 20px; }
-  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .note { color: var(--discret); font-size: .88em; margin: 10px 0 0; }
-  .sous { color: var(--discret); font-size: .8em; }
+  .intro { color: var(--discret); margin: 0 0 12px; font-size: .92em; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-top: 4px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .note { color: var(--discret); font-size: .9em; margin: 10px 0 0; }
+  .sous { color: var(--discret); font-size: .82em; }
   ul.note { margin: 4px 0 0; padding-left: 20px; }
   .masque { display: none; }
-  input, select, button { font: inherit; color: var(--texte); background: var(--fond); border: 1px solid var(--bord); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+  input, select, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 6px; padding: 8px 10px; min-width: 0; }
   input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
-  .sec { color: var(--accent); }
+  button:hover { border-color: var(--accent); }
+  .sec { color: var(--accent); background: var(--accent-doux); border-color: transparent; }
   .pri { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .pri:hover { filter: brightness(.92); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .ligne { display: grid; grid-template-columns: 1.1fr 1.3fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .option { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; align-items: end; }
+  .ligne { display: grid; grid-template-columns: 1.1fr 1.3fr auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .option { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 10px; align-items: end; }
   .option label { font-size: .9em; color: var(--discret); display: grid; gap: 4px; }
-  .erreur, .avert { color: var(--alerte); background: var(--alerte-fond); border-radius: 6px; padding: 8px 12px; margin: 12px 0 0; }
+  .erreur, .avert { color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte); border-radius: 6px; padding: 8px 12px; margin: 12px 0 0; font-weight: 600; }
   .avert { margin: 0 0 8px; }
   .tableau { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
-  th { color: var(--discret); font-weight: 600; font-size: .85em; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
+  th { color: var(--texte); background: var(--entete); font-weight: 600; font-size: .86em; border-bottom: 2px solid var(--bord-fort); }
+  tbody tr:nth-child(even) td { background: var(--entete); }
+  tbody tr:hover td { background: var(--accent-doux); }
   .num { text-align: right; }
-  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-  .chiffre { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; }
-  .chiffre .label { color: var(--discret); font-size: .85em; }
-  .chiffre .valeur { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .barre { display: flex; border-radius: 8px; overflow: hidden; height: 44px; }
-  .segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; min-width: 0; }
+  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .chiffre { border: 1px solid var(--bord); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 10px; background: var(--entete); }
+  .chiffre .label { color: var(--discret); font-size: .82em; font-weight: 600; }
+  .chiffre .valeur { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .barre { display: flex; border-radius: 8px; overflow: hidden; height: 44px; border: 1px solid var(--bord-fort); }
+  .segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; min-width: 0; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .segment:nth-child(5) { color: #18202c; text-shadow: none; }
+  .segment.sep { box-shadow: inset 3px 0 0 var(--texte); }
+  .bandes { display: flex; margin-bottom: 4px; font-size: .8em; font-weight: 600; }
+  .bandes > div { text-align: center; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .bande-faible { background: var(--accent-doux); color: var(--accent); border-radius: 4px 0 0 4px; }
+  .bande-haute { background: var(--entete); color: var(--texte); border-radius: 0 4px 4px 0; }
   .barre-allures { display: flex; margin-top: 6px; }
   .barre-allures > div { text-align: center; font-size: .78em; color: var(--discret); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .echelle { position: relative; height: 20px; margin-top: 6px; font-size: .78em; color: var(--discret); }
   .echelle span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-  .zones-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 14px; }
-  .zone-carte { border: 1px solid var(--bord); border-left: 6px solid var(--c); border-radius: 8px; padding: 12px 14px; min-width: 0; }
-  .zone-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
-  .zone-allure { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; margin: 6px 0 8px; }
+  .zones-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
+  .zone-carte { border: 1px solid var(--bord); border-left: 6px solid var(--c); border-radius: 8px; padding: 10px 12px; min-width: 0; background: var(--carte); }
+  .zone-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; }
+  .zone-allure { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; margin: 2px 0 4px; }
   .zone-allure .sous { font-size: .6em; font-weight: 400; }
-  .zone-ligne { font-size: .92em; margin-top: 6px; }
+  .zone-ligne { font-size: .9em; margin-top: 4px; }
   .zone-etiquette { display: block; color: var(--discret); font-size: .78em; text-transform: uppercase; letter-spacing: .04em; }
-  fieldset { border: 1px solid var(--bord); border-radius: 8px; margin: 14px 0 0; padding: 12px; }
-  legend { padding: 0 6px; color: var(--discret); }
-  .champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
-  .champs label { font-size: .9em; color: var(--discret); display: grid; gap: 4px; }
-  .coche { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-  h3 { font-size: 1rem; margin: 0 0 6px; }
-  .profil { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; margin-top: 12px; }
+  fieldset { border: 1px solid var(--bord-fort); border-radius: 8px; margin: 12px 0 0; padding: 10px 12px; background: var(--entete); }
+  legend { padding: 0 6px; color: var(--texte); font-weight: 600; font-size: .92em; }
+  .champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px 8px; margin-top: 6px; }
+  .champs label { font-size: .88em; color: var(--discret); display: grid; gap: 2px; }
+  .coche { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  h3 { font-size: 1rem; margin: 0 0 4px; }
+  .profil { border: 1px solid var(--bord); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--accent-doux); }
+  .profil p, .profil ul { margin: 4px 0; }
+  .bas { margin-top: 10px; }
+  .perso { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+  .onglets { display: inline-flex; border: 1px solid var(--bord-fort); border-radius: 8px; overflow: hidden; margin-bottom: 10px; max-width: 100%; }
+  .onglet { border: 0; border-radius: 0; background: var(--carte); color: var(--discret); padding: 7px 12px; }
+  .onglet.actif { background: var(--accent); color: #fff; font-weight: 600; }
+  .graphique { margin-top: 12px; }
+  .graphique svg { width: 100%; height: auto; display: block; }
+  .graphique text { fill: var(--discret); font-size: 12px; font-family: inherit; }
+  .grille { stroke: var(--bord); stroke-width: 1; }
+  .courbe { fill: none; stroke: var(--discret); stroke-width: 2; stroke-dasharray: 6 4; }
+  .pt { fill: var(--accent); stroke: var(--carte); stroke-width: 1.5; }
+  .pt.alerte { fill: #d12f2f; }
+  .vma { fill: var(--carte); stroke: var(--accent); stroke-width: 2; }
+  .lg-alerte { color: #d12f2f; }
+  .lg-ok { color: var(--accent); }
 </style>
 </head>
 <body>
 <main>
   <h1>Allures et zones d'entraînement</h1>
-  <p class="intro">Indice d'endurance de Péronnet et Thibault. Saisissez vos temps sur différentes distances (compétitions ou tests) : l'appli estime votre VMA (vitesse maximale aérobie) et votre indice d'endurance, puis en déduit les allures selon la durée et les zones d'entraînement. Tout se calcule dans votre navigateur.</p>
+  <p class="intro">Indice d'endurance de Péronnet et Thibault : à partir de vos temps (compétitions ou tests), estime la VMA, l'indice d'endurance, les allures et les zones d'entraînement. Calcul dans le navigateur.</p>
 
   <section class="carte">
     <h2>1. Vos performances</h2>
+    <p class="note">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.</p>
     <form id="formulaire" novalidate>
       <div id="lignes"></div>
       <div class="actions">
-        <button type="button" class="sec" id="ajouter">+ Ajouter une performance</button>
+        <button type="button" class="sec" id="ajouter">+ Ajouter</button>
         <button type="button" class="sec" id="vider">Tout effacer</button>
       </div>
       <div class="option">
         <label>VMA connue (km/h, facultatif)
           <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5">
         </label>
-        <p class="note" style="margin:0">Renseignez-la si vous la connaissez (test de laboratoire ou terrain) : une seule performance suffit alors. Sans elle, il faut au moins deux durées différentes.</p>
+        <p class="note" style="margin:0">Une seule performance suffit si la VMA est connue ; sinon, deux durées différentes.</p>
       </div>
       <fieldset>
-        <legend>Profil (facultatif)</legend>
-        <p class="note">Utilisé seulement si vos chronos ou votre VMA ne suffisent pas, et pour comparer avec vos résultats.</p>
+        <legend>Profil (requis s'il n'y a qu'une seule donnée, performance ou VMA)</legend>
         <div class="champs">
           <label>Volume hebdo (km)<input type="number" id="p-volume" min="0" step="1" placeholder="ex. 40"></label>
           <label>Séances par semaine<input type="number" id="p-frequence" min="0" step="1" placeholder="ex. 3"></label>
@@ -92,69 +119,58 @@
           <label>Âge<input type="number" id="p-age" min="10" max="100" step="1" placeholder="ex. 40"></label>
         </div>
         <label class="coche"><input type="checkbox" id="p-reprise"> Reprise après blessure ou pratique occasionnelle</label>
+        <div class="actions bas"><button type="button" class="sec" id="vider-profil">Vider le profil</button></div>
       </fieldset>
-      <div class="actions" style="margin-top:14px"><button type="submit" class="pri">Calculer le profil</button></div>
+      <div class="actions bas"><button type="submit" class="pri">Calculer</button></div>
       <div id="erreur" class="erreur masque" role="alert"></div>
     </form>
     <datalist id="distances">
       <option value="800"></option><option value="1500"></option><option value="3000"></option><option value="5000"></option>
       <option value="10000"></option><option value="21097"></option><option value="42195"></option>
     </datalist>
-    <p class="note">Temps acceptés : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales. Les valeurs proposées sont un exemple : remplacez-les par les vôtres.</p>
+    <p class="note">Temps : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales.</p>
   </section>
 
   <div id="resultats" class="masque">
     <section class="carte">
       <h2>2. Synthèse</h2>
       <div class="chiffres" id="synthese"></div>
-      <p class="note" id="source"></p>
+      <div class="actions bas"><button type="button" class="sec" id="bouton-graphique" aria-expanded="false">Afficher le graphique</button></div>
+      <div id="graphique" class="graphique masque"></div>
+      <ul class="note" id="source"></ul>
       <div id="profil"></div>
-      <p class="note">L'allure à 1 h est l'indicateur le plus pertinent pour relier la vitesse et l'endurance : elle combine la VMA (la vitesse maximale) et l'indice d'endurance (la capacité à la tenir dans le temps). C'est la référence des zones d'entraînement.</p>
+      <p class="note">L'allure 1 h est à mi-chemin entre vitesse et endurance longue.</p>
       <div id="avertissements"></div>
     </section>
 
     <section class="carte">
-      <h2>3. Performances utilisées</h2>
+      <h2>3. Prédictions</h2>
+      <div class="onglets" role="group" aria-label="Sens de la prédiction">
+        <button type="button" class="onglet actif" data-mode="chrono" aria-pressed="true">Chronos selon distance</button>
+        <button type="button" class="onglet" data-mode="distance" aria-pressed="false">Distances selon chronos</button>
+      </div>
+      <p class="avert masque" id="alerte-predictions" role="status">Attention : les performances saisies s'accordent mal entre elles, ces prédictions sont donc moins fiables.</p>
       <div class="tableau"><table>
-        <thead><tr><th>Distance</th><th class="num">Temps</th><th class="num">Vitesse</th><th class="num">Allure</th><th class="num">% VMA</th><th class="num">% modèle</th></tr></thead>
-        <tbody id="tb-perf"></tbody>
-      </table></div>
-      <p class="note">« % modèle » est la valeur prédite par le modèle à la même durée : un écart faible indique des performances cohérentes entre elles.</p>
-    </section>
-
-    <section class="carte">
-      <h2>4. Chronos prédictifs</h2>
-      <div class="tableau"><table>
-        <thead><tr><th>Distance</th><th class="num">Temps prédit</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th></tr></thead>
+        <thead id="entete-predict"></thead>
         <tbody id="tb-predict"></tbody>
       </table></div>
-      <p class="note">Temps que le modèle prévoit à partir de vos performances. La fiabilité dépend de l'extrapolation de la distance hors de vos données :</p>
-      <ul class="note">
-        <li><strong>Élevée</strong> : jusqu'à 10 % d'extrapolation.</li>
-        <li><strong>Moyenne</strong> : de 10 à 60 %.</li>
-        <li><strong>Faible</strong> : de 60 à 120 %.</li>
-        <li><strong>Très faible</strong> : de 120 à 200 %.</li>
-        <li><strong>Fantaisiste</strong> : au-delà de 200 %, trop incertain.</li>
-      </ul>
+      <div class="perso">
+        <input type="number" id="perso-saisie" list="distances" min="1" step="1" placeholder="Autre distance (m), ex. 3000" aria-label="Distance personnalisée en mètres">
+        <button type="button" class="sec" id="perso-ajouter">+ Ajouter</button>
+      </div>
+      <p class="erreur masque" id="perso-erreur" role="alert"></p>
+      <p class="note">Fiabilité selon l'extrapolation hors de vos données : <strong>Élevée</strong> ≤ 10 % · <strong>Moyenne</strong> ≤ 60 % · <strong>Faible</strong> ≤ 120 % · <strong>Très faible</strong> ≤ 200 % · <strong>Fantaisiste</strong> au-delà.</p>
     </section>
 
     <section class="carte">
-      <h2>5. Allures selon la durée</h2>
-      <div class="tableau"><table>
-        <thead><tr><th>Durée</th><th class="num">% VMA</th><th class="num">Vitesse</th><th class="num">Allure</th><th class="num">Distance</th></tr></thead>
-        <tbody id="tb-allures"></tbody>
-      </table></div>
-      <p class="note">Allure en min/km. Distance = distance parcourue à cette allure pendant la durée indiquée.</p>
-    </section>
-
-    <section class="carte">
-      <h2>6. Zones d'entraînement</h2>
+      <h2>4. Zones d'entraînement</h2>
+      <div class="bandes" id="bandes"></div>
       <div class="barre" id="barre" role="img" aria-label="Barre des 6 zones d'entraînement"></div>
       <div class="barre-allures" id="barre-allures"></div>
       <div class="echelle" id="echelle"></div>
-      <p class="note">Largeur des zones proportionnelle à la plage de % de l'allure 1 h. Sous chaque zone : allure (min/km).</p>
+      <p class="note">Largeur proportionnelle à la plage de % de l'allure 1 h. <strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
       <div class="zones-grille" id="zones-grille"></div>
-      <p class="note">Zones définies en pourcentage de votre allure à 1 h (vitesse tenable 60 min selon le modèle), converties en allures. Ces allures valent pour un terrain plat : sur terrain technique et en montée, réduisez-les. Elles sont indicatives : adaptez-les à votre expérience et à votre ressenti.</p>
+      <p class="note">Allures indicatives, valables sur terrain plat : réduisez-les en technique ou en montée.</p>
     </section>
   </div>
 </main>
@@ -168,8 +184,11 @@
   const COULEURS = ['#6b7f99', '#4e8fd9', '#2f9e8f', '#5aa04a', '#e0a100', '#d9542b'];
   const ECHELLE_MIN = 50, ECHELLE_MAX = 130; // échelle de la barre ; les zones ouvertes s'arrêtent aux bornes
   const EXEMPLE = [[5000, '18:30'], [10000, '39:00']];
-  const NOMS = { 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
+  const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
   const lignes = $('#lignes');
+  const persoDist = [], persoTemps = []; // saisies personnalisées (m et min), triées
+  const TEMPS_STANDARD = [6, 30, 60, 120, 240]; // min
+  let mode = 'chrono', dernier = null; // mode : 'chrono' (temps selon distance) ou 'distance' (distance selon temps)
 
   const f1 = (x) => (Number.isFinite(x) ? x.toFixed(1).replace('.', ',') : '—');
   const f2 = (x) => (Number.isFinite(x) ? x.toFixed(2).replace('.', ',') : '—');
@@ -220,9 +239,12 @@
   function rendreBarre(res) {
     const zones = E.zones(res);
     const bornes = (z) => [z.pMin ?? ECHELLE_MIN, z.pMax ?? ECHELLE_MAX];
+    const frontiere = zones.find(z => z.id === 'Z2').pMax; // sépare faible intensité (Z1 + Z2) et élevée (Z3 à Z6)
+    $('#bandes').innerHTML = `<div class="bande-faible" style="flex:${frontiere - ECHELLE_MIN}">Faible intensité : Z1 + Z2</div>`
+      + `<div class="bande-haute" style="flex:${ECHELLE_MAX - frontiere}">Intensité élevée : Z3 à Z6</div>`;
     $('#barre').innerHTML = zones.map((z, i) => {
       const [lo, hi] = bornes(z);
-      return `<div class="segment" style="flex:${hi - lo};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`;
+      return `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${hi - lo};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`;
     }).join('');
     $('#barre-allures').innerHTML = zones.map(z => {
       const [lo, hi] = bornes(z);
@@ -232,34 +254,95 @@
       <span style="left:${((z.pMin - ECHELLE_MIN) / (ECHELLE_MAX - ECHELLE_MIN) * 100).toFixed(2)}%">${z.pMin} %</span>`).join('');
   }
 
+  /** Graphique : % VMA selon la durée (échelle log), courbe de tendance, performances à vérifier en rouge */
+  function tracerGraphique(res) {
+    const W = 640, H = 300, g = { l: 44, r: 16, t: 12, b: 32 };
+    const TMIN = 5, TMAX = 300; // minutes
+    const x = (t) => g.l + Math.log(t / TMIN) / Math.log(TMAX / TMIN) * (W - g.l - g.r);
+    const valeurs = [100, E.pctVma(res.k, TMIN), E.pctVma(res.k, TMAX), ...res.performances.map(p => p.pctVvo2)];
+    const bas = Math.floor((Math.min(...valeurs) - 2) / 5) * 5, haut = Math.ceil((Math.max(...valeurs) + 2) / 5) * 5;
+    const y = (v) => g.t + (1 - (v - bas) / (haut - bas)) * (H - g.t - g.b);
+    let svg = '';
+    for (let v = bas; v <= haut; v += 5) {
+      svg += `<line class="grille" x1="${g.l}" x2="${W - g.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${g.l - 6}" y="${y(v) + 4}" text-anchor="end">${v} %</text>`;
+    }
+    for (const [t, lib] of [[5, '5 min'], [10, '10 min'], [20, '20 min'], [30, '30 min'], [60, '1 h'], [120, '2 h'], [180, '3 h'], [300, '5 h']]) {
+      svg += `<text x="${x(t)}" y="${H - 10}" text-anchor="middle">${lib}</text>`;
+    }
+    const courbe = Array.from({ length: 41 }, (_, i) => {
+      const t = TMIN * Math.pow(TMAX / TMIN, i / 40);
+      return `${i ? 'L' : 'M'}${x(t).toFixed(1)} ${y(E.pctVma(res.k, t)).toFixed(1)}`;
+    }).join(' ');
+    svg += `<path class="courbe" d="${courbe}"/>`;
+    if (res.vmaConnue) {
+      const pctSaisie = 100 * res.vmaSaisie * 1000 / 60 / res.V;
+      svg += `<circle class="vma" cx="${x(6).toFixed(1)}" cy="${y(pctSaisie).toFixed(1)}" r="6"><title>VMA saisie : ${f1(pctSaisie)} % de la VMA estimée</title></circle>`;
+    }
+    svg += res.performances.map(p => `<circle class="pt${p.probleme ? ' alerte' : ''}" cx="${x(p.temps).toFixed(1)}" cy="${y(p.pctVvo2).toFixed(1)}" r="6">` +
+      `<title>${fDist(p.distance)} en ${E.formatDuree(p.temps)} : ${f1(p.pctVvo2)} % VMA${p.probleme ? ' (à vérifier)' : ''}</title></circle>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Performances en pourcentage de VMA selon la durée">${svg}</svg>
+      <p class="note">Axe vertical : % de la VMA. <span class="lg-ok">●</span> Performance · <span class="lg-alerte">●</span> À vérifier · <span class="lg-ok">○</span> VMA (6 min) · tirets : courbe de tendance.</p>`;
+  }
+
+  /** Prédictions : valeurs standard puis saisies personnalisées (supprimables), selon le mode */
+  function rendrePredictions(res) {
+    const chrono = mode === 'chrono';
+    const [dMin, dMax] = plageDonnees(res, 'distance'), [tMin, tMax] = plageDonnees(res, 'temps');
+    const horsDonnees = (p) => res.ieDouteux && (chrono ? p.distance < dMin || p.distance > dMax : p.temps < tMin || p.temps > tMax);
+    const ligne = (p, action) => `<tr class="${horsDonnees(p) ? 'doute' : ''}">${chrono
+      ? `<td>${NOMS[p.distance] || fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td>`
+      : `<td>${E.formatTemps(p.temps)}</td><td class="num">${fDist(p.distance)}</td>`}
+      <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td><td class="${p.fiabilite === 'Fantaisiste' ? 'doute' : ''}">${p.fiabilite}${horsDonnees(p) ? '<br><small>valeurs incohérentes</small>' : ''}</td><td>${action}</td></tr>`;
+    const bouton = (i) => `<button type="button" class="suppr" data-i="${i}" aria-label="Supprimer cette valeur">✕</button>`;
+    const standard = chrono ? E.tablePredictions(res) : E.tableDistances(res, TEMPS_STANDARD);
+    const perso = chrono ? E.tablePredictions(res, persoDist) : E.tableDistances(res, persoTemps);
+    $('#entete-predict').innerHTML = chrono
+      ? '<tr><th>Distance</th><th class="num">Temps prédit</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>'
+      : '<tr><th>Temps</th><th class="num">Distance prédite</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>';
+    $('#tb-predict').innerHTML = standard.map(p => ligne(p, '')).join('') + perso.map((p, i) => ligne(p, bouton(i))).join('');
+  }
+
+  /** Plage (min et max) couverte par les données saisies ; la VMA saisie compte comme chrono de 6 min */
+  function plageDonnees(res, cle) {
+    const v = res.performances.map(p => p[cle]);
+    if (res.vmaConnue) v.push(cle === 'distance' ? res.vmaSaisie * 1000 / 60 * 6 : 6);
+    return [Math.min(...v), Math.max(...v)];
+  }
+
   function rendre(res) {
     $('#resultats').classList.remove('masque');
+    dernier = res;
     const vRef = E.vitesseReference(res);
+    const [tMin, tMax] = plageDonnees(res, 'temps');
+    const horsPlage = (min) => res.ieDouteux && (min < tMin || min > tMax); // valeur extrapolée, indice douteux
     const endurance = res.IE >= -6 ? 'très bonne endurance' : res.IE >= -9 ? 'endurance correcte' : 'endurance à développer';
-    const ajustement = res.r2 !== null ? 'R² de la régression' : res.performances.length === 2 ? '2 performances : ajustement exact' : 'VMA fournie';
+    const nb = res.performances.length + (res.vmaConnue ? 1 : 0); // la VMA compte comme chrono de 6 min
+    const ajustement = res.r2 !== null ? (res.vmaConnue ? 'R² du modèle, VMA incluse' : 'R² de la régression')
+      : nb === 2 ? (res.vmaConnue ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'VMA fournie';
     $('#synthese').innerHTML = [
-      chiffre('VMA', `${f1(res.vvo2Kmh)} km/h`, `allure ${E.formatAllure(res.allureVvo2)} /km`),
-      chiffre('Allure 1 h (référence des zones)', `${f1(vRef * 60 / 1000)} km/h`, `allure ${E.formatAllure(1000 / vRef)} /km`),
-      chiffre("Indice d'endurance", f1(res.IE), endurance),
+      chiffre('VMA', horsPlage(6) ? `<span class="doute">${f1(res.vvo2Kmh)} km/h</span>` : `${f1(res.vvo2Kmh)} km/h`,
+        `allure ${E.formatAllure(res.allureVvo2)} /km` + (horsPlage(6) ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
+      chiffre('Allure 1 h (référence des zones)', horsPlage(60) ? `<span class="doute">${f1(vRef * 60 / 1000)} km/h</span>` : `${f1(vRef * 60 / 1000)} km/h`,
+        `allure ${E.formatAllure(1000 / vRef)} /km` + (horsPlage(60) ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
+      chiffre("Indice d'endurance", res.ieDouteux ? `<span class="doute">${f1(res.IE)}</span>` : f1(res.IE),
+        endurance + (res.vmaConnue && res.performances.length ? ' · VMA intégrée' : '') + (res.ieDouteux ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
       chiffre("Qualité de l'ajustement", res.r2 === null ? '—' : f2(res.r2), ajustement),
-      chiffre('Performances retenues', String(res.performances.length), '')
+      chiffre('Performances retenues', String(nb), res.vmaConnue ? (res.performances.length ? 'dont VMA' : 'VMA seule') : '')
     ].join('');
 
-    $('#source').textContent = `Calcul fondé sur : ${res.source}.`;
+    const donnees = res.performances.map(p => `${p.probleme ? '<span class="doute">' : ''}${fDist(p.distance)} en ${E.formatTemps(p.temps)}${p.probleme ? ' (valeurs incohérentes)</span>' : ''}`);
+    if (res.vmaConnue) donnees.push(`VMA saisie (${f1(res.vmaSaisie)} km/h)`);
+    const profil = !res.estimation.renseigne ? 'non renseigné'
+      : res.profilUtilise ? `utilisé pour les prédictions (${res.coherenceFaible ? 'chronos incohérents' : 'données insuffisantes'})`
+      : 'renseigné mais non utilisé : vos chronos sont cohérents';
+    $('#source').innerHTML = [`Données utilisées : ${donnees.join(', ') || 'aucune performance'}.`, `Profil : ${profil}.`]
+      .map(l => `<li>${l}</li>`).join('');
     $('#profil').innerHTML = res.estimation.renseigne ? profilHtml(res) : '';
     $('#avertissements').innerHTML = res.avertissements.map(a => `<p class="avert">${a}</p>`).join('');
 
-    $('#tb-perf').innerHTML = res.performances.map(p => `
-      <tr><td>${fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td><td class="num">${f1(p.vitesseKmh)} km/h</td>
-      <td class="num">${E.formatAllure(p.allureMinKm)}</td><td class="num">${f1(p.pctVvo2)} %</td><td class="num">${f1(p.pctModele)} %</td></tr>`).join('');
-
-    $('#tb-predict').innerHTML = E.tablePredictions(res).map(p => `
-      <tr><td>${NOMS[p.distance] || fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td>
-      <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td><td>${p.fiabilite}</td></tr>`).join('');
-
-    $('#tb-allures').innerHTML = E.tableDurees(res).map(d => `
-      <tr><td>${E.formatDuree(d.duree)}</td><td class="num">${f1(d.pct)} %</td><td class="num">${f1(d.vitesseKmh)} km/h</td>
-      <td class="num">${E.formatAllure(d.allureMinKm)}</td><td class="num">${fDist(d.distanceKm * 1000)}</td></tr>`).join('');
+    $('#alerte-predictions').classList.toggle('masque', !res.coherenceFaible);
+    rendrePredictions(res);
+    if (!$('#graphique').classList.contains('masque')) $('#graphique').innerHTML = tracerGraphique(res);
 
     $('#zones-grille').innerHTML = E.zones(res).map((z, i) => `
       <article class="zone-carte" style="--c:${COULEURS[i]}">
@@ -275,7 +358,7 @@
   /** Estimation par le profil : détail des facteurs et comparaison avec le calcul */
   function profilHtml(res) {
     const e = res.estimation;
-    const utilise = res.source === 'une performance et le profil' || res.source === 'VMA et profil';
+    const utilise = res.profilUtilise;
     const lignes = [`<li>Point de départ, coureur moyen : ${f1(e.base)}</li>`]
       .concat(e.details.map(d => `<li>${d.label} (${d.valeur}) : ${d.effet > 0 ? '+' : ''}${f1(d.effet)}</li>`));
     return `<div class="profil">
@@ -306,6 +389,52 @@
       afficherErreur(err.message);
     }
   }
+
+  document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.onglet').forEach(o => { o.classList.toggle('actif', o === b); o.setAttribute('aria-pressed', o === b); });
+    const champ = $('#perso-saisie'), chrono = mode === 'chrono';
+    champ.type = chrono ? 'number' : 'text';
+    chrono ? champ.setAttribute('list', 'distances') : champ.removeAttribute('list');
+    champ.placeholder = chrono ? 'Autre distance (m), ex. 3000' : 'Autre temps, ex. 1:30:00';
+    champ.setAttribute('aria-label', chrono ? 'Distance personnalisée en mètres' : 'Temps personnalisé');
+    champ.value = '';
+    $('#perso-erreur').classList.add('masque');
+    if (dernier) rendrePredictions(dernier);
+  }));
+  $('#vider-profil').addEventListener('click', () => {
+    ['#p-volume', '#p-frequence', '#p-experience', '#p-age'].forEach(s => { $(s).value = ''; });
+    $('#p-reprise').checked = false;
+    calculer();
+  });
+  $('#bouton-graphique').addEventListener('click', (e) => {
+    const cache = $('#graphique').classList.toggle('masque');
+    e.currentTarget.textContent = cache ? 'Afficher le graphique' : 'Masquer le graphique';
+    e.currentTarget.setAttribute('aria-expanded', String(!cache));
+    if (!cache) $('#graphique').innerHTML = tracerGraphique(dernier);
+  });
+  $('#perso-ajouter').addEventListener('click', () => {
+    if (!dernier) return;
+    const champ = $('#perso-saisie'), err = $('#perso-erreur'), chrono = mode === 'chrono';
+    const valeur = chrono ? Number(champ.value) : E.parseTemps(champ.value);
+    err.classList.add('masque');
+    const ok = chrono ? valeur > 0 && Number.isFinite(E.tablePredictions(dernier, [valeur])[0].temps) : valeur > 0;
+    if (!ok) {
+      err.textContent = chrono ? 'Distance invalide : indiquez des mètres, par exemple 3000.' : 'Temps invalide : par exemple 1:30:00 ou 90.';
+      return err.classList.remove('masque');
+    }
+    const liste = chrono ? persoDist : persoTemps;
+    if (!liste.includes(valeur)) liste.push(valeur);
+    liste.sort((a, b) => a - b);
+    champ.value = '';
+    rendrePredictions(dernier);
+  });
+  $('#tb-predict').addEventListener('click', (e) => {
+    const b = e.target.closest('.suppr');
+    if (!b) return;
+    (mode === 'chrono' ? persoDist : persoTemps).splice(Number(b.dataset.i), 1);
+    rendrePredictions(dernier);
+  });
 
   EXEMPLE.forEach(([d, t]) => ajouterLigne(d, t));
   $('#ajouter').addEventListener('click', () => ajouterLigne());

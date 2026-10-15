@@ -12,14 +12,18 @@
   const REF_ZONE_MIN = 60;       // référence des zones : allure 1 h
   const VITESSE_KMH = [4, 30];   // bornes réalistes de vitesse moyenne (km/h)
   const ECART_MAX = 2;           // écart max (points de % VMA) entre une performance et la courbe des autres
+  const IE_HABITUEL = [-14, -2]; // bornes habituelles de l'indice d'endurance
 
   // Fiabilité d'une prédiction selon l'extrapolation hors de la plage saisie
   const SEUILS_FIABILITE = [
     [0.10, 'Élevée'], [0.60, 'Moyenne'], [1.20, 'Faible'], [2.00, 'Très faible'], [Infinity, 'Fantaisiste']
   ];
 
-  const DUREES_TABLE = [5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 120, 150, 180, 240, 300];
-  const DISTANCES_PREDITES = [5000, 10000, 21097, 42195];
+  // La VMA compte comme une donnée (chrono sur 6 min) : une donnée seule ne suffit pas sans profil
+  const MESSAGE_DONNEE_UNIQUE = "Une seule donnée (performance ou VMA) ne suffit pas pour prédire : renseignez votre profil (volume, fréquence, expérience ou âge) ou une autre performance.";
+
+  const DUREES_TABLE =[5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 120, 150, 180, 240, 300];
+  const DISTANCES_PREDITES = [1500, 5000, 10000, 21097, 42195];
 
   // Zones en % de l'allure 1 h (pMin / pMax, null = sans limite)
   const ZONES_DEF = [
@@ -67,6 +71,7 @@
 
   /** Minutes -> "18:30" ou "1:27:00" */
   function formatTemps(min) {
+    if (!Number.isFinite(min)) return '—';
     const s = Math.round(min * 60);
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), p = (n) => String(n).padStart(2, '0');
     return h ? `${h}:${p(m)}:${p(s % 60)}` : `${m}:${p(s % 60)}`;
@@ -120,53 +125,88 @@
 
     const xs = valides.map(p => Math.log(p.temps / REF_MIN));
     const ys = valides.map(p => p.distance / p.temps); // m/min
-    let V, k, r2 = null;
+    // La VMA connue est une donnée comme les autres, au point (6 min, VMA) : aucune n'est prioritaire
+    const xsReg = vmaKmh > 0 ? [...xs, 0] : xs;
+    const ysReg = vmaKmh > 0 ? [...ys, vmaKmh * 1000 / 60] : ys;
+    const reg = regression(xsReg, ysReg);
+    if (!reg) throw new Error(vmaKmh > 0
+      ? "Avec une VMA connue, il faut une performance d'une durée différente de 6 min."
+      : "Il faut au moins deux durées différentes (ex. 1500 m et 10 km) pour calibrer le modèle, ou renseigner la VMA connue.");
+    const V = reg.a, k = reg.b / reg.a;
+    const r2 = xsReg.length > 2 ? reg.r2 : null; // avec 2 points, la droite passe exactement par les deux
 
-    if (vmaKmh > 0) {
-      V = vmaKmh * 1000 / 60;
-      const ks = xs.map((x, i) => (Math.abs(x) > 1e-9 ? (ys[i] / V - 1) / x : null)).filter(v => v !== null);
-      if (!ks.length) throw new Error("Avec une VMA connue, il faut une performance d'une durée différente de 6 min.");
-      k = ks.reduce((s, v) => s + v, 0) / ks.length;
-    } else {
-      const reg = regression(xs, ys);
-      if (!reg) throw new Error("Il faut au moins deux durées différentes (ex. 1500 m et 10 km) pour calibrer le modèle, ou renseigner la VMA connue.");
-      V = reg.a;
-      k = reg.b / reg.a;
-      r2 = valides.length > 2 ? reg.r2 : null; // avec 2 performances, la droite passe exactement par les deux points
-    }
-
-    const performances = valides.map((p, i) => ({
-      ...p,
-      vitesseKmh: ys[i] * 60 / 1000,
-      allureMinKm: 1000 / ys[i],
-      pctVvo2: 100 * ys[i] / V,
-      pctModele: pctVma(k, p.temps)
+    // Cohérence (1) : une vitesse ne doit pas augmenter quand la distance augmente
+    const violations = [];
+    valides.forEach((a, i) => valides.forEach((b, j) => {
+      if (b.distance > a.distance && ys[j] > ys[i]) violations.push([i, j]);
     }));
 
+    // Cohérence (2) : une performance hors de la tendance des autres est une contre-performance
+    // si son retrait rend les autres cohérentes entre elles (il faut alors au moins 3 points restants)
+    const pointsReg = valides.map((p, i) => ({ perf: i, x: xs[i], y: ys[i] }));
+    if (vmaKmh > 0) pointsReg.push({ perf: null, x: 0, y: vmaKmh * 1000 / 60 });
+    const droiteDe = (pts) => regression(pts.map(q => q.x), pts.map(q => q.y));
+    const ecart = (d, q) => 100 * (q.y - (d.a + d.b * q.x)) / d.a; // points de % VMA
+    const globale = droiteDe(pointsReg);
+    const horsTendance = globale ? pointsReg.filter(q => q.perf !== null && Math.abs(ecart(globale, q)) > ECART_MAX) : [];
+    let contre = null;
+    if (horsTendance.length && pointsReg.length >= 4) {
+      contre = pointsReg.filter(q => q.perf !== null).reduce((m, q) => {
+        const reste = pointsReg.filter(z => z !== q), d = droiteDe(reste);
+        if (!d || !reste.every(z => Math.abs(ecart(d, z)) <= ECART_MAX)) return m;
+        const e = ecart(d, q);
+        return !m || Math.abs(e) > Math.abs(m.e) ? { q, e } : m;
+      }, null);
+    }
+    const flagged = new Set(contre ? [contre.q.perf] : horsTendance.map(q => q.perf));
+
+    const performances = valides.map((p, i) => {
+      const pctVvo2 = 100 * ys[i] / V, pctModele = pctVma(k, p.temps);
+      return { ...p, vitesseKmh: ys[i] * 60 / 1000, allureMinKm: 1000 / ys[i], pctVvo2, pctModele, probleme: flagged.has(i) };
+    });
+
     const avertissements = [];
+
+    // Messages de cohérence
+    const coherenceFaible = violations.length > 0 || flagged.size > 0;
+    const nom = (p) => `${String(p.distance).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} m`;
+    const kmh = (v) => (v * 60 / 1000).toFixed(1).replace('.', ',');
+    const enumere = (items) => items.length > 1 ? `${items.slice(0, -1).join(', ')} et ${items[items.length - 1]}` : items[0];
+    for (const [i, j] of violations) {
+      avertissements.push(`Une vitesse ne peut pas augmenter quand la distance augmente : le ${nom(valides[j])} en ${formatTemps(valides[j].temps)} (${kmh(ys[j])} km/h) est plus rapide que le ${nom(valides[i])} en ${formatTemps(valides[i].temps)} (${kmh(ys[i])} km/h). Vérifiez ces deux performances.`);
+    }
+    if (flagged.size) {
+      const fautives = valides.filter((_, i) => flagged.has(i));
+      const coherentes = valides.filter((_, i) => !flagged.has(i));
+      const suite = coherentes.length > 1 ? ` Les autres performances (${enumere(coherentes.map(nom))}) sont cohérentes entre elles.` : '';
+      if (contre) {
+        const c = valides[contre.q.perf], ampleur = Math.abs(contre.e).toFixed(1).replace('.', ',');
+        avertissements.push(contre.e < 0
+          ? `Le ${nom(c)} en ${formatTemps(c.temps)} semble être une contre-performance : il est nettement plus lent que ce que vos autres résultats laissent attendre (${ampleur} points de % VMA). Il pèse sur les prédictions, qui sont donc moins fiables.${suite}`
+          : `Le ${nom(c)} en ${formatTemps(c.temps)} est nettement plus rapide que ce que vos autres résultats laissent attendre (${ampleur} points de % VMA) : vérifiez cette saisie. Il pèse sur les prédictions, qui sont donc moins fiables.${suite}`);
+      } else {
+        const liste = enumere(fautives.map(p => `le ${nom(p)} en ${formatTemps(p.temps)}`));
+        avertissements.push(`Les performances saisies s'accordent mal entre elles, sans qu'une seule se détache clairement : ${liste} ${fautives.length > 1 ? 'sont à vérifier' : 'est à vérifier'}. Elles pèsent sur les prédictions, qui sont donc moins fiables.`);
+      }
+    }
     if (valides.some(p => p.temps < REF_MIN)) avertissements.push("Une performance dure moins de 6 min : elle est hors de la plage idéale du modèle et peut peser fortement sur la VMA.");
     if (valides.some(p => p.temps > LIMITE_MIN)) avertissements.push("Une performance dure plus de 5 h : le modèle n'est pas applicable à cette durée.");
 
     // Incohérences entre les données
-    if (k >= 0) avertissements.push("L'indice d'endurance calculé est positif ou nul : les performances ne sont pas cohérentes entre elles (vérifiez les distances et temps).");
+    if (k < 0 && 100 * k < IE_HABITUEL[0]) avertissements.push(`L'indice d'endurance calculé (${(100 * k).toFixed(1).replace('.', ',')}) est très éloigné des valeurs habituelles (en dessous de ${IE_HABITUEL[0]}) : vérifiez les temps saisis, en particulier l'écart entre les distances.`);
+    if (k >= 0) throw new Error(`L'indice d'endurance calculé est positif ou nul (${(100 * k).toFixed(1).replace('.', ',')}) : les performances saisies ne peuvent pas être modélisées. Vérifiez les distances et les temps.`);
     const distances = valides.map(p => p.distance);
     for (const d of new Set(distances)) {
       if (distances.filter(x => x === d).length > 1) avertissements.push(`Plusieurs performances sur ${d} m : vérifiez qu'il ne s'agit pas d'un doublon.`);
     }
-    if (valides.length > 2) {
-      for (const p of performances) {
-        const ecart = Math.abs(p.pctVvo2 - p.pctModele);
-        if (ecart > ECART_MAX) avertissements.push(`${p.distance} m en ${formatTemps(p.temps)} s'écarte des autres performances (écart de ${ecart.toFixed(1).replace('.', ',')} points de % VMA) : vérifiez ce temps.`);
-      }
-    }
     if (vmaKmh > 0) {
       for (const p of performances) {
-        if (p.temps >= REF_MIN && p.pctVvo2 > 102) avertissements.push(`${p.distance} m en ${formatTemps(p.temps)} est plus rapide que la VMA indiquée : vérifiez la VMA ou ce temps.`);
+        if (p.temps >= REF_MIN && p.vitesseKmh > vmaKmh * 1.02) avertissements.push(`${p.distance} m en ${formatTemps(p.temps)} est plus rapide que la VMA indiquée : vérifiez la VMA ou ce temps.`);
       }
     }
 
     return {
-      V, k, IE: 100 * k, r2,
+      V, k, IE: 100 * k, r2, coherenceFaible,
       vvo2Kmh: V * 60 / 1000,
       allureVvo2: 1000 / V,
       performances,
@@ -188,7 +228,9 @@
   /** Temps prédit (min) pour une distance (m) : dichotomie sur distance = v(T) × T */
   function predireTemps(res, distance) {
     const f = (t) => vitesseMpm(res, t) * t - distance;
-    let lo = 0.1, hi = 2000;
+    // Avec k < 0, la distance parcourable culmine au sommet de la courbe : on ne cherche que sur la partie croissante
+    const sommet = res.k < 0 ? REF_MIN * Math.exp((-1 - res.k) / res.k) : Infinity;
+    let lo = 0.1, hi = Math.min(2000, sommet);
     if (f(lo) > 0 || f(hi) < 0) return NaN;
     for (let i = 0; i < 200; i++) {
       const mid = (lo + hi) / 2;
@@ -199,13 +241,17 @@
 
   /** Fiabilité d'une prédiction selon l'extrapolation de la distance hors de la plage saisie */
   function fiabilitePrediction(res, distance) {
-    if (!res.performances.length) return 'Indicative';
     const d = res.performances.map(p => p.distance);
+    if (res.vmaConnue) d.push(res.V * REF_MIN); // VMA connue = chrono de référence sur 6 min
+    if (!d.length) return 'Indicative';
     const dMin = Math.min(...d), dMax = Math.max(...d);
     let extrapolation = 0;
     if (distance > dMax) extrapolation = (distance - dMax) / dMax;
     else if (distance < dMin) extrapolation = (dMin - distance) / dMin;
-    return SEUILS_FIABILITE.find(([max]) => extrapolation <= max)[1];
+    const niveaux = SEUILS_FIABILITE.map(([, nom]) => nom);
+    let i = SEUILS_FIABILITE.findIndex(([max]) => extrapolation <= max);
+    if (res.coherenceFaible) i = Math.min(i + 1, niveaux.length - 1); // données incohérentes : un cran plus bas
+    return niveaux[i];
   }
 
   /** Chronos prédits pour une liste de distances (m) */
@@ -215,6 +261,20 @@
       const vMpm = distance / temps;
       return {
         distance, temps,
+        allureMinKm: 1000 / vMpm,
+        vitesseKmh: vMpm * 60 / 1000,
+        fiabilite: fiabilitePrediction(res, distance)
+      };
+    });
+  }
+
+  /** Distances prédites (m) pour une liste de temps (min) */
+  function tableDistances(res, temps) {
+    return temps.map(t => {
+      const distance = vitesseMpm(res, t) * t;
+      const vMpm = distance / t;
+      return {
+        distance, temps: t,
         allureMinKm: 1000 / vMpm,
         vitesseKmh: vMpm * 60 / 1000,
         fiabilite: fiabilitePrediction(res, distance)
@@ -239,12 +299,20 @@
   const INCERT_BASE = 1.5;     // incertitude de base (points d'IE), élargie par facteur non renseigné
   const EFFET_REPRISE = -1.5;  // reprise après blessure ou pratique occasionnelle
   // Effet sur l'IE (points) selon chaque facteur. Un effet positif rapproche l'IE de 0 (endurance meilleure).
-  // Paliers inclusifs : [borne haute, effet]
-  const PALIERS = {
-    volume: [[20, -2], [40, -1], [60, 0], [80, 1], [Infinity, 1.5]],   // km / semaine
-    frequence: [[2, -1], [3, 0], [5, 0.5], [Infinity, 1]],             // séances / semaine
-    experience: [[1, -2], [3, -1], [7, 0], [15, 1], [Infinity, 1.5]],  // années de pratique régulière
-    age: [[20, -1], [35, 0], [50, 0.5], [Infinity, 1]]                 // années
+  // Points d'ancrage [valeur, effet] reliés par interpolation linéaire, constants au-delà des bornes.
+  const ANCRES = {
+    volume: [[10, -2], [30, -1], [50, 0], [70, 1], [90, 1.5]],        // km / semaine
+    frequence: [[1, -1], [3, 0], [5, 0.5], [7, 1]],                    // séances / semaine
+    experience: [[0.5, -2], [2, -1], [5, 0], [10, 1], [20, 1.5]],      // années de pratique régulière
+    age: [[18, -1], [27.5, 0], [42.5, 0.5], [60, 1]]                   // années
+  };
+  const effetInterpole = (ancres, x) => {
+    if (x <= ancres[0][0]) return ancres[0][1];
+    const last = ancres[ancres.length - 1];
+    if (x >= last[0]) return last[1];
+    const i = ancres.findIndex(([v]) => v >= x);
+    const [x0, y0] = ancres[i - 1], [x1, y1] = ancres[i];
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
   };
   const LIBELLES = { volume: ['Volume', ' km/sem'], frequence: ['Fréquence', ' séances/sem'], experience: ['Expérience', ' ans'], age: ['Âge', ' ans'] };
 
@@ -256,11 +324,11 @@
   function estimerIE(profil = {}) {
     let IE = IE_MOYEN, manquants = 0;
     const details = [];
-    for (const cle of Object.keys(PALIERS)) {
+    for (const cle of Object.keys(ANCRES)) {
       const brut = profil[cle];
       if (brut === '' || brut === null || brut === undefined || !Number.isFinite(Number(brut))) { manquants++; continue; }
       const x = Number(brut);
-      const effet = PALIERS[cle].find(([max]) => x <= max)[1];
+      const effet = effetInterpole(ANCRES[cle], x);
       IE += effet;
       details.push({ label: LIBELLES[cle][0], valeur: x + LIBELLES[cle][1], effet });
     }
@@ -268,7 +336,7 @@
       IE += EFFET_REPRISE;
       details.push({ label: 'Reprise ou pratique occasionnelle', valeur: 'oui', effet: EFFET_REPRISE });
     }
-    IE = Math.min(-2, Math.max(-14, IE));
+    IE = Math.min(IE_HABITUEL[1], Math.max(IE_HABITUEL[0], IE));
     return { IE, base: IE_MOYEN, incertitude: INCERT_BASE + 0.5 * manquants, details, renseigne: details.length > 0 };
   }
 
@@ -298,23 +366,35 @@
       res = calibrer(valides, vmaKmh);
       source = vmaKmh > 0 ? 'VMA et performances' : 'performances';
     } else if (valides.length) {
+      if (!estimation.renseigne) throw new Error(MESSAGE_DONNEE_UNIQUE);
       const p = valides[0];
       const V = (p.distance / p.temps) / (1 + k * Math.log(p.temps / REF_MIN));
       const performances = valides.map(q => ({ ...q, vitesseKmh: q.distance / q.temps * 60 / 1000, allureMinKm: q.temps / q.distance * 1000, pctVvo2: 100 * (q.distance / q.temps) / V, pctModele: pctVma(k, q.temps) }));
       res = modeleDirect(V, k, performances, ["Un seul chrono : la VMA est déduite de l'indice estimé par votre profil, elle est donc indicative."]);
       source = 'une performance et le profil';
     } else if (vmaKmh > 0) {
+      if (!estimation.renseigne) throw new Error(MESSAGE_DONNEE_UNIQUE);
       res = modeleDirect(vmaKmh * 1000 / 60, k, [], ["Aucune performance saisie : l'indice d'endurance vient de votre profil, les prédictions sont indicatives."]);
       source = 'VMA et profil';
     } else {
       throw new Error("Renseignez au moins une performance ou votre VMA.");
     }
 
-    return { ...res, source, estimation };
+    // Le profil sert aux prédictions si les données sont insuffisantes (source ci-dessus) ou incohérentes
+    let profilUtilise = source === 'une performance et le profil' || source === 'VMA et profil';
+    if (res.coherenceFaible && estimation.renseigne) {
+      res = { ...res, k, IE: 100 * k, performances: res.performances.map(p => ({ ...p, pctModele: pctVma(k, p.temps) })) };
+      res.avertissements = [...res.avertissements, `Vos performances étant incohérentes, l'indice d'endurance utilisé pour les prédictions vient du profil (${estimation.IE.toFixed(1).replace('.', ',')}) et non de vos chronos.`];
+      source = `${source}, indice d'endurance du profil`;
+      profilUtilise = true;
+    }
+
+    const ieDouteux = res.IE < IE_HABITUEL[0] || res.IE > IE_HABITUEL[1];
+    return { ...res, source, estimation, profilUtilise, ieDouteux, vmaConnue: vmaKmh > 0, vmaSaisie: vmaKmh };
   }
 
   const API = {
-    parseTemps, calibrer, calibrerComplet, estimerIE, tableDurees, tablePredictions, zones, vitesseReference,
+    parseTemps, calibrer, calibrerComplet, estimerIE, pctVma, tableDurees, tablePredictions, tableDistances, zones, vitesseReference,
     formatAllure, formatTemps, formatDuree, ZONES_DEF
   };
 
