@@ -5,175 +5,199 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Allures et zones — indice d'endurance</title>
 <style>
-  :root { --fond:#eef1f5; --carte:#fff; --texte:#18202c; --discret:#4a5568; --accent:#1f6feb; --accent-doux:#e8f0fe; --bord:#c4ccd8; --bord-fort:#8a96a8; --entete:#f1f4f8; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; }
+  :root { --fond:#eef1f5; --carte:#fff; --texte:#18202c; --discret:#4a5568; --accent:#1f6feb; --accent-doux:#e8f0fe; --bord:#d5dbe3; --bord-fort:#8a96a8; --entete:#f4f6f9; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; --ombre:0 1px 3px rgba(16,24,40,.08); }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#3a4656; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; }
+    :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#2e3947; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; --ombre:none; }
   }
-  .doute { color: var(--rouge); font-weight: 700; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 980px; margin: 0 auto; padding: 16px 12px 32px; }
-  h1 { font-size: 1.35rem; margin: 0 0 2px; }
-  h2 { font-size: 1.05rem; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); color: var(--texte); }
-  code { font-family: ui-monospace, Consolas, monospace; font-size: .95em; }
-  .intro { color: var(--discret); margin: 0 0 12px; font-size: .92em; }
-  .carte { background: var(--carte); border: 1px solid var(--bord); border-top: 4px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
-  .note { color: var(--discret); font-size: .9em; margin: 10px 0 0; }
-  .sous { color: var(--discret); font-size: .82em; }
-  ul.note { margin: 4px 0 0; padding-left: 20px; }
-  .masque { display: none; }
-  input, select, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 6px; padding: 8px 10px; min-width: 0; }
-  input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header, .page { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 20px; padding-bottom: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  body.simple .avance:not(.requis) { display: none !important; }
+  h1 { font-size: 1.45rem; margin: 0; }
+  header p { color: var(--discret); margin: 4px 0 0; max-width: 75ch; }
+  .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-bottom: 40px; }
+  @media (min-width: 960px) { .page { grid-template-columns: 340px minmax(0, 1fr); align-items: start; } .saisie { position: sticky; top: 16px; } }
+  .resultats { display: grid; gap: 16px; min-width: 0; transition: opacity .2s; }
+  .perime { opacity: .45; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 16px; box-shadow: var(--ombre); min-width: 0; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  .note, .sous { color: var(--discret); }
+  .note { font-size: .88em; margin: 10px 0 0; }
+  .sous { font-size: .82em; }
+  ul.note { padding-left: 20px; }
+  .doute { color: var(--rouge); font-weight: 700; }
+  code { font-family: ui-monospace, Consolas, monospace; }
+  input, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  .sec { color: var(--accent); background: var(--accent-doux); border-color: transparent; }
-  .pri { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
-  .pri:hover { filter: brightness(.92); }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .ligne { display: grid; grid-template-columns: 1.1fr 1.3fr auto; gap: 6px; align-items: center; margin-bottom: 6px; }
-  .option { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 10px; align-items: end; }
-  .option label { font-size: .9em; color: var(--discret); display: grid; gap: 4px; }
-  .erreur, .avert { color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte); border-radius: 6px; padding: 8px 12px; margin: 12px 0 0; font-weight: 600; }
-  .avert { margin: 0 0 8px; }
+  .sec, .puce { color: var(--accent); background: var(--accent-doux); border-color: transparent; font-weight: 600; }
+  .sec:hover, .puce:hover { border-color: var(--accent); }
+  .lien { border: 0; background: none; padding: 4px 0; color: var(--accent); text-decoration: underline; font-size: .88em; }
+  .entetes, .ligne { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 6px; }
+  .entetes { font-size: .8em; color: var(--discret); margin: 12px 0 4px; }
+  .ligne { margin-bottom: 6px; }
+  .ligne.invalide input { border-color: var(--rouge); }
+  .suppr { padding: 0; border-color: transparent; background: none; color: var(--discret); }
+  .suppr:hover { color: var(--rouge); }
+  .puces { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+  .puce { border-radius: 999px; padding: 4px 12px; font-size: .86em; }
+  .puces .lien { margin-left: auto; }
+  .champ, .champs label { display: grid; gap: 4px; font-size: .88em; color: var(--discret); }
+  .champ { margin-top: 16px; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .saisie details { border-top: 1px solid var(--bord); padding-top: 12px; }
+  .champs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .coche { display: flex; gap: 8px; align-items: center; margin: 10px 0 2px; font-size: .92em; }
+  .erreur, .avert, .alertes { color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte); border-radius: 8px; padding: 8px 12px; margin: 12px 0 0; }
+  .erreur, .avert { font-weight: 600; }
+  .avert { margin: 0 0 10px; }
+  .alertes { padding-left: 28px; }
+  .alertes li + li { margin-top: 6px; }
+  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; }
+  .chiffre { background: var(--entete); border-radius: 10px; padding: 10px 12px; }
+  .chiffre .label { color: var(--discret); font-size: .82em; font-weight: 600; }
+  .chiffre .valeur { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .graphique svg { width: 100%; height: auto; display: block; margin-top: 8px; }
+  .graphique text { fill: var(--discret); font-size: 12px; font-family: inherit; }
+  .grille { stroke: var(--bord); }
+  .courbe { fill: none; stroke: var(--discret); stroke-width: 2; stroke-dasharray: 6 4; }
+  .pt { fill: var(--accent); stroke: var(--carte); stroke-width: 1.5; }
+  .pt.alerte { fill: var(--rouge); }
+  .vma { fill: var(--carte); stroke: var(--accent); stroke-width: 2; }
+  .lg-ok { color: var(--accent); }
+  .lg-alerte { color: var(--rouge); }
+  .titre { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .titre h2 { margin: 0; }
+  .onglets { display: inline-flex; background: var(--entete); border-radius: 999px; padding: 3px; }
+  .onglet { border: 0; border-radius: 999px; background: none; color: var(--discret); padding: 6px 14px; font-size: .9em; }
+  .onglet.actif { background: var(--carte); color: var(--texte); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
   .tableau { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
-  th { color: var(--texte); background: var(--entete); font-weight: 600; font-size: .86em; border-bottom: 2px solid var(--bord-fort); }
-  tbody tr:nth-child(even) td { background: var(--entete); }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
+  th { font-size: .82em; color: var(--discret); font-weight: 600; }
   tbody tr:hover td { background: var(--accent-doux); }
   .num { text-align: right; }
-  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-  .chiffre { border: 1px solid var(--bord); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 10px; background: var(--entete); }
-  .chiffre .label { color: var(--discret); font-size: .82em; font-weight: 600; }
-  .chiffre .valeur { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .barre { display: flex; border-radius: 8px; overflow: hidden; height: 44px; border: 1px solid var(--bord-fort); }
+  .perso { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+  .bandes, .barre, .barre-allures { display: flex; }
+  .bandes > div, .barre-allures > div { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .bandes { margin-bottom: 4px; font-size: .8em; font-weight: 600; }
+  .bandes > div { padding: 3px 6px; }
+  .bande-faible { background: var(--accent-doux); color: var(--accent); border-radius: 6px 0 0 6px; }
+  .bande-haute { background: var(--entete); border-radius: 0 6px 6px 0; }
+  .barre { border-radius: 8px; overflow: hidden; height: 44px; }
   .segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; min-width: 0; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
   .segment:nth-child(5) { color: #18202c; text-shadow: none; }
   .segment.sep { box-shadow: inset 3px 0 0 var(--texte); }
-  .bandes { display: flex; margin-bottom: 4px; font-size: .8em; font-weight: 600; }
-  .bandes > div { text-align: center; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .bande-faible { background: var(--accent-doux); color: var(--accent); border-radius: 4px 0 0 4px; }
-  .bande-haute { background: var(--entete); color: var(--texte); border-radius: 0 4px 4px 0; }
-  .barre-allures { display: flex; margin-top: 6px; }
-  .barre-allures > div { text-align: center; font-size: .78em; color: var(--discret); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .echelle { position: relative; height: 20px; margin-top: 6px; font-size: .78em; color: var(--discret); }
+  .barre-allures { margin-top: 6px; font-size: .78em; color: var(--discret); }
+  .echelle { position: relative; height: 20px; margin-top: 4px; font-size: .78em; color: var(--discret); }
   .echelle span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-  .zones-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
-  .zone-carte { border: 1px solid var(--bord); border-left: 6px solid var(--c); border-radius: 8px; padding: 10px 12px; min-width: 0; background: var(--carte); }
-  .zone-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; }
-  .zone-allure { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; margin: 2px 0 4px; }
-  .zone-allure .sous { font-size: .6em; font-weight: 400; }
-  .zone-ligne { font-size: .9em; margin-top: 4px; }
-  .zone-etiquette { display: block; color: var(--discret); font-size: .78em; text-transform: uppercase; letter-spacing: .04em; }
-  fieldset { border: 1px solid var(--bord-fort); border-radius: 8px; margin: 12px 0 0; padding: 10px 12px; background: var(--entete); }
-  legend { padding: 0 6px; color: var(--texte); font-weight: 600; font-size: .92em; }
-  .champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px 8px; margin-top: 6px; }
-  .champs label { font-size: .88em; color: var(--discret); display: grid; gap: 2px; }
-  .coche { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  h3 { font-size: 1rem; margin: 0 0 4px; }
-  .profil { border: 1px solid var(--bord); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--accent-doux); }
-  .profil p, .profil ul { margin: 4px 0; }
-  .bas { margin-top: 10px; }
-  .perso { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
-  .onglets { display: inline-flex; border: 1px solid var(--bord-fort); border-radius: 8px; overflow: hidden; margin-bottom: 10px; max-width: 100%; }
-  .onglet { border: 0; border-radius: 0; background: var(--carte); color: var(--discret); padding: 7px 12px; }
-  .onglet.actif { background: var(--accent); color: #fff; font-weight: 600; }
-  .graphique { margin-top: 12px; }
-  .graphique svg { width: 100%; height: auto; display: block; }
-  .graphique text { fill: var(--discret); font-size: 12px; font-family: inherit; }
-  .grille { stroke: var(--bord); stroke-width: 1; }
-  .courbe { fill: none; stroke: var(--discret); stroke-width: 2; stroke-dasharray: 6 4; }
-  .pt { fill: var(--accent); stroke: var(--carte); stroke-width: 1.5; }
-  .pt.alerte { fill: #d12f2f; }
-  .vma { fill: var(--carte); stroke: var(--accent); stroke-width: 2; }
-  .lg-alerte { color: #d12f2f; }
-  .lg-ok { color: var(--accent); }
+  .zones-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 12px; }
+  .zone-carte { border: 1px solid var(--bord); border-left: 6px solid var(--c); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .zone-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
+  .zone-allure { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .zone-carte details { margin-top: 6px; font-size: .9em; }
+  .zone-carte summary { font-weight: 400; color: var(--accent); }
+  .zone-carte p { margin: 6px 0 0; }
+  .zone-carte ol { margin: 4px 0 0; padding-left: 20px; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Allures et zones d'entraînement</h1>
-  <p class="intro">Indice d'endurance de Péronnet et Thibault : à partir de vos temps (compétitions ou tests), estime la VMA, l'indice d'endurance, les allures et les zones d'entraînement. Calcul dans le navigateur.</p>
+<header>
+  <div>
+    <h1>Allures et zones d'entraînement</h1>
+    <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault, valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
+  </div>
+  <div class="onglets" role="group" aria-label="Niveau de détail">
+    <button type="button" class="onglet" data-affichage="simple">Simplifié</button>
+    <button type="button" class="onglet" data-affichage="avance">Avancé</button>
+  </div>
+</header>
 
-  <section class="carte">
-    <h2>1. Vos performances</h2>
-    <p class="note">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.</p>
+<div class="page">
+  <aside class="carte saisie">
     <form id="formulaire" novalidate>
+      <h2>Vos données</h2>
+      <p class="note">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.</p>
+      <div class="entetes" aria-hidden="true"><span>Distance (m)</span><span>Temps</span></div>
       <div id="lignes"></div>
-      <div class="actions">
-        <button type="button" class="sec" id="ajouter">+ Ajouter</button>
-        <button type="button" class="sec" id="vider">Tout effacer</button>
+      <div class="puces" id="puces">
+        <span class="sous">Ajouter :</span>
+        <button type="button" class="puce" data-d="1500">1500 m</button>
+        <button type="button" class="puce" data-d="5000">5 km</button>
+        <button type="button" class="puce" data-d="10000">10 km</button>
+        <button type="button" class="puce" data-d="21097">Semi</button>
+        <button type="button" class="puce" data-d="42195">Marathon</button>
+        <button type="button" class="puce" data-d="">Autre</button>
+        <button type="button" class="lien" id="vider">Tout effacer</button>
       </div>
-      <div class="option">
-        <label>VMA connue (km/h, facultatif)
-          <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5">
-        </label>
-        <p class="note" style="margin:0">Une seule performance suffit si la VMA est connue ; sinon, deux durées différentes.</p>
-      </div>
-      <fieldset>
-        <legend>Profil (requis s'il n'y a qu'une seule donnée, performance ou VMA)</legend>
+      <p class="note">Temps : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales.</p>
+      <label class="champ">VMA connue (km/h, facultatif) : comptée comme un chrono sur 6 min
+        <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5" inputmode="decimal">
+      </label>
+      <details id="profil-details" class="avance">
+        <summary>Profil d'entraînement <span class="sous">(requis s'il n'y a qu'une seule donnée)</span></summary>
         <div class="champs">
           <label>Volume hebdo (km)<input type="number" id="p-volume" min="0" step="1" placeholder="ex. 40"></label>
           <label>Séances par semaine<input type="number" id="p-frequence" min="0" step="1" placeholder="ex. 3"></label>
-          <label>Années de pratique régulière<input type="number" id="p-experience" min="0" step="0.5" placeholder="ex. 5"></label>
+          <label>Années de pratique<input type="number" id="p-experience" min="0" step="0.5" placeholder="ex. 5"></label>
           <label>Âge<input type="number" id="p-age" min="10" max="100" step="1" placeholder="ex. 40"></label>
         </div>
         <label class="coche"><input type="checkbox" id="p-reprise"> Reprise après blessure ou pratique occasionnelle</label>
-        <div class="actions bas"><button type="button" class="sec" id="vider-profil">Vider le profil</button></div>
-      </fieldset>
-      <div class="actions bas"><button type="submit" class="pri">Calculer</button></div>
-      <div id="erreur" class="erreur masque" role="alert"></div>
+        <button type="button" class="lien" id="vider-profil">Vider le profil</button>
+      </details>
+      <p id="erreur" class="erreur" role="alert" hidden></p>
     </form>
-    <datalist id="distances">
-      <option value="800"></option><option value="1500"></option><option value="3000"></option><option value="5000"></option>
-      <option value="10000"></option><option value="21097"></option><option value="42195"></option>
-    </datalist>
-    <p class="note">Temps : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales.</p>
-  </section>
+  </aside>
 
-  <div id="resultats" class="masque">
+  <div id="resultats" class="resultats" hidden>
     <section class="carte">
-      <h2>2. Synthèse</h2>
+      <h2>Synthèse</h2>
       <div class="chiffres" id="synthese"></div>
-      <div class="actions bas"><button type="button" class="sec" id="bouton-graphique" aria-expanded="false">Afficher le graphique</button></div>
-      <div id="graphique" class="graphique masque"></div>
-      <ul class="note" id="source"></ul>
-      <div id="profil"></div>
-      <p class="note">L'allure 1 h est à mi-chemin entre vitesse et endurance longue.</p>
-      <div id="avertissements"></div>
+      <ul class="alertes" id="alertes" hidden></ul>
+      <ul class="note avance" id="source"></ul>
+      <p class="note avance">L'allure 1 h est à mi-chemin entre vitesse et endurance longue.</p>
+      <details id="profil-estimation" class="avance" hidden><summary>Estimation par le profil</summary><div id="profil-estimation-contenu"></div></details>
+      <details class="graphique avance"><summary>Graphique : performances et courbe de tendance</summary><div id="graphique"></div></details>
     </section>
 
     <section class="carte">
-      <h2>3. Prédictions</h2>
-      <div class="onglets" role="group" aria-label="Sens de la prédiction">
-        <button type="button" class="onglet actif" data-mode="chrono" aria-pressed="true">Chronos selon distance</button>
-        <button type="button" class="onglet" data-mode="distance" aria-pressed="false">Distances selon chronos</button>
+      <div class="titre">
+        <h2>Prédictions</h2>
+        <div class="onglets avance" role="group" aria-label="Sens de la prédiction">
+          <button type="button" class="onglet actif" data-mode="chrono" aria-pressed="true">Chronos selon distance</button>
+          <button type="button" class="onglet" data-mode="distance" aria-pressed="false">Distances selon chronos</button>
+        </div>
       </div>
-      <p class="avert masque" id="alerte-predictions" role="status">Attention : les performances saisies s'accordent mal entre elles, ces prédictions sont donc moins fiables.</p>
-      <div class="tableau"><table>
-        <thead id="entete-predict"></thead>
-        <tbody id="tb-predict"></tbody>
-      </table></div>
-      <div class="perso">
+      <p class="avert" id="alerte-predictions" role="status" hidden>Attention : les performances saisies s'accordent mal entre elles, ces prédictions sont donc moins fiables.</p>
+      <div class="tableau"><table><thead id="entete-predict"></thead><tbody id="tb-predict"></tbody></table></div>
+      <form class="perso avance" id="form-perso" novalidate>
         <input type="number" id="perso-saisie" list="distances" min="1" step="1" placeholder="Autre distance (m), ex. 3000" aria-label="Distance personnalisée en mètres">
-        <button type="button" class="sec" id="perso-ajouter">+ Ajouter</button>
-      </div>
-      <p class="erreur masque" id="perso-erreur" role="alert"></p>
-      <p class="note">Fiabilité selon l'extrapolation hors de vos données : <strong>Élevée</strong> ≤ 10 % · <strong>Moyenne</strong> ≤ 60 % · <strong>Faible</strong> ≤ 120 % · <strong>Très faible</strong> ≤ 200 % · <strong>Fantaisiste</strong> au-delà.</p>
+        <button type="submit" class="sec">+ Ajouter</button>
+      </form>
+      <p class="erreur" id="perso-erreur" role="alert" hidden></p>
+      <p class="note avance">Fiabilité selon l'extrapolation hors de vos données : <strong>Élevée</strong> ≤ 10 % · <strong>Moyenne</strong> ≤ 60 % · <strong>Faible</strong> ≤ 120 % · <strong>Très faible</strong> ≤ 200 % · <strong>Fantaisiste</strong> au-delà.</p>
     </section>
 
     <section class="carte">
-      <h2>4. Zones d'entraînement</h2>
+      <h2>Zones d'entraînement</h2>
       <div class="bandes" id="bandes"></div>
       <div class="barre" id="barre" role="img" aria-label="Barre des 6 zones d'entraînement"></div>
       <div class="barre-allures" id="barre-allures"></div>
-      <div class="echelle" id="echelle"></div>
-      <p class="note">Largeur proportionnelle à la plage de % de l'allure 1 h. <strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
+      <div class="echelle avance" id="echelle"></div>
+      <p class="note"><span class="avance">Largeur proportionnelle à la plage de % de l'allure 1 h. </span><strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
       <div class="zones-grille" id="zones-grille"></div>
       <p class="note">Allures indicatives, valables sur terrain plat : réduisez-les en technique ou en montée.</p>
     </section>
   </div>
-</main>
+</div>
+
+<datalist id="distances">
+  <option value="800"></option><option value="1500"></option><option value="3000"></option><option value="5000"></option>
+  <option value="10000"></option><option value="21097"></option><option value="42195"></option>
+</datalist>
 
 <script src="endurance.js"></script>
 <script>
@@ -182,90 +206,123 @@
   const E = window.Endurance;
   const $ = (sel) => document.querySelector(sel);
   const COULEURS = ['#6b7f99', '#4e8fd9', '#2f9e8f', '#5aa04a', '#e0a100', '#d9542b'];
-  const ECHELLE_MIN = 50, ECHELLE_MAX = 130; // échelle de la barre ; les zones ouvertes s'arrêtent aux bornes
+  const ECHELLE = [50, 130]; // échelle de la barre des zones (% de l'allure 1 h) ; les zones ouvertes s'arrêtent aux bornes
   const EXEMPLE = [[5000, '18:30'], [10000, '39:00']];
   const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
-  const lignes = $('#lignes');
-  const persoDist = [], persoTemps = []; // saisies personnalisées (m et min), triées
   const TEMPS_STANDARD = [6, 30, 60, 120, 240]; // min
-  let mode = 'chrono', dernier = null; // mode : 'chrono' (temps selon distance) ou 'distance' (distance selon temps)
+  const PROFIL = ['volume', 'frequence', 'experience', 'age'];
+  const perso = { chrono: [], distance: [] }; // valeurs ajoutées par mode : distances (m) en mode chrono, temps (min) en mode distance
+  let mode = 'chrono', dernier = null, minuterie;
 
   const f1 = (x) => (Number.isFinite(x) ? x.toFixed(1).replace('.', ',') : '—');
   const f2 = (x) => (Number.isFinite(x) ? x.toFixed(2).replace('.', ',') : '—');
   const fDist = (m) => (m >= 1000 ? `${f2(m / 1000)} km` : `${Math.round(m)} m`);
-  const chiffre = (label, valeur, sous) => `<div class="chiffre"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous || ''}</div></div>`;
+  const rouge = (html, oui) => (oui ? `<span class="doute">${html}</span>` : html);
+  const INCOHERENT = '<br><span class="doute">valeurs incohérentes</span>';
+  const chiffre = (label, valeur, sous, avance) => `<div class="chiffre${avance ? ' avance' : ''}"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous}</div></div>`;
+
+  /* ---------- Saisie ---------- */
 
   function ajouterLigne(d = '', t = '') {
     const div = document.createElement('div');
     div.className = 'ligne';
-    div.innerHTML = `
-      <input class="dist" type="number" min="1" step="1" list="distances" placeholder="Distance (m)" aria-label="Distance en mètres" value="${d}">
-      <input class="temps" type="text" placeholder="Temps (ex. 18:30)" aria-label="Temps" value="${t}">
+    div.innerHTML = `<input class="dist" type="number" min="1" step="1" list="distances" placeholder="ex. 5000" aria-label="Distance en mètres" value="${d}">
+      <input class="temps" placeholder="ex. 18:30" aria-label="Temps" value="${t}">
       <button type="button" class="suppr" aria-label="Supprimer cette performance">✕</button>`;
-    div.querySelector('.suppr').addEventListener('click', () => {
-      div.remove();
-      if (!lignes.children.length) ajouterLigne();
-    });
-    lignes.appendChild(div);
+    $('#lignes').append(div);
+    return div;
   }
 
+  /** Lignes complètes uniquement : une ligne à moitié remplie est ignorée tant que la saisie n'est pas finie */
   function lirePerformances() {
     const erreurs = [], perfs = [];
-    [...lignes.querySelectorAll('.ligne')].forEach((l, i) => {
-      const distance = Number(l.querySelector('.dist').value);
-      const brut = l.querySelector('.temps').value;
-      const temps = E.parseTemps(brut);
-      if (!brut.trim() && !distance) return; // ligne vide ignorée
-      if (!(distance > 0)) erreurs.push(`Ligne ${i + 1} : distance manquante ou invalide.`);
-      if (Number.isNaN(temps)) erreurs.push(`Ligne ${i + 1} : temps invalide (ex. 18:30 ou 1:27:00).`);
-      if (distance > 0 && !Number.isNaN(temps)) perfs.push({ distance, temps });
+    [...$('#lignes').children].forEach((l, i) => {
+      const d = l.querySelector('.dist').value, brut = l.querySelector('.temps').value;
+      const distance = Number(d), temps = E.parseTemps(brut), complete = d !== '' && brut.trim() !== '';
+      const distOk = distance > 0, tempsOk = !Number.isNaN(temps);
+      l.classList.toggle('invalide', complete && !(distOk && tempsOk));
+      if (!complete) return;
+      if (!distOk) erreurs.push(`Ligne ${i + 1} : distance invalide.`);
+      if (!tempsOk) erreurs.push(`Ligne ${i + 1} : temps invalide (ex. 18:30 ou 1:27:00).`);
+      if (distOk && tempsOk) perfs.push({ distance, temps });
     });
     return { perfs, erreurs };
   }
 
-  /* Zones */
-  const allureZone = (z) => {
-    if (z.pMin === null) return `plus lent que ${E.formatAllure(z.allureRapide)}`;
-    if (z.pMax === null) return `plus rapide que ${E.formatAllure(z.allureLente)}`;
-    return `${E.formatAllure(z.allureRapide)} – ${E.formatAllure(z.allureLente)}`;
-  };
-  const allureCourte = (z) => {
-    if (z.pMin === null) return `> ${E.formatAllure(z.allureRapide)}`;
-    if (z.pMax === null) return `< ${E.formatAllure(z.allureLente)}`;
-    return `${E.formatAllure(z.allureRapide)}–${E.formatAllure(z.allureLente)}`;
-  };
-  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
+  const lireProfil = () => ({ ...Object.fromEntries(PROFIL.map(c => [c, $(`#p-${c}`).value])), reprise: $('#p-reprise').checked });
 
-  function rendreBarre(res) {
-    const zones = E.zones(res);
-    const bornes = (z) => [z.pMin ?? ECHELLE_MIN, z.pMax ?? ECHELLE_MAX];
-    const frontiere = zones.find(z => z.id === 'Z2').pMax; // sépare faible intensité (Z1 + Z2) et élevée (Z3 à Z6)
-    $('#bandes').innerHTML = `<div class="bande-faible" style="flex:${frontiere - ECHELLE_MIN}">Faible intensité : Z1 + Z2</div>`
-      + `<div class="bande-haute" style="flex:${ECHELLE_MAX - frontiere}">Intensité élevée : Z3 à Z6</div>`;
-    $('#barre').innerHTML = zones.map((z, i) => {
-      const [lo, hi] = bornes(z);
-      return `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${hi - lo};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`;
-    }).join('');
-    $('#barre-allures').innerHTML = zones.map(z => {
-      const [lo, hi] = bornes(z);
-      return `<div style="flex:${hi - lo}">${allureCourte(z)}</div>`;
-    }).join('');
-    $('#echelle').innerHTML = zones.filter(z => z.pMin !== null).map(z => `
-      <span style="left:${((z.pMin - ECHELLE_MIN) / (ECHELLE_MAX - ECHELLE_MIN) * 100).toFixed(2)}%">${z.pMin} %</span>`).join('');
+  function calculer() {
+    const { perfs, erreurs } = lirePerformances(), vma = Number($('#vvo2').value);
+    let res = null, message = erreurs.join(' ');
+    if (!message) {
+      try { res = E.calibrerComplet(perfs, vma > 0 ? vma : null, lireProfil()); } catch (err) { message = err.message; }
+    }
+    $('#erreur').textContent = message;
+    $('#erreur').hidden = !message;
+    // Profil visible même en mode simplifié s'il est requis ou déjà rempli
+    const profilRequis = /profil/.test(message) || PROFIL.some(c => $(`#p-${c}`).value) || $('#p-reprise').checked;
+    $('#profil-details').classList.toggle('requis', profilRequis);
+    if (/profil/.test(message)) $('#profil-details').open = true;
+    $('#resultats').hidden = !res && !dernier;
+    $('#resultats').classList.toggle('perime', !res); // derniers résultats grisés tant que la saisie est invalide
+    if (res) rendre(res);
+  }
+
+  /* ---------- Résultats ---------- */
+
+  /** Plage (min et max) couverte par les données saisies ; la VMA saisie compte comme chrono de 6 min */
+  function plage(res, cle) {
+    const v = res.performances.map(p => p[cle]);
+    if (res.vmaSaisie) v.push(cle === 'distance' ? res.vmaSaisie * 1000 / 60 * 6 : 6);
+    return [Math.min(...v), Math.max(...v)];
+  }
+
+  function rendre(res) {
+    dernier = res;
+    const e = res.estimation, vRef = E.vitesseReference(res), [tMin, tMax] = plage(res, 'temps');
+    const hors = (min) => res.ieDouteux && (min < tMin || min > tMax); // valeur extrapolée, indice douteux
+    const nb = res.performances.length + (res.vmaSaisie ? 1 : 0); // la VMA compte comme chrono de 6 min
+    const endurance = res.IE >= -6 ? 'très bonne endurance' : res.IE >= -9 ? 'endurance correcte' : 'endurance à développer';
+    const ajustement = res.r2 !== null ? (res.vmaSaisie ? 'R² du modèle, VMA incluse' : 'R² de la régression')
+      : nb === 2 ? (res.vmaSaisie ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'VMA fournie';
+    $('#synthese').innerHTML = [
+      chiffre('VMA', rouge(`${f1(res.vvo2Kmh)} km/h`, hors(6)), `allure ${E.formatAllure(1000 / res.V)} /km${hors(6) ? INCOHERENT : ''}`),
+      chiffre('Allure 1 h', rouge(`${f1(vRef * 60 / 1000)} km/h`, hors(60)), `${E.formatAllure(1000 / vRef)} /km · référence des zones${hors(60) ? INCOHERENT : ''}`),
+      chiffre("Indice d'endurance", rouge(f1(res.IE), res.ieDouteux), `${endurance}${res.vmaSaisie && res.performances.length ? ' · VMA intégrée' : ''}${res.ieDouteux ? INCOHERENT : ''}`),
+      chiffre("Qualité de l'ajustement", res.r2 === null ? '—' : f2(res.r2), ajustement, true),
+      chiffre('Performances retenues', String(nb), res.vmaSaisie ? (res.performances.length ? 'dont VMA' : 'VMA seule') : '', true)
+    ].join('');
+
+    $('#alertes').innerHTML = res.avertissements.map(a => `<li>${a}</li>`).join('');
+    $('#alertes').hidden = !res.avertissements.length;
+    const donnees = res.performances.map(p => rouge(`${fDist(p.distance)} en ${E.formatTemps(p.temps)}${p.probleme ? ' (valeurs incohérentes)' : ''}`, p.probleme));
+    if (res.vmaSaisie) donnees.push(`VMA saisie (${f1(res.vmaSaisie)} km/h)`);
+    const profil = !e.renseigne ? 'non renseigné'
+      : res.profilUtilise ? `utilisé pour les prédictions (${res.coherenceFaible ? 'chronos incohérents' : 'données insuffisantes'})`
+      : 'renseigné mais non utilisé : vos chronos sont cohérents';
+    $('#source').innerHTML = `<li>Données utilisées : ${donnees.join(', ') || 'aucune performance'}.</li><li>Profil : ${profil}.</li>`;
+
+    $('#profil-estimation').hidden = !e.renseigne;
+    $('#profil-estimation-contenu').innerHTML = `
+      <p>Indice d'endurance estimé : <strong>${f1(e.IE)}</strong> (± ${f1(e.incertitude)})${res.profilUtilise ? ' : utilisé pour ce calcul' : `, contre ${f1(res.IE)} calculé à partir de vos chronos`}.</p>
+      <ul class="note">${[`<li>Point de départ, coureur moyen : ${f1(e.base)}</li>`, ...e.details.map(d => `<li>${d.label} (${d.valeur}) : ${d.effet > 0 ? '+' : ''}${f1(d.effet)}</li>`)].join('')}</ul>
+      <p class="note">Ces coefficients sont des hypothèses, à valider avec des données réelles. Un indice plus proche de 0 traduit une meilleure endurance.</p>`;
+
+    $('#graphique').innerHTML = tracerGraphique(res);
+    $('#alerte-predictions').hidden = !res.coherenceFaible;
+    rendrePredictions(res);
+    rendreZones(res);
   }
 
   /** Graphique : % VMA selon la durée (échelle log), courbe de tendance, performances à vérifier en rouge */
   function tracerGraphique(res) {
-    const W = 640, H = 300, g = { l: 44, r: 16, t: 12, b: 32 };
-    const TMIN = 5, TMAX = 300; // minutes
+    const W = 640, H = 300, g = { l: 44, r: 16, t: 12, b: 32 }, TMIN = 5, TMAX = 300; // minutes
     const x = (t) => g.l + Math.log(t / TMIN) / Math.log(TMAX / TMIN) * (W - g.l - g.r);
     const valeurs = [100, E.pctVma(res.k, TMIN), E.pctVma(res.k, TMAX), ...res.performances.map(p => p.pctVvo2)];
     const bas = Math.floor((Math.min(...valeurs) - 2) / 5) * 5, haut = Math.ceil((Math.max(...valeurs) + 2) / 5) * 5;
     const y = (v) => g.t + (1 - (v - bas) / (haut - bas)) * (H - g.t - g.b);
     let svg = '';
-    for (let v = bas; v <= haut; v += 5) {
-      svg += `<line class="grille" x1="${g.l}" x2="${W - g.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${g.l - 6}" y="${y(v) + 4}" text-anchor="end">${v} %</text>`;
-    }
+    for (let v = bas; v <= haut; v += 5) svg += `<line class="grille" x1="${g.l}" x2="${W - g.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${g.l - 6}" y="${y(v) + 4}" text-anchor="end">${v} %</text>`;
     for (const [t, lib] of [[5, '5 min'], [10, '10 min'], [20, '20 min'], [30, '30 min'], [60, '1 h'], [120, '2 h'], [180, '3 h'], [300, '5 h']]) {
       svg += `<text x="${x(t)}" y="${H - 10}" text-anchor="middle">${lib}</text>`;
     }
@@ -274,9 +331,9 @@
       return `${i ? 'L' : 'M'}${x(t).toFixed(1)} ${y(E.pctVma(res.k, t)).toFixed(1)}`;
     }).join(' ');
     svg += `<path class="courbe" d="${courbe}"/>`;
-    if (res.vmaConnue) {
-      const pctSaisie = 100 * res.vmaSaisie * 1000 / 60 / res.V;
-      svg += `<circle class="vma" cx="${x(6).toFixed(1)}" cy="${y(pctSaisie).toFixed(1)}" r="6"><title>VMA saisie : ${f1(pctSaisie)} % de la VMA estimée</title></circle>`;
+    if (res.vmaSaisie) {
+      const pct = 100 * res.vmaSaisie * 1000 / 60 / res.V;
+      svg += `<circle class="vma" cx="${x(6).toFixed(1)}" cy="${y(pct).toFixed(1)}" r="6"><title>VMA saisie : ${f1(pct)} % de la VMA estimée</title></circle>`;
     }
     svg += res.performances.map(p => `<circle class="pt${p.probleme ? ' alerte' : ''}" cx="${x(p.temps).toFixed(1)}" cy="${y(p.pctVvo2).toFixed(1)}" r="6">` +
       `<title>${fDist(p.distance)} en ${E.formatDuree(p.temps)} : ${f1(p.pctVvo2)} % VMA${p.probleme ? ' (à vérifier)' : ''}</title></circle>`).join('');
@@ -284,162 +341,125 @@
       <p class="note">Axe vertical : % de la VMA. <span class="lg-ok">●</span> Performance · <span class="lg-alerte">●</span> À vérifier · <span class="lg-ok">○</span> VMA (6 min) · tirets : courbe de tendance.</p>`;
   }
 
-  /** Prédictions : valeurs standard puis saisies personnalisées (supprimables), selon le mode */
+  /** Prédictions : valeurs standard puis valeurs ajoutées (supprimables), selon le mode */
   function rendrePredictions(res) {
     const chrono = mode === 'chrono';
-    const [dMin, dMax] = plageDonnees(res, 'distance'), [tMin, tMax] = plageDonnees(res, 'temps');
-    const horsDonnees = (p) => res.ieDouteux && (chrono ? p.distance < dMin || p.distance > dMax : p.temps < tMin || p.temps > tMax);
-    const ligne = (p, action) => `<tr class="${horsDonnees(p) ? 'doute' : ''}">${chrono
+    const [dMin, dMax] = plage(res, 'distance'), [tMin, tMax] = plage(res, 'temps');
+    const hors = (p) => res.ieDouteux && (chrono ? p.distance < dMin || p.distance > dMax : p.temps < tMin || p.temps > tMax);
+    const ligne = (p, i) => `<tr class="${hors(p) ? 'doute' : ''}">${chrono
       ? `<td>${NOMS[p.distance] || fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td>`
       : `<td>${E.formatTemps(p.temps)}</td><td class="num">${fDist(p.distance)}</td>`}
-      <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td><td class="${p.fiabilite === 'Fantaisiste' ? 'doute' : ''}">${p.fiabilite}${horsDonnees(p) ? '<br><small>valeurs incohérentes</small>' : ''}</td><td>${action}</td></tr>`;
-    const bouton = (i) => `<button type="button" class="suppr" data-i="${i}" aria-label="Supprimer cette valeur">✕</button>`;
+      <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td>
+      <td class="${p.fiabilite === 'Fantaisiste' ? 'doute' : ''}">${p.fiabilite}${hors(p) ? '<br><small>valeurs incohérentes</small>' : ''}</td>
+      <td>${i === undefined ? '' : `<button type="button" class="suppr" data-i="${i}" aria-label="Supprimer cette valeur">✕</button>`}</td></tr>`;
     const standard = chrono ? E.tablePredictions(res) : E.tableDistances(res, TEMPS_STANDARD);
-    const perso = chrono ? E.tablePredictions(res, persoDist) : E.tableDistances(res, persoTemps);
-    $('#entete-predict').innerHTML = chrono
-      ? '<tr><th>Distance</th><th class="num">Temps prédit</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>'
-      : '<tr><th>Temps</th><th class="num">Distance prédite</th><th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>';
-    $('#tb-predict').innerHTML = standard.map(p => ligne(p, '')).join('') + perso.map((p, i) => ligne(p, bouton(i))).join('');
+    const ajouts = chrono ? E.tablePredictions(res, perso.chrono) : E.tableDistances(res, perso.distance);
+    $('#entete-predict').innerHTML = `<tr><th>${chrono ? 'Distance' : 'Temps'}</th><th class="num">${chrono ? 'Temps prédit' : 'Distance prédite'}</th>
+      <th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>`;
+    $('#tb-predict').innerHTML = standard.map(p => ligne(p)).join('') + ajouts.map(ligne).join('');
   }
 
-  /** Plage (min et max) couverte par les données saisies ; la VMA saisie compte comme chrono de 6 min */
-  function plageDonnees(res, cle) {
-    const v = res.performances.map(p => p[cle]);
-    if (res.vmaConnue) v.push(cle === 'distance' ? res.vmaSaisie * 1000 / 60 * 6 : 6);
-    return [Math.min(...v), Math.max(...v)];
-  }
+  /* ---------- Zones ---------- */
 
-  function rendre(res) {
-    $('#resultats').classList.remove('masque');
-    dernier = res;
-    const vRef = E.vitesseReference(res);
-    const [tMin, tMax] = plageDonnees(res, 'temps');
-    const horsPlage = (min) => res.ieDouteux && (min < tMin || min > tMax); // valeur extrapolée, indice douteux
-    const endurance = res.IE >= -6 ? 'très bonne endurance' : res.IE >= -9 ? 'endurance correcte' : 'endurance à développer';
-    const nb = res.performances.length + (res.vmaConnue ? 1 : 0); // la VMA compte comme chrono de 6 min
-    const ajustement = res.r2 !== null ? (res.vmaConnue ? 'R² du modèle, VMA incluse' : 'R² de la régression')
-      : nb === 2 ? (res.vmaConnue ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'VMA fournie';
-    $('#synthese').innerHTML = [
-      chiffre('VMA', horsPlage(6) ? `<span class="doute">${f1(res.vvo2Kmh)} km/h</span>` : `${f1(res.vvo2Kmh)} km/h`,
-        `allure ${E.formatAllure(res.allureVvo2)} /km` + (horsPlage(6) ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
-      chiffre('Allure 1 h (référence des zones)', horsPlage(60) ? `<span class="doute">${f1(vRef * 60 / 1000)} km/h</span>` : `${f1(vRef * 60 / 1000)} km/h`,
-        `allure ${E.formatAllure(1000 / vRef)} /km` + (horsPlage(60) ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
-      chiffre("Indice d'endurance", res.ieDouteux ? `<span class="doute">${f1(res.IE)}</span>` : f1(res.IE),
-        endurance + (res.vmaConnue && res.performances.length ? ' · VMA intégrée' : '') + (res.ieDouteux ? '<br><span class="doute">valeurs incohérentes</span>' : '')),
-      chiffre("Qualité de l'ajustement", res.r2 === null ? '—' : f2(res.r2), ajustement),
-      chiffre('Performances retenues', String(nb), res.vmaConnue ? (res.performances.length ? 'dont VMA' : 'VMA seule') : '')
-    ].join('');
+  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
+  const allureZone = (z, court) => (z.pMin === null ? `${court ? '>' : 'plus lent que'} ${E.formatAllure(z.allureRapide)}`
+    : z.pMax === null ? `${court ? '<' : 'plus rapide que'} ${E.formatAllure(z.allureLente)}`
+    : `${E.formatAllure(z.allureRapide)}${court ? '–' : ' – '}${E.formatAllure(z.allureLente)}`);
 
-    const donnees = res.performances.map(p => `${p.probleme ? '<span class="doute">' : ''}${fDist(p.distance)} en ${E.formatTemps(p.temps)}${p.probleme ? ' (valeurs incohérentes)</span>' : ''}`);
-    if (res.vmaConnue) donnees.push(`VMA saisie (${f1(res.vmaSaisie)} km/h)`);
-    const profil = !res.estimation.renseigne ? 'non renseigné'
-      : res.profilUtilise ? `utilisé pour les prédictions (${res.coherenceFaible ? 'chronos incohérents' : 'données insuffisantes'})`
-      : 'renseigné mais non utilisé : vos chronos sont cohérents';
-    $('#source').innerHTML = [`Données utilisées : ${donnees.join(', ') || 'aucune performance'}.`, `Profil : ${profil}.`]
-      .map(l => `<li>${l}</li>`).join('');
-    $('#profil').innerHTML = res.estimation.renseigne ? profilHtml(res) : '';
-    $('#avertissements').innerHTML = res.avertissements.map(a => `<p class="avert">${a}</p>`).join('');
-
-    $('#alerte-predictions').classList.toggle('masque', !res.coherenceFaible);
-    rendrePredictions(res);
-    if (!$('#graphique').classList.contains('masque')) $('#graphique').innerHTML = tracerGraphique(res);
-
-    $('#zones-grille').innerHTML = E.zones(res).map((z, i) => `
+  function rendreZones(res) {
+    const zones = E.zones(res);
+    const largeur = (z) => (z.pMax ?? ECHELLE[1]) - (z.pMin ?? ECHELLE[0]);
+    const frontiere = zones.find(z => z.id === 'Z2').pMax; // sépare faible intensité (Z1 + Z2) et élevée (Z3 à Z6)
+    $('#bandes').innerHTML = `<div class="bande-faible" style="flex:${frontiere - ECHELLE[0]}">Faible intensité : Z1 + Z2</div>`
+      + `<div class="bande-haute" style="flex:${ECHELLE[1] - frontiere}">Intensité élevée : Z3 à Z6</div>`;
+    $('#barre').innerHTML = zones.map((z, i) => `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${largeur(z)};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`).join('');
+    $('#barre-allures').innerHTML = zones.map(z => `<div style="flex:${largeur(z)}">${allureZone(z, true)}</div>`).join('');
+    $('#echelle').innerHTML = zones.filter(z => z.pMin !== null)
+      .map(z => `<span style="left:${((z.pMin - ECHELLE[0]) / (ECHELLE[1] - ECHELLE[0]) * 100).toFixed(2)}%">${z.pMin} %</span>`).join('');
+    const ouverts = [...document.querySelectorAll('#zones-grille details')].map(d => d.open); // garde les détails ouverts
+    $('#zones-grille').innerHTML = zones.map((z, i) => `
       <article class="zone-carte" style="--c:${COULEURS[i]}">
-        <header class="zone-tete"><strong>${z.id} · ${z.nom}</strong><span class="sous">${plageZone(z)} de l'allure 1 h</span></header>
+        <div class="zone-tete"><strong>${z.id} · ${z.nom}</strong><span class="sous">${plageZone(z)} de l'allure 1 h</span></div>
         <div class="zone-allure">${allureZone(z)} <span class="sous">/km</span></div>
-        <div class="zone-ligne"><span class="zone-etiquette">Objectif</span>${z.objectif}</div>
-        <div class="zone-ligne"><span class="zone-etiquette">Comment l'utiliser</span>${z.utilisation}</div>
+        <details class="avance"${ouverts[i] ? ' open' : ''}><summary>${z.objectif ? 'Objectif et usage' : 'Usage'}</summary>${z.objectif ? `<p><strong>Objectif :</strong> ${z.objectif}.</p>` : ''}${z.quand
+          ? `<p><strong>Quand l'utiliser :</strong></p><ol>${z.quand.map(q => `<li>${q}</li>`).join('')}</ol>`
+          : `<p><strong>Comment l'utiliser :</strong> ${z.utilisation}.</p>`}</details>
       </article>`).join('');
-
-    rendreBarre(res);
   }
 
-  /** Estimation par le profil : détail des facteurs et comparaison avec le calcul */
-  function profilHtml(res) {
-    const e = res.estimation;
-    const utilise = res.profilUtilise;
-    const lignes = [`<li>Point de départ, coureur moyen : ${f1(e.base)}</li>`]
-      .concat(e.details.map(d => `<li>${d.label} (${d.valeur}) : ${d.effet > 0 ? '+' : ''}${f1(d.effet)}</li>`));
-    return `<div class="profil">
-      <h3>Estimation par le profil</h3>
-      <p>Indice d'endurance estimé : <strong>${f1(e.IE)}</strong> (± ${f1(e.incertitude)})${utilise ? ' : utilisé pour ce calcul' : `, contre ${f1(res.IE)} calculé à partir de vos chronos`}.</p>
-      <ul class="note">${lignes.join('')}</ul>
-      <p class="note">Ces coefficients sont des hypothèses, à valider avec des données réelles. Un indice plus proche de 0 traduit une meilleure endurance.</p>
-    </div>`;
-  }
+  /* ---------- Événements ---------- */
 
-  function lireProfil() {
-    return {
-      volume: $('#p-volume').value, frequence: $('#p-frequence').value,
-      experience: $('#p-experience').value, age: $('#p-age').value, reprise: $('#p-reprise').checked
-    };
-  }
-
-  function calculer() {
-    $('#erreur').classList.add('masque');
-    const { perfs, erreurs } = lirePerformances();
-    const afficherErreur = (msg) => { $('#erreur').textContent = msg; $('#erreur').classList.remove('masque'); };
-    if (erreurs.length) return afficherErreur(erreurs.join(' '));
-    const vvo2 = Number($('#vvo2').value);
-    try {
-      rendre(E.calibrerComplet(perfs, vvo2 > 0 ? vvo2 : null, lireProfil()));
-    } catch (err) {
-      $('#resultats').classList.add('masque');
-      afficherErreur(err.message);
-    }
-  }
-
-  document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
-    mode = b.dataset.mode;
-    document.querySelectorAll('.onglet').forEach(o => { o.classList.toggle('actif', o === b); o.setAttribute('aria-pressed', o === b); });
-    const champ = $('#perso-saisie'), chrono = mode === 'chrono';
-    champ.type = chrono ? 'number' : 'text';
-    chrono ? champ.setAttribute('list', 'distances') : champ.removeAttribute('list');
-    champ.placeholder = chrono ? 'Autre distance (m), ex. 3000' : 'Autre temps, ex. 1:30:00';
-    champ.setAttribute('aria-label', chrono ? 'Distance personnalisée en mètres' : 'Temps personnalisé');
-    champ.value = '';
-    $('#perso-erreur').classList.add('masque');
-    if (dernier) rendrePredictions(dernier);
-  }));
+  $('#formulaire').addEventListener('input', () => { clearTimeout(minuterie); minuterie = setTimeout(calculer, 300); });
+  $('#formulaire').addEventListener('submit', (e) => e.preventDefault());
+  $('#lignes').addEventListener('click', (e) => {
+    const b = e.target.closest('.suppr');
+    if (!b) return;
+    b.parentElement.remove();
+    if (!$('#lignes').children.length) ajouterLigne();
+    calculer();
+  });
+  $('#puces').addEventListener('click', (e) => {
+    const b = e.target.closest('.puce');
+    if (!b) return;
+    const ligne = [...$('#lignes').children].find(l => !l.querySelector('.dist').value && !l.querySelector('.temps').value) || ajouterLigne();
+    ligne.querySelector('.dist').value = b.dataset.d;
+    ligne.querySelector(b.dataset.d ? '.temps' : '.dist').focus();
+  });
+  $('#vider').addEventListener('click', () => { $('#lignes').innerHTML = ''; ajouterLigne(); calculer(); });
   $('#vider-profil').addEventListener('click', () => {
-    ['#p-volume', '#p-frequence', '#p-experience', '#p-age'].forEach(s => { $(s).value = ''; });
+    PROFIL.forEach(c => { $(`#p-${c}`).value = ''; });
     $('#p-reprise').checked = false;
     calculer();
   });
-  $('#bouton-graphique').addEventListener('click', (e) => {
-    const cache = $('#graphique').classList.toggle('masque');
-    e.currentTarget.textContent = cache ? 'Afficher le graphique' : 'Masquer le graphique';
-    e.currentTarget.setAttribute('aria-expanded', String(!cache));
-    if (!cache) $('#graphique').innerHTML = tracerGraphique(dernier);
-  });
-  $('#perso-ajouter').addEventListener('click', () => {
+
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    const chrono = mode === 'chrono', champ = $('#perso-saisie');
+    document.querySelectorAll('[data-mode]').forEach(o => { o.classList.toggle('actif', o === b); o.setAttribute('aria-pressed', o === b); });
+    Object.assign(champ, { type: chrono ? 'number' : 'text', value: '', placeholder: chrono ? 'Autre distance (m), ex. 3000' : 'Autre temps, ex. 1:30:00' });
+    champ.setAttribute('aria-label', chrono ? 'Distance personnalisée en mètres' : 'Temps personnalisé');
+    if (chrono) champ.setAttribute('list', 'distances'); else champ.removeAttribute('list');
+    $('#perso-erreur').hidden = true;
+    if (dernier) rendrePredictions(dernier);
+  }));
+  $('#form-perso').addEventListener('submit', (e) => {
+    e.preventDefault();
     if (!dernier) return;
-    const champ = $('#perso-saisie'), err = $('#perso-erreur'), chrono = mode === 'chrono';
+    const champ = $('#perso-saisie'), chrono = mode === 'chrono', err = $('#perso-erreur');
     const valeur = chrono ? Number(champ.value) : E.parseTemps(champ.value);
-    err.classList.add('masque');
-    const ok = chrono ? valeur > 0 && Number.isFinite(E.tablePredictions(dernier, [valeur])[0].temps) : valeur > 0;
-    if (!ok) {
-      err.textContent = chrono ? 'Distance invalide : indiquez des mètres, par exemple 3000.' : 'Temps invalide : par exemple 1:30:00 ou 90.';
-      return err.classList.remove('masque');
-    }
-    const liste = chrono ? persoDist : persoTemps;
-    if (!liste.includes(valeur)) liste.push(valeur);
-    liste.sort((a, b) => a - b);
+    const ok = valeur > 0 && (!chrono || Number.isFinite(E.tablePredictions(dernier, [valeur])[0].temps));
+    err.textContent = chrono ? 'Distance invalide : indiquez des mètres, par exemple 3000.' : 'Temps invalide : par exemple 1:30:00 ou 90.';
+    err.hidden = ok;
+    if (!ok) return;
+    if (!perso[mode].includes(valeur)) perso[mode].push(valeur);
+    perso[mode].sort((a, b) => a - b);
     champ.value = '';
     rendrePredictions(dernier);
   });
   $('#tb-predict').addEventListener('click', (e) => {
     const b = e.target.closest('.suppr');
     if (!b) return;
-    (mode === 'chrono' ? persoDist : persoTemps).splice(Number(b.dataset.i), 1);
+    perso[mode].splice(Number(b.dataset.i), 1);
     rendrePredictions(dernier);
   });
 
+  /** Mode simplifié (l'essentiel) ou avancé (tout le détail) ; le choix est mémorisé dans le navigateur */
+  function choisirAffichage(simple) {
+    document.body.classList.toggle('simple', simple);
+    document.querySelectorAll('[data-affichage]').forEach(b => {
+      const actif = (b.dataset.affichage === 'simple') === simple;
+      b.classList.toggle('actif', actif);
+      b.setAttribute('aria-pressed', actif);
+    });
+    if (simple && mode !== 'chrono') $('[data-mode="chrono"]').click(); // le mode « distances » n'existe qu'en avancé
+    try { localStorage.setItem('affichage', simple ? 'simple' : 'avance'); } catch (e) { /* stockage indisponible */ }
+  }
+  document.querySelectorAll('[data-affichage]').forEach(b => b.addEventListener('click', () => choisirAffichage(b.dataset.affichage === 'simple')));
+  let affichage = null;
+  try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
+  choisirAffichage(affichage !== 'avance');
+
   EXEMPLE.forEach(([d, t]) => ajouterLigne(d, t));
-  $('#ajouter').addEventListener('click', () => ajouterLigne());
-  $('#vider').addEventListener('click', () => { lignes.innerHTML = ''; ajouterLigne(); });
-  $('#formulaire').addEventListener('submit', (e) => { e.preventDefault(); calculer(); });
   calculer();
 })();
 </script>

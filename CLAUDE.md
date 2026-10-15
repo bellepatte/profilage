@@ -4,14 +4,20 @@
 
 Appli web **100 % côté client** (aucun serveur, aucune dépendance) qui, à partir de chronos
 (compétitions ou tests) et/ou de la VMA, dresse le profil de course d'un coureur ou d'une coureuse :
-VMA, indice d'endurance (Péronnet & Thibault), allures selon la durée, chronos prédictifs,
-zones d'entraînement à 6 niveaux, et estimation par profil quand les données manquent.
+VMA, indice d'endurance (Péronnet & Thibault), prédictions (chronos selon la distance, distances
+selon le temps), zones d'entraînement à 6 niveaux, et estimation par profil quand les données manquent.
 
 Interface et contenus **en français**. Ne pas introduire de dépendance externe ni de CDN.
 
 ## Fichiers
 
-- `index.html` : page unique (CSS + interface + script de rendu). Charge `endurance.js`.
+- `index.html` : page unique (CSS + interface + script de rendu). Charge `endurance.js`. Saisie à
+  gauche (fixe sur grand écran), résultats à droite ; recalcul automatique pendant la frappe (délai
+  300 ms), sans bouton « Calculer ». Une ligne à moitié remplie est ignorée ; une erreur grise les
+  derniers résultats (`.perime`) au lieu de les masquer.
+  Deux modes d'affichage (choix dans l'en-tête, mémorisé en `localStorage`, « Simplifié » par défaut) :
+  tout élément réservé au mode avancé porte la classe `avance` ; `.requis` le rend visible malgré tout
+  (profil requis ou déjà rempli). Le mode « distances selon chronos » n'existe qu'en avancé.
 - `endurance.js` : moteur de calcul, pur JavaScript, sans DOM. Exporte `window.Endurance`
   (et `module.exports` pour les tests Node).
 
@@ -62,7 +68,7 @@ Il n'y a pas de build, pas de gestionnaire de paquets, pas de tests versionnés.
   `E.formatTemps`, `E.formatDuree`. Ne pas dupliquer ces formats.
 - Les ids DOM utilisés par le script doivent exister dans le HTML.
 - Virgule décimale à l'affichage (`toFixed(…).replace('.', ',')`), point en entrée numérique.
-- Le code a été réduit une fois : garder la concision, éviter le code mort et les champs inutilisés.
+- Le code a été réduit deux fois : garder la concision, éviter le code mort et les champs inutilisés.
 
 ## Vérifier une modification
 
@@ -71,11 +77,13 @@ certaines sessions : utiliser le chemin complet.
 
 - Syntaxe moteur : `node --check endurance.js`
 - Syntaxe du script de la page : extraire le contenu de `<script>…</script>` et lancer `node --check`.
-- Non-régression du calcul : comparer les sorties de `calibrer`, `tablePredictions`, `tableDurees`,
-  `zones` avant et après une modification, sur plusieurs jeux de données (deux exemples, quatre
-  performances, une VMA connue, une erreur de saisie). Les sorties doivent être identiques
+- Non-régression du calcul : comparer les sorties de `calibrerComplet`, `calibrer`, `tablePredictions`,
+  `tableDistances`, `zones` avant et après une modification, sur plusieurs jeux de données (exemples,
+  contre-performance, VMA connue, profil, erreurs). Les sorties doivent être identiques
   si le calcul n'a pas été modifié intentionnellement.
-- L'affichage n'a pas été vérifié dans un navigateur : ouvrir `index.html` pour contrôler la mise en page.
+- Affichage : Edge headless (`msedge.exe --headless=new --screenshot=… --window-size=1280,2600 file:///…`)
+  produit une capture lisible. Il impose une largeur minimale d'environ 500 px : pour le téléphone,
+  afficher la page dans une `<iframe>` de 390 px. Lancer une capture à la fois, avec un `--user-data-dir` temporaire.
 
 ## Exemples de référence
 
@@ -85,5 +93,5 @@ certaines sessions : utiliser le chemin complet.
 ## Points ouverts
 
 - Valider les coefficients du profil (`ANCRES`) et la pertinence de l'effet âge.
-- Vérifier l'affichage sur téléphone (cartes de zones, barre, tableaux).
+- Affichage téléphone vérifié en capture à 390 px ; reste à tester sur un vrai appareil (saisie tactile).
 - Les tests de non-régression ne sont pas dans le projet : les ajouter si le projet doit évoluer.
