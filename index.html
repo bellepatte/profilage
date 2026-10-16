@@ -30,6 +30,7 @@
   .doute { color: var(--rouge); font-weight: 700; }
   code { font-family: ui-monospace, Consolas, monospace; }
   input, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  ::placeholder { color: var(--discret); opacity: .5; }
   input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
   .sec, .puce { color: var(--accent); background: var(--accent-doux); border-color: transparent; font-weight: 600; }
@@ -39,6 +40,8 @@
   .entetes { font-size: .8em; color: var(--discret); margin: 12px 0 4px; }
   .ligne { margin-bottom: 6px; }
   .ligne.invalide input { border-color: var(--rouge); }
+  .conv { grid-column: 1 / -1; font-size: .8em; color: var(--discret); margin-bottom: 2px; }
+  .conv:empty { display: none; }
   .suppr { padding: 0; border-color: transparent; background: none; color: var(--discret); }
   .suppr:hover { color: var(--rouge); }
   .puces { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
@@ -100,8 +103,7 @@
   .zone-allure { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
   .zone-carte details { margin-top: 6px; font-size: .9em; }
   .zone-carte summary { font-weight: 400; color: var(--accent); }
-  .zone-carte p { margin: 6px 0 0; }
-  .zone-carte ol { margin: 4px 0 0; padding-left: 20px; }
+  .zone-carte ol { margin: 6px 0 0; padding-left: 20px; }
 </style>
 </head>
 <body>
@@ -121,7 +123,7 @@
     <form id="formulaire" novalidate>
       <h2>Vos données</h2>
       <p class="note">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.</p>
-      <div class="entetes" aria-hidden="true"><span>Distance (m)</span><span>Temps</span></div>
+      <div class="entetes" aria-hidden="true"><span>Distance</span><span>Temps</span></div>
       <div id="lignes"></div>
       <div class="puces" id="puces">
         <span class="sous">Ajouter :</span>
@@ -133,9 +135,10 @@
         <button type="button" class="puce" data-d="">Autre</button>
         <button type="button" class="lien" id="vider">Tout effacer</button>
       </div>
-      <p class="note">Temps : <code>mm:ss</code>, <code>h:mm:ss</code> ou minutes décimales.</p>
+      <p class="note">Formats acceptés : temps <code>42:20</code>, <code>42'20</code>, <code>42min</code>, <code>1h20</code> ; distance <code>5000</code>, <code>5 km</code>, <code>semi</code>, <code>marathon</code>.</p>
       <label class="champ">VMA connue (km/h, facultatif) : comptée comme un chrono sur 6 min
         <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5" inputmode="decimal">
+        <span class="conv" id="vma-conv"></span>
       </label>
       <details id="profil-details" class="avance">
         <summary>Profil d'entraînement <span class="sous">(requis s'il n'y a qu'une seule donnée)</span></summary>
@@ -151,6 +154,11 @@
       <p id="erreur" class="erreur" role="alert" hidden></p>
     </form>
   </aside>
+
+  <section class="carte" id="accueil">
+    <h2>Vos résultats</h2>
+    <p class="note">Saisissez au moins deux performances sur des distances différentes, ou une performance et votre VMA : la VMA, l'indice d'endurance, les prédictions et les zones d'entraînement s'afficheront ici.</p>
+  </section>
 
   <div id="resultats" class="resultats" hidden>
     <section class="carte">
@@ -174,7 +182,7 @@
       <p class="avert" id="alerte-predictions" role="status" hidden>Attention : les performances saisies s'accordent mal entre elles, ces prédictions sont donc moins fiables.</p>
       <div class="tableau"><table><thead id="entete-predict"></thead><tbody id="tb-predict"></tbody></table></div>
       <form class="perso avance" id="form-perso" novalidate>
-        <input type="number" id="perso-saisie" list="distances" min="1" step="1" placeholder="Autre distance (m), ex. 3000" aria-label="Distance personnalisée en mètres">
+        <input id="perso-saisie" list="distances" placeholder="Autre distance, ex. 3000 ou 3 km" aria-label="Distance personnalisée">
         <button type="submit" class="sec">+ Ajouter</button>
       </form>
       <p class="erreur" id="perso-erreur" role="alert" hidden></p>
@@ -189,14 +197,14 @@
       <div class="echelle avance" id="echelle"></div>
       <p class="note"><span class="avance">Largeur proportionnelle à la plage de % de l'allure 1 h. </span><strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
       <div class="zones-grille" id="zones-grille"></div>
-      <p class="note">Allures indicatives, valables sur terrain plat : réduisez-les en technique ou en montée.</p>
+      <p class="note">Allures indicatives, valables sur terrain plat et roulant : réduisez-les dans les parties techniques ou en montée.</p>
     </section>
   </div>
 </div>
 
 <datalist id="distances">
-  <option value="800"></option><option value="1500"></option><option value="3000"></option><option value="5000"></option>
-  <option value="10000"></option><option value="21097"></option><option value="42195"></option>
+  <option value="800 m"></option><option value="1500 m"></option><option value="3000 m"></option><option value="5 km"></option>
+  <option value="10 km"></option><option value="semi"></option><option value="marathon"></option>
 </datalist>
 
 <script src="endurance.js"></script>
@@ -207,10 +215,13 @@
   const $ = (sel) => document.querySelector(sel);
   const COULEURS = ['#6b7f99', '#4e8fd9', '#2f9e8f', '#5aa04a', '#e0a100', '#d9542b'];
   const ECHELLE = [50, 130]; // échelle de la barre des zones (% de l'allure 1 h) ; les zones ouvertes s'arrêtent aux bornes
-  const EXEMPLE = [[5000, '18:30'], [10000, '39:00']];
+  const EXEMPLE = [[5000, '25:00'], [10000, '53:00']];
   const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
   const TEMPS_STANDARD = [6, 30, 60, 120, 240]; // min
   const PROFIL = ['volume', 'frequence', 'experience', 'age'];
+  // Repères de l'indice d'endurance : [seuil, description], retenu dès que IE > seuil
+  const REPERES_IE = [[-4, 'vitesse à retravailler en priorité'], [-6, 'très bonne endurance, vitesse à développer'],
+    [-8, 'profil équilibré entre vitesse et endurance'], [-10, 'endurance à développer'], [-Infinity, 'endurance à développer en priorité']];
   const perso = { chrono: [], distance: [] }; // valeurs ajoutées par mode : distances (m) en mode chrono, temps (min) en mode distance
   let mode = 'chrono', dernier = null, minuterie;
 
@@ -223,12 +234,13 @@
 
   /* ---------- Saisie ---------- */
 
-  function ajouterLigne(d = '', t = '') {
+  function ajouterLigne(d = '', t = '', [exD, exT] = ['ex. 5 km', 'ex. 25:00']) {
     const div = document.createElement('div');
     div.className = 'ligne';
-    div.innerHTML = `<input class="dist" type="number" min="1" step="1" list="distances" placeholder="ex. 5000" aria-label="Distance en mètres" value="${d}">
-      <input class="temps" placeholder="ex. 18:30" aria-label="Temps" value="${t}">
-      <button type="button" class="suppr" aria-label="Supprimer cette performance">✕</button>`;
+    div.innerHTML = `<input class="dist" list="distances" placeholder="${exD}" aria-label="Distance (ex. 5000, 5 km, semi)" value="${d}">
+      <input class="temps" placeholder="${exT}" aria-label="Temps (ex. 42:20, 42min, 1h20)" value="${t}">
+      <button type="button" class="suppr" aria-label="Supprimer cette performance">✕</button>
+      <span class="conv"></span>`;
     $('#lignes').append(div);
     return div;
   }
@@ -238,11 +250,13 @@
     const erreurs = [], perfs = [];
     [...$('#lignes').children].forEach((l, i) => {
       const d = l.querySelector('.dist').value, brut = l.querySelector('.temps').value;
-      const distance = Number(d), temps = E.parseTemps(brut), complete = d !== '' && brut.trim() !== '';
+      const distance = E.parseDistance(d), temps = E.parseTemps(brut), complete = d.trim() !== '' && brut.trim() !== '';
       const distOk = distance > 0, tempsOk = !Number.isNaN(temps);
       l.classList.toggle('invalide', complete && !(distOk && tempsOk));
+      l.querySelector('.conv').textContent = complete && distOk && tempsOk
+        ? `${f1(distance / temps * 60 / 1000)} km/h · allure ${E.formatAllure(temps / distance * 1000)} /km` : '';
       if (!complete) return;
-      if (!distOk) erreurs.push(`Ligne ${i + 1} : distance invalide.`);
+      if (!distOk) erreurs.push(`Ligne ${i + 1} : distance invalide (ex. 5000, 5 km, semi).`);
       if (!tempsOk) erreurs.push(`Ligne ${i + 1} : temps invalide (ex. 18:30 ou 1:27:00).`);
       if (distOk && tempsOk) perfs.push({ distance, temps });
     });
@@ -253,8 +267,10 @@
 
   function calculer() {
     const { perfs, erreurs } = lirePerformances(), vma = Number($('#vvo2').value);
+    $('#vma-conv').textContent = vma > 0 ? `allure ${E.formatAllure(60 / vma)} /km` : '';
     let res = null, message = erreurs.join(' ');
-    if (!message) {
+    const vide = !message && !perfs.length && !(vma > 0); // rien de saisi : invite, pas d'erreur
+    if (!message && !vide) {
       try { res = E.calibrerComplet(perfs, vma > 0 ? vma : null, lireProfil()); } catch (err) { message = err.message; }
     }
     $('#erreur').textContent = message;
@@ -263,7 +279,8 @@
     const profilRequis = /profil/.test(message) || PROFIL.some(c => $(`#p-${c}`).value) || $('#p-reprise').checked;
     $('#profil-details').classList.toggle('requis', profilRequis);
     if (/profil/.test(message)) $('#profil-details').open = true;
-    $('#resultats').hidden = !res && !dernier;
+    $('#resultats').hidden = vide || (!res && !dernier);
+    $('#accueil').hidden = !$('#resultats').hidden;
     $('#resultats').classList.toggle('perime', !res); // derniers résultats grisés tant que la saisie est invalide
     if (res) rendre(res);
   }
@@ -282,7 +299,7 @@
     const e = res.estimation, vRef = E.vitesseReference(res), [tMin, tMax] = plage(res, 'temps');
     const hors = (min) => res.ieDouteux && (min < tMin || min > tMax); // valeur extrapolée, indice douteux
     const nb = res.performances.length + (res.vmaSaisie ? 1 : 0); // la VMA compte comme chrono de 6 min
-    const endurance = res.IE >= -6 ? 'très bonne endurance' : res.IE >= -9 ? 'endurance correcte' : 'endurance à développer';
+    const endurance = REPERES_IE.find(([seuil]) => res.IE > seuil)[1];
     const ajustement = res.r2 !== null ? (res.vmaSaisie ? 'R² du modèle, VMA incluse' : 'R² de la régression')
       : nb === 2 ? (res.vmaSaisie ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'VMA fournie';
     $('#synthese').innerHTML = [
@@ -295,8 +312,9 @@
 
     $('#alertes').innerHTML = res.avertissements.map(a => `<li>${a}</li>`).join('');
     $('#alertes').hidden = !res.avertissements.length;
-    const donnees = res.performances.map(p => rouge(`${fDist(p.distance)} en ${E.formatTemps(p.temps)}${p.probleme ? ' (valeurs incohérentes)' : ''}`, p.probleme));
-    if (res.vmaSaisie) donnees.push(`VMA saisie (${f1(res.vmaSaisie)} km/h)`);
+    const vitesseAllure = (kmh) => `${f1(kmh)} km/h, ${E.formatAllure(60 / kmh)} /km`;
+    const donnees = res.performances.map(p => rouge(`${fDist(p.distance)} en ${E.formatTemps(p.temps)} (${vitesseAllure(p.vitesseKmh)})${p.probleme ? ' : valeurs incohérentes' : ''}`, p.probleme));
+    if (res.vmaSaisie) donnees.push(`VMA saisie (${vitesseAllure(res.vmaSaisie)})`);
     const profil = !e.renseigne ? 'non renseigné'
       : res.profilUtilise ? `utilisé pour les prédictions (${res.coherenceFaible ? 'chronos incohérents' : 'données insuffisantes'})`
       : 'renseigné mais non utilisé : vos chronos sont cohérents';
@@ -365,11 +383,16 @@
   const allureZone = (z, court) => (z.pMin === null ? `${court ? '>' : 'plus lent que'} ${E.formatAllure(z.allureRapide)}`
     : z.pMax === null ? `${court ? '<' : 'plus rapide que'} ${E.formatAllure(z.allureLente)}`
     : `${E.formatAllure(z.allureRapide)}${court ? '–' : ' – '}${E.formatAllure(z.allureLente)}`);
+  const vitesseZone = (z) => (z.pMin === null ? `moins de ${f1(60 / z.allureRapide)} km/h`
+    : z.pMax === null ? `plus de ${f1(60 / z.allureLente)} km/h`
+    : `${f1(60 / z.allureLente)} – ${f1(60 / z.allureRapide)} km/h`);
 
   function rendreZones(res) {
     const zones = E.zones(res);
     const largeur = (z) => (z.pMax ?? ECHELLE[1]) - (z.pMin ?? ECHELLE[0]);
     const frontiere = zones.find(z => z.id === 'Z2').pMax; // sépare faible intensité (Z1 + Z2) et élevée (Z3 à Z6)
+    const vmaMax = Math.max(res.vvo2Kmh, res.vmaSaisie || 0); // VMA calculée ou mesurée
+    const vmaAuDessus = (z) => z.id === 'Z5' && vmaMax > 60 / z.allureRapide; // VMA au-delà du haut de Z5
     $('#bandes').innerHTML = `<div class="bande-faible" style="flex:${frontiere - ECHELLE[0]}">Faible intensité : Z1 + Z2</div>`
       + `<div class="bande-haute" style="flex:${ECHELLE[1] - frontiere}">Intensité élevée : Z3 à Z6</div>`;
     $('#barre').innerHTML = zones.map((z, i) => `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${largeur(z)};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`).join('');
@@ -381,9 +404,9 @@
       <article class="zone-carte" style="--c:${COULEURS[i]}">
         <div class="zone-tete"><strong>${z.id} · ${z.nom}</strong><span class="sous">${plageZone(z)} de l'allure 1 h</span></div>
         <div class="zone-allure">${allureZone(z)} <span class="sous">/km</span></div>
-        <details class="avance"${ouverts[i] ? ' open' : ''}><summary>${z.objectif ? 'Objectif et usage' : 'Usage'}</summary>${z.objectif ? `<p><strong>Objectif :</strong> ${z.objectif}.</p>` : ''}${z.quand
-          ? `<p><strong>Quand l'utiliser :</strong></p><ol>${z.quand.map(q => `<li>${q}</li>`).join('')}</ol>`
-          : `<p><strong>Comment l'utiliser :</strong> ${z.utilisation}.</p>`}</details>
+        <div class="sous">${vitesseZone(z)}</div>
+        ${vmaAuDessus(z) ? '<p class="note">Votre VMA est supérieure à cette zone car votre indice d\'endurance est faible.</p>' : ''}
+        <details class="avance"${ouverts[i] ? ' open' : ''}><summary>Quand l'utiliser</summary><ol>${z.quand.map(q => `<li>${q}</li>`).join('')}</ol></details>
       </article>`).join('');
   }
 
@@ -391,6 +414,11 @@
 
   $('#formulaire').addEventListener('input', () => { clearTimeout(minuterie); minuterie = setTimeout(calculer, 300); });
   $('#formulaire').addEventListener('submit', (e) => e.preventDefault());
+  // En quittant un champ, conversion au format standard : « 5 km » -> 5000, « 1h20 » -> 1:20:00
+  $('#lignes').addEventListener('change', (e) => {
+    const c = e.target, dist = c.classList.contains('dist'), v = dist ? E.parseDistance(c.value) : E.parseTemps(c.value);
+    if (Number.isFinite(v)) c.value = dist ? String(v) : E.formatTemps(v);
+  });
   $('#lignes').addEventListener('click', (e) => {
     const b = e.target.closest('.suppr');
     if (!b) return;
@@ -416,8 +444,8 @@
     mode = b.dataset.mode;
     const chrono = mode === 'chrono', champ = $('#perso-saisie');
     document.querySelectorAll('[data-mode]').forEach(o => { o.classList.toggle('actif', o === b); o.setAttribute('aria-pressed', o === b); });
-    Object.assign(champ, { type: chrono ? 'number' : 'text', value: '', placeholder: chrono ? 'Autre distance (m), ex. 3000' : 'Autre temps, ex. 1:30:00' });
-    champ.setAttribute('aria-label', chrono ? 'Distance personnalisée en mètres' : 'Temps personnalisé');
+    Object.assign(champ, { value: '', placeholder: chrono ? 'Autre distance, ex. 3000 ou 3 km' : 'Autre temps, ex. 1h30 ou 1:30:00' });
+    champ.setAttribute('aria-label', chrono ? 'Distance personnalisée' : 'Temps personnalisé');
     if (chrono) champ.setAttribute('list', 'distances'); else champ.removeAttribute('list');
     $('#perso-erreur').hidden = true;
     if (dernier) rendrePredictions(dernier);
@@ -426,9 +454,9 @@
     e.preventDefault();
     if (!dernier) return;
     const champ = $('#perso-saisie'), chrono = mode === 'chrono', err = $('#perso-erreur');
-    const valeur = chrono ? Number(champ.value) : E.parseTemps(champ.value);
+    const valeur = chrono ? E.parseDistance(champ.value) : E.parseTemps(champ.value);
     const ok = valeur > 0 && (!chrono || Number.isFinite(E.tablePredictions(dernier, [valeur])[0].temps));
-    err.textContent = chrono ? 'Distance invalide : indiquez des mètres, par exemple 3000.' : 'Temps invalide : par exemple 1:30:00 ou 90.';
+    err.textContent = chrono ? 'Distance invalide : par exemple 3000, 3 km ou semi.' : 'Temps invalide : par exemple 1h30, 90min ou 1:30:00.';
     err.hidden = ok;
     if (!ok) return;
     if (!perso[mode].includes(valeur)) perso[mode].push(valeur);
@@ -459,7 +487,7 @@
   try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
   choisirAffichage(affichage !== 'avance');
 
-  EXEMPLE.forEach(([d, t]) => ajouterLigne(d, t));
+  EXEMPLE.forEach(([d, t]) => ajouterLigne('', '', [d, t])); // exemples affichés en texte indicatif grisé
   calculer();
 })();
 </script>

@@ -12,6 +12,7 @@
   const REF_ZONE_MIN = 60;       // référence des zones : allure 1 h
   const VITESSE_KMH = [4, 30];   // bornes réalistes de vitesse moyenne (km/h)
   const ECART_MAX = 2;           // écart max (points de % VMA) entre une performance et la tendance des autres
+  const ECART_DISTANCE_MIN = 0.10; // avec deux données seulement, écart minimal entre les distances
   const IE_HABITUEL = [-14, -2]; // bornes habituelles de l'indice d'endurance
   const DISTANCES_PREDITES = [1500, 5000, 10000, 21097, 42195];
   // Fiabilité d'une prédiction selon l'extrapolation hors de la plage saisie
@@ -34,11 +35,11 @@
       quand: ["Fréquemment pour améliorer substantiellement les capacités d'endurance, mais sur des volumes réduits (risque de cumul de fatigue à court terme)",
         "Spécifiquement lorsque cette zone correspond à une allure de course (ex. : semi-marathon, 10 km)"] },
     { id: 'Z5', nom: 'VMA', pMin: 100, pMax: 120,
-      objectif: "Compétitions courues à ces allures ou à ce niveau d'intensité (ex. 5 km, finish de course). Développe significativement la puissance aérobie (consommation max d'O2) et améliore grandement les capacités athlétiques, au prix d'un coût physiologique significatif. Encadrement conseillé",
-      utilisation: "Sur des séances dédiées, en séries courtes ou moyennement courtes (ex. 10 × 2 min)" },
+      quand: ["Lors de cycles de développement de la puissance aérobie (amélioration du potentiel d'endurance) et occasionnellement en maintien de qualité",
+        "Si les objectifs compétitifs correspondent aux allures de cette zone (ex. : 5 ou 10 km, fins de course)"] },
     { id: 'Z6', nom: 'Vitesse', pMin: 120, pMax: null,
-      objectif: "Compétitions courues à ces allures ou à ce niveau d'intensité (ex. 1500 m, finish de course). Développe la puissance musculaire et aérobie (consommation max d'O2). Coût physiologique pouvant être excessif sans encadrement",
-      utilisation: "Sur des séances dédiées ou intégrées à d'autres zones, sur des efforts courts (ex. 5 × 20 s avec récupération longue)" }
+      quand: ["Lors de cycles de développement de la puissance musculaire et aérobie et lors de séances occasionnelles de maintien de qualité",
+        "Lorsque les allures des courses visées correspondent à cette zone (ex. : demi-fond, fins de course)"] }
   ];
 
   /* ---------- Saisie et formatage ---------- */
@@ -48,13 +49,33 @@
   const metres = (d) => `${String(d).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} m`;
   const enumere = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} et ${items[items.length - 1]}` : items[0]);
 
-  /** "18:30", "1:27:00", "18,5" -> minutes décimales ; NaN si invalide */
+  /** "18:30", "1:27:00", "18,5", "42min", "42'20", "1h20", "1h20m30s", "20s" -> minutes décimales ; NaN si invalide */
   function parseTemps(saisie) {
-    const s = String(saisie ?? '').trim().replace(',', '.');
-    const p = s.split(':').map(Number);
-    if (!s || p.some(Number.isNaN) || p.length > 3) return NaN;
-    const min = p.length === 1 ? p[0] : p.length === 2 ? p[0] + p[1] / 60 : p[0] * 60 + p[1] + p[2] / 60;
+    const s = String(saisie ?? '').trim().toLowerCase().replace(/,/g, '.');
+    if (!s) return NaN;
+    let min;
+    if (s.includes(':') || /^\d+(\.\d+)?$/.test(s)) { // mm:ss, h:mm:ss ou minutes décimales
+      const p = s.split(':').map(Number);
+      if (p.some(Number.isNaN) || p.length > 3) return NaN;
+      min = p.length === 1 ? p[0] : p.length === 2 ? p[0] + p[1] / 60 : p[0] * 60 + p[1] + p[2] / 60;
+    } else { // avec unités : heures (h), minutes (min, mn, m, '), secondes (s, sec, '', ")
+      const n = '(\\d+(?:\\.\\d+)?)(?![\\d.])'; // nombre entier, jamais coupé en deux
+      const m = s.match(new RegExp(`^(?:${n}\\s*h)?\\s*(?:${n}\\s*(?:min|mn|m|')?)?\\s*(?:${n}\\s*(?:sec|s|''|")?)?$`));
+      if (!m || !(m[1] || m[2] || m[3])) return NaN;
+      min = Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0) + Number(m[3] ?? 0) / 60;
+    }
     return min > 0 ? min : NaN;
+  }
+
+  /** "5000", "5000 m", "5 km", "5,5km", "10k", "semi", "marathon" -> mètres ; sans unité, une valeur < 100 est lue en km ; NaN si invalide */
+  function parseDistance(saisie) {
+    const s = String(saisie ?? '').trim().toLowerCase().replace(/,/g, '.').replace(/(\d)\s+(?=\d)/g, '$1');
+    if (/^(semi|demi)([\s-]*marathon)?$/.test(s)) return 21097;
+    if (s === 'marathon') return 42195;
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*(km|k|m)?$/);
+    if (!m) return NaN;
+    const x = Number(m[1]), d = (m[2] ?? (x < 100 ? 'km' : 'm')) === 'm' ? x : Math.round(x * 1000);
+    return d > 0 ? d : NaN;
   }
 
   /** 5.8833 -> "5:53" */
@@ -117,6 +138,15 @@
     // La VMA connue est une donnée comme les autres, au point (6 min, VMA) : aucune n'est prioritaire
     const points = valides.map((p, i) => ({ i, x: Math.log(p.temps / REF_MIN), y: ys[i] }));
     if (vmaKmh > 0) points.push({ i: null, x: 0, y: vmaKmh * 1000 / 60 });
+    // Deux données seulement : leurs distances doivent différer d'au moins 10 % (VMA = performance sur 6 min)
+    if (points.length === 2) {
+      const d = [...valides.map(p => p.distance), ...(vmaKmh > 0 ? [vmaKmh * 1000 / 60 * REF_MIN] : [])];
+      const ecartDistances = (Math.max(...d) - Math.min(...d)) / Math.min(...d);
+      if (ecartDistances < ECART_DISTANCE_MIN) {
+        throw new Error(`Les deux données sont trop proches : l'écart entre les distances doit être d'au moins ${100 * ECART_DISTANCE_MIN} % (ici ${virgule(100 * ecartDistances)} %)`
+          + `${vmaKmh > 0 ? `. La VMA compte comme une performance sur 6 min, soit ${metres(Math.round(d[1]))}` : ''}. Ajoutez une performance sur une distance plus éloignée.`);
+      }
+    }
     const reg = regression(points);
     if (!reg) throw new Error(vmaKmh > 0
       ? "Avec une VMA connue, il faut une performance d'une durée différente de 6 min."
@@ -125,9 +155,13 @@
     const r2 = points.length > 2 ? reg.r2 : null; // avec 2 points, la droite passe exactement par les deux
     if (k >= 0) throw new Error(`L'indice d'endurance calculé est positif ou nul (${virgule(100 * k)}) : les performances saisies ne peuvent pas être modélisées. Vérifiez les distances et les temps.`);
 
-    // Cohérence (1) : une vitesse ne doit pas augmenter quand la distance augmente
+    // Cohérence (1) : une vitesse ne doit pas augmenter quand la distance augmente ; la VMA saisie
+    // compte comme une performance (VMA × 6 min, en 6:00)
+    const vVma = vmaKmh * 1000 / 60;
+    const saisies = valides.map((p, i) => ({ distance: p.distance, v: ys[i], nom: `le ${metres(p.distance)} en ${formatTemps(p.temps)} (${virgule(kmh(ys[i]))} km/h)` }));
+    if (vmaKmh > 0) saisies.push({ distance: vVma * REF_MIN, v: vVma, vma: true, nom: `la VMA saisie (${virgule(vmaKmh)} km/h, soit ${metres(Math.round(vVma * REF_MIN))} en 6:00)` });
     const violations = [];
-    valides.forEach((a, i) => valides.forEach((b, j) => { if (b.distance > a.distance && ys[j] > ys[i]) violations.push([i, j]); }));
+    saisies.forEach(a => saisies.forEach(b => { if (b.distance > a.distance && b.v > a.v) violations.push([a, b]); }));
 
     // Cohérence (2) : une performance hors de la tendance des autres est une contre-performance
     // si son retrait rend les autres cohérentes entre elles (il faut alors au moins 3 points restants)
@@ -148,8 +182,8 @@
     // Avertissements
     const avertissements = [];
     const nomTemps = (p) => `${metres(p.distance)} en ${formatTemps(p.temps)}`;
-    for (const [i, j] of violations) {
-      avertissements.push(`Une vitesse ne peut pas augmenter quand la distance augmente : le ${nomTemps(valides[j])} (${virgule(kmh(ys[j]))} km/h) est plus rapide que le ${nomTemps(valides[i])} (${virgule(kmh(ys[i]))} km/h). Vérifiez ces deux performances.`);
+    for (const [a, b] of violations) {
+      avertissements.push(`Une vitesse ne peut pas augmenter quand la distance augmente : ${b.nom} est plus rapide que ${a.nom}. Vérifiez ces deux ${a.vma || b.vma ? 'saisies' : 'performances'}.`);
     }
     if (flagged.size) {
       const fautives = valides.filter((_, i) => flagged.has(i)), coherentes = valides.filter((_, i) => !flagged.has(i));
@@ -166,14 +200,10 @@
     if (valides.some(p => p.temps < REF_MIN)) avertissements.push("Une performance dure moins de 6 min : elle est hors de la plage idéale du modèle et peut peser fortement sur la VMA.");
     if (valides.some(p => p.temps > LIMITE_MIN)) avertissements.push("Une performance dure plus de 5 h : le modèle n'est pas applicable à cette durée.");
     if (100 * k < IE_HABITUEL[0]) avertissements.push(`L'indice d'endurance calculé (${virgule(100 * k)}) est très éloigné des valeurs habituelles (en dessous de ${IE_HABITUEL[0]}) : vérifiez les temps saisis, en particulier l'écart entre les distances.`);
+    if (100 * k > IE_HABITUEL[1]) avertissements.push(`L'indice d'endurance calculé (${virgule(100 * k)}) est anormalement proche de 0 : vérifiez les temps saisis.`);
     const distances = valides.map(p => p.distance);
     for (const d of new Set(distances)) {
       if (distances.filter(x => x === d).length > 1) avertissements.push(`Plusieurs performances sur ${d} m : vérifiez qu'il ne s'agit pas d'un doublon.`);
-    }
-    if (vmaKmh > 0) {
-      for (const p of performances) {
-        if (p.temps >= REF_MIN && p.vitesseKmh > vmaKmh * 1.02) avertissements.push(`${p.distance} m en ${formatTemps(p.temps)} est plus rapide que la VMA indiquée : vérifiez la VMA ou ce temps.`);
-      }
     }
 
     return { V, k, IE: 100 * k, r2, coherenceFaible: violations.length > 0 || flagged.size > 0, vvo2Kmh: kmh(V), performances, avertissements };
@@ -309,7 +339,7 @@
   }
 
   const API = {
-    parseTemps, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, vitesseReference,
+    parseTemps, parseDistance, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, vitesseReference,
     formatAllure, formatTemps, formatDuree
   };
 
