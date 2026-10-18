@@ -29,12 +29,13 @@
   ul.note { padding-left: 20px; }
   .doute { color: var(--rouge); font-weight: 700; }
   code { font-family: ui-monospace, Consolas, monospace; }
-  input, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  input, select, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 8px; padding: 8px 10px; min-width: 0; }
   ::placeholder { color: var(--discret); opacity: .5; }
-  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
   .sec, .puce { color: var(--accent); background: var(--accent-doux); border-color: transparent; font-weight: 600; }
   .sec:hover, .puce:hover { border-color: var(--accent); }
+  a { color: var(--accent); }
   .lien { border: 0; background: none; padding: 4px 0; color: var(--accent); text-decoration: underline; font-size: .88em; }
   .entetes, .ligne { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 6px; }
   .entetes { font-size: .8em; color: var(--discret); margin: 12px 0 4px; }
@@ -110,7 +111,7 @@
 <header>
   <div>
     <h1>Allures et zones d'entraînement</h1>
-    <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault, valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
+    <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault (<a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology, 1989), valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
   </div>
   <div class="onglets" role="group" aria-label="Niveau de détail">
     <button type="button" class="onglet" data-affichage="simple">Simplifié</button>
@@ -144,11 +145,10 @@
         <summary>Profil d'entraînement <span class="sous">(requis s'il n'y a qu'une seule donnée)</span></summary>
         <div class="champs">
           <label>Volume hebdo (km)<input type="number" id="p-volume" min="0" step="1" placeholder="ex. 40"></label>
-          <label>Séances par semaine<input type="number" id="p-frequence" min="0" step="1" placeholder="ex. 3"></label>
-          <label>Années de pratique<input type="number" id="p-experience" min="0" step="0.5" placeholder="ex. 5"></label>
           <label>Âge<input type="number" id="p-age" min="10" max="100" step="1" placeholder="ex. 40"></label>
+          <label>Sexe<select id="p-sexe"><option value="">—</option><option value="F">Femme</option><option value="H">Homme</option></select></label>
         </div>
-        <label class="coche"><input type="checkbox" id="p-reprise"> Reprise après blessure ou pratique occasionnelle</label>
+        <p class="note">Coefficients ajustés sur 1 848 coureurs amateurs : Vickers A. J., Vertosick E. A., <a href="https://doi.org/10.1186/s13102-016-0052-y" target="_blank" rel="noopener"><cite>An empirical study of race times in recreational endurance runners</cite></a>, BMC Sports Science, Medicine and Rehabilitation, 2016.</p>
         <button type="button" class="lien" id="vider-profil">Vider le profil</button>
       </details>
       <p id="erreur" class="erreur" role="alert" hidden></p>
@@ -218,7 +218,7 @@
   const EXEMPLE = [[5000, '25:00'], [10000, '53:00']];
   const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
   const TEMPS_STANDARD = [6, 30, 60, 120, 240]; // min
-  const PROFIL = ['volume', 'frequence', 'experience', 'age'];
+  const PROFIL = ['volume', 'age', 'sexe'];
   // Repères de l'indice d'endurance : [seuil, description], retenu dès que IE > seuil
   const REPERES_IE = [[-4, 'vitesse à retravailler en priorité'], [-6, 'très bonne endurance, vitesse à développer'],
     [-8, 'profil équilibré entre vitesse et endurance'], [-10, 'endurance à développer'], [-Infinity, 'endurance à développer en priorité']];
@@ -263,7 +263,7 @@
     return { perfs, erreurs };
   }
 
-  const lireProfil = () => ({ ...Object.fromEntries(PROFIL.map(c => [c, $(`#p-${c}`).value])), reprise: $('#p-reprise').checked });
+  const lireProfil = () => Object.fromEntries(PROFIL.map(c => [c, $(`#p-${c}`).value]));
 
   function calculer() {
     const { perfs, erreurs } = lirePerformances(), vma = Number($('#vvo2').value);
@@ -276,7 +276,7 @@
     $('#erreur').textContent = message;
     $('#erreur').hidden = !message;
     // Profil visible même en mode simplifié s'il est requis ou déjà rempli
-    const profilRequis = /profil/.test(message) || PROFIL.some(c => $(`#p-${c}`).value) || $('#p-reprise').checked;
+    const profilRequis = /profil/.test(message) || PROFIL.some(c => $(`#p-${c}`).value);
     $('#profil-details').classList.toggle('requis', profilRequis);
     if (/profil/.test(message)) $('#profil-details').open = true;
     $('#resultats').hidden = vide || (!res && !dernier);
@@ -301,7 +301,7 @@
     const nb = res.performances.length + (res.vmaSaisie ? 1 : 0); // la VMA compte comme chrono de 6 min
     const endurance = REPERES_IE.find(([seuil]) => res.IE > seuil)[1];
     const ajustement = res.r2 !== null ? (res.vmaSaisie ? 'R² du modèle, VMA incluse' : 'R² de la régression')
-      : nb === 2 ? (res.vmaSaisie ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'VMA fournie';
+      : nb === 2 ? (res.vmaSaisie ? '1 performance + VMA : ajustement exact' : '2 performances : ajustement exact') : 'donnée unique complétée par le profil';
     $('#synthese').innerHTML = [
       chiffre('VMA', rouge(`${f1(res.vvo2Kmh)} km/h`, hors(6)), `allure ${E.formatAllure(1000 / res.V)} /km${hors(6) ? INCOHERENT : ''}`),
       chiffre('Allure 1 h', rouge(`${f1(vRef * 60 / 1000)} km/h`, hors(60)), `${E.formatAllure(1000 / vRef)} /km · référence des zones${hors(60) ? INCOHERENT : ''}`),
@@ -324,7 +324,7 @@
     $('#profil-estimation-contenu').innerHTML = `
       <p>Indice d'endurance estimé : <strong>${f1(e.IE)}</strong> (± ${f1(e.incertitude)})${res.profilUtilise ? ' : utilisé pour ce calcul' : `, contre ${f1(res.IE)} calculé à partir de vos chronos`}.</p>
       <ul class="note">${[`<li>Point de départ, coureur moyen : ${f1(e.base)}</li>`, ...e.details.map(d => `<li>${d.label} (${d.valeur}) : ${d.effet > 0 ? '+' : ''}${f1(d.effet)}</li>`)].join('')}</ul>
-      <p class="note">Ces coefficients sont des hypothèses, à valider avec des données réelles. Un indice plus proche de 0 traduit une meilleure endurance.</p>`;
+      <p class="note">Coefficients tirés d'une étude sur 1 848 coureurs amateurs (<a href="https://doi.org/10.1186/s13102-016-0052-y" target="_blank" rel="noopener">Vickers et Vertosick, 2016</a>). Estimation très approximative : un deuxième chrono sera toujours bien plus précis. Un indice plus proche de 0 traduit une meilleure endurance.</p>`;
 
     $('#graphique').innerHTML = tracerGraphique(res);
     $('#alerte-predictions').hidden = !res.coherenceFaible;
@@ -436,7 +436,6 @@
   $('#vider').addEventListener('click', () => { $('#lignes').innerHTML = ''; ajouterLigne(); calculer(); });
   $('#vider-profil').addEventListener('click', () => {
     PROFIL.forEach(c => { $(`#p-${c}`).value = ''; });
-    $('#p-reprise').checked = false;
     calculer();
   });
 

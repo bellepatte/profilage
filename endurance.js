@@ -18,7 +18,7 @@
   // Fiabilité d'une prédiction selon l'extrapolation hors de la plage saisie
   const SEUILS_FIABILITE = [[0.10, 'Élevée'], [0.60, 'Moyenne'], [1.20, 'Faible'], [2.00, 'Très faible'], [Infinity, 'Fantaisiste']];
   // La VMA compte comme une donnée (chrono sur 6 min) : une donnée seule ne suffit pas sans profil
-  const MESSAGE_DONNEE_UNIQUE = "Une seule donnée (performance ou VMA) ne suffit pas pour prédire : renseignez votre profil (volume, fréquence, expérience ou âge) ou une autre performance.";
+  const MESSAGE_DONNEE_UNIQUE = "Une seule donnée (performance ou VMA) ne suffit pas pour prédire : renseignez votre profil (volume, âge ou sexe) ou une autre performance.";
 
   // Zones en % de l'allure 1 h (pMin / pMax, null = sans limite)
   const ZONES_DEF = [
@@ -256,19 +256,18 @@
 
   /* ---------- Profil : estimation de l'indice quand les données manquent ---------- */
 
-  // Indice d'un coureur régulier, sans particularité. Hypothèses de l'estimation (à valider avec des données réelles).
-  const IE_MOYEN = -8;
-  const INCERT_BASE = 1.5;     // incertitude de base (points d'IE), élargie par facteur non renseigné
-  const EFFET_REPRISE = -1.5;  // reprise après blessure ou pratique occasionnelle
+  // Coefficients ajustés sur 1 848 coureurs amateurs (Vickers & Vertosick, BMC Sports Sci Med Rehabil 2016) :
+  // indice médian −7,2 ; volume, âge et sexe n'expliquent qu'environ 7 % des écarts entre coureurs.
+  const IE_MOYEN = -7.2;
+  const INCERT_BASE = 2.5;     // incertitude de base (points d'IE), élargie par facteur non renseigné
   // Effet sur l'IE (points) selon chaque facteur. Un effet positif rapproche l'IE de 0 (endurance meilleure).
   // Points d'ancrage [valeur, effet] reliés par interpolation linéaire, constants au-delà des bornes.
   const ANCRES = {
-    volume: [[10, -2], [30, -1], [50, 0], [70, 1], [90, 1.5]],        // km / semaine
-    frequence: [[1, -1], [3, 0], [5, 0.5], [7, 1]],                    // séances / semaine
-    experience: [[0.5, -2], [2, -1], [5, 0], [10, 1], [20, 1.5]],      // années de pratique régulière
-    age: [[18, -1], [27.5, 0], [42.5, 0.5], [60, 1]]                   // années
+    volume: [[10, -1], [30, -0.7], [50, -0.2], [70, 0.2], [90, 0.6], [110, 1.2]], // km / semaine
+    age: [[18, -1], [27.5, 0], [42.5, 0.2], [60, 0.7]]                             // années
   };
-  const LIBELLES = { volume: ['Volume', ' km/sem'], frequence: ['Fréquence', ' séances/sem'], experience: ['Expérience', ' ans'], age: ['Âge', ' ans'] };
+  const EFFET_SEXE = { H: -0.2, F: 0.3 };
+  const LIBELLES = { volume: ['Volume', ' km/sem'], age: ['Âge', ' ans'] };
 
   function effetInterpole(ancres, x) {
     const i = ancres.findIndex(([v]) => v >= x);
@@ -281,7 +280,7 @@
   /**
    * Estime l'indice d'endurance à partir du profil : chaque facteur renseigné ajoute ou retire
    * des points à un coureur moyen. Un facteur absent n'agit pas, mais élargit l'incertitude.
-   *   profil : { volume, frequence, experience, age (nombres ou vides), reprise (booléen) }
+   *   profil : { volume, age (nombres ou vides), sexe ('H', 'F' ou vide) }
    */
   function estimerIE(profil = {}) {
     let IE = IE_MOYEN, manquants = 0;
@@ -293,9 +292,11 @@
       IE += effet;
       details.push({ label: LIBELLES[cle][0], valeur: x + LIBELLES[cle][1], effet });
     }
-    if (profil.reprise) {
-      IE += EFFET_REPRISE;
-      details.push({ label: 'Reprise ou pratique occasionnelle', valeur: 'oui', effet: EFFET_REPRISE });
+    const effetSexe = EFFET_SEXE[profil.sexe];
+    if (effetSexe === undefined) manquants++;
+    else {
+      IE += effetSexe;
+      details.push({ label: 'Sexe', valeur: profil.sexe === 'F' ? 'femme' : 'homme', effet: effetSexe });
     }
     IE = Math.min(IE_HABITUEL[1], Math.max(IE_HABITUEL[0], IE));
     return { IE, base: IE_MOYEN, incertitude: INCERT_BASE + 0.5 * manquants, details, renseigne: details.length > 0 };

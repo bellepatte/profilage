@@ -29,6 +29,9 @@ Il n'y a pas de build, pas de gestionnaire de paquets, pas de tests versionnés.
 
 ## Modèle (forme simplifiée de Péronnet & Thibault)
 
+Référence citée dans le sous-titre de la page : Péronnet F., Thibault G., *Mathematical analysis of running
+performance and world running records*, J Appl Physiol 1989 (doi:10.1152/jappl.1989.67.1.453).
+
 - `% VMA(T) = 100 + IE × ln(T / 6)`, T en minutes. `k = IE / 100`.
 - Vitesse tenable : `v(T) = VMA × (1 + k × ln(T / 6))`, en m/min en interne.
 - Calibrage : régression linéaire de `v = distance / temps` sur `x = ln(temps / 6)`.
@@ -52,10 +55,14 @@ Il n'y a pas de build, pas de gestionnaire de paquets, pas de tests versionnés.
   la tendance (> 2 points de % VMA) dont le retrait rend les autres cohérentes (≥ 4 points au total).
   Sans contre-performance identifiable, les points hors tendance sont « à vérifier ». Une
   incohérence reste dans le calcul, mais abaisse la fiabilité d'un cran (`coherenceFaible`).
-- **Profil** (`estimerIE`) : point de départ −8 (coureur moyen), effets par volume, fréquence,
-  expérience, âge et reprise (`ANCRES` interpolés linéairement, `EFFET_REPRISE`), incertitude ±1,5 plus 0,5 par facteur
-  manquant. Bornes −14 à −2. Les coefficients sont des **hypothèses**, à valider avec des données réelles.
-  L'effet « âge » en particulier est discutable : la VO2max diminue avec l'âge.
+- **Profil** (`estimerIE`) : point de départ −7,2 (indice médian), effets du volume et de l'âge
+  (`ANCRES` interpolés linéairement) et du sexe (`EFFET_SEXE` : femme +0,3, homme −0,2), incertitude ±2,5
+  plus 0,5 par facteur manquant. Bornes −14 à −2. Coefficients ajustés sur 1 848 coureurs amateurs
+  (Vickers & Vertosick, *BMC Sports Sci Med Rehabil* 2016, données publiques) : indice qui remonte avec
+  le volume (≈ 2,3 points de < 20 à > 100 km/sem) et après 50 ans, plus bas avant 25 ans. Ces facteurs
+  n'expliquent qu'environ 7 % des écarts entre coureurs (erreur moyenne ≈ 2,1 points) : le profil reste
+  très approximatif. Fréquence, expérience et reprise ont été retirées (non validables) ; fractionné et
+  tempo non retenus (le public visé en fait). La référence (lien DOI) est citée dans le profil et sous l'estimation.
 - **Repli** (`calibrerComplet`) : la VMA compte comme une donnée (chrono sur 6 min). Une seule
   donnée (une performance, ou la VMA seule) ne suffit que si le profil est renseigné : la VMA est
   alors déduite du profil, ou l'indice vient du profil. Profil vide → refusé. Deux données ou plus →
@@ -100,6 +107,7 @@ certaines sessions : utiliser le chemin complet.
 
 ## Points ouverts
 
-- Valider les coefficients du profil (`ANCRES`) et la pertinence de l'effet âge.
+- Coefficients du profil ajustés sur une population américaine recrutée en ligne (temps déclarés) :
+  à confirmer sur des coureurs du public visé si des données sont disponibles.
 - Affichage téléphone vérifié en capture à 390 px ; reste à tester sur un vrai appareil (saisie tactile).
 - Les tests de non-régression ne sont pas dans le projet : les ajouter si le projet doit évoluer.
