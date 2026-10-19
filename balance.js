@@ -28,6 +28,7 @@
   // écart-type que l'intensité) autour de l'allure de l'objectif ; Z2 prend de l'avance si l'allure de course y est.
   const SPECIFIQUE_FACILE = 2;
   const state = { volume: 5, unit: 'h', goal: '10k', easy: EASY_BASE, easyAuto: true, rec: 15, recAuto: true, profil: null };
+  let ctx = null; // objectif, volume hebdomadaire (h) et profil du dernier rendu, lus par plan.js
 
   // Indice d'endurance : mauvais (≤ −10) → accent sur l'aérobie (intensité en Z3/Z4) ;
   // bon (≥ −4) → vitesse prioritaire (intensité en Z5/Z6) ; autour de IE_NEUTRE → toutes les filières.
@@ -150,8 +151,18 @@
     const tss = heures && heures.map((h, i) => h * c[i]), tssTot = tss ? tss.reduce((s, x) => s + x, 0) : 0;
 
     const showH = rows[0].h !== null, showKm = rows[0].km !== null;
+    // Repère de l'allure de l'objectif : dans le segment de sa zone, au prorata de sa place entre les bornes de la zone
+    const iObj = gp === null ? -1 : (i => (i < 0 ? 5 : i))(Z.findIndex(z => gp * 100 < z.hi));
+    const posObj = iObj < 0 ? null : 100 * (t.slice(0, iObj).reduce((s, x) => s + x, 0) +
+      t[iObj] * Math.min(1, Math.max(0, (gp * 100 - Z[iObj].lo) / (Z[iObj].hi - Z[iObj].lo))));
+    const allureObj = iObj < 0 ? '' : `${g.label} : ${E.formatAllure(1000 / (E.vitesseReference(profil) * gp))} /km`;
     $('eq-bar').innerHTML = Z.map((z, i) =>
-      `<div class="segment${i === 2 ? ' sep' : ''}" style="flex:${t[i] * 100};background:var(--z${i + 1})" title="${z.id} ${z.nom} : ${fmtPct(t[i] * 100)} du volume, ${fmtPct(f[i] * 100)} du TSS">${t[i] > 0.05 ? z.id : ''}</div>`).join('');
+      `<div class="segment${i === 2 ? ' sep' : ''}" style="flex:${t[i] * 100};background:var(--z${i + 1})" title="${z.id} ${z.nom} : ${fmtPct(t[i] * 100)} du volume, ${fmtPct(f[i] * 100)} du TSS">${t[i] > 0.05 ? z.id : ''}</div>`).join('') +
+      (posObj === null ? '' : `<div class="repere" style="left:${posObj}%" title="Allure ${allureObj}"></div>`);
+    $('eq-repere').hidden = posObj === null;
+    $('eq-repere').innerHTML = posObj === null ? '' : posObj > 50
+      ? `<span style="left:${posObj}%;transform:translateX(calc(-100% + .45em))">${allureObj} ▼</span>`
+      : `<span style="left:${posObj}%;transform:translateX(-.45em)">▼ ${allureObj}</span>`;
 
     const sum = (rs, k) => rs.reduce((s, r) => [s[0] + r[k][0], s[1] + r[k][1]], [0, 0]);
     const part = (rs) => [showH && fmtRange(fmtTime, sum(rs, 'h')), showKm && fmtRange(fmtKm, sum(rs, 'km'))].filter(Boolean).join(' · ');
@@ -188,7 +199,7 @@
 
     $('eq-zoneNote').textContent = gp === null
       ? "Renseignez votre profil pour centrer l'intensité sur l'allure de l'objectif."
-      : `Allure ${g.label} ≈ ${fmtPct(gp * 100)} de l'allure 1 h (${(Z.find(z => gp * 100 < z.hi) || Z[5]).id}) : le volume d'intensité est réparti autour de cette zone.`;
+      : `Allure ${g.label} ≈ ${fmtPct(gp * 100)} de l'allure 1 h (${Z[iObj].id}) : le volume d'intensité est réparti autour de cette zone.`;
 
     const b = biaisIE();
     $('eq-biais').textContent = !profil ? '' : b <= -1 / 3
@@ -199,6 +210,8 @@
     $('eq-easyLbl').textContent = `${state.easy} % / ${100 - state.easy} %`;
     $('eq-recLbl').textContent = `${state.rec} %`;
     save();
+    ctx = { goal: state.goal, label: g.label, dist: g.dist, heures: h, profil };
+    document.dispatchEvent(new Event('balance')); // le plan d'entraînement (plan.js) repart de ce contexte
   }
 
   // Initialisation des contrôles
@@ -229,6 +242,6 @@
     render();
   }
 
-  window.Balance = { setProfil };
+  window.Balance = { setProfil, contexte: () => ctx };
   render();
 })();

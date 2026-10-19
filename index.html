@@ -92,7 +92,14 @@
   .bandes > div { padding: 3px 6px; }
   .bande-faible { background: var(--accent-doux); color: var(--accent); border-radius: 6px 0 0 6px; }
   .bande-haute { background: var(--entete); border-radius: 0 6px 6px 0; }
-  .barre { border-radius: 8px; overflow: hidden; height: 44px; }
+  .barre { border-radius: 8px; overflow: hidden; height: 44px; position: relative; }
+  .test-cache { opacity: 0; border: 0; background: none; padding: 0 4px; font-size: .6em; vertical-align: middle; cursor: pointer; }
+  .test-cache:hover, .test-cache:focus-visible { opacity: .6; }
+  .reperes { position: relative; height: 2.7em; font-size: .75em; font-weight: 600; color: var(--discret); }
+  .reperes span { position: absolute; transform: translateX(-50%); white-space: nowrap; line-height: 1.3; }
+  .reperes .rang0 { bottom: 0; }
+  .reperes .rang1 { bottom: 1.35em; }
+  .repere { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--texte); box-shadow: 0 0 0 1px #fff; }
   .segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; min-width: 0; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
   .segment:nth-child(5) { color: #18202c; text-shadow: none; }
   .segment.sep { box-shadow: inset 3px 0 0 var(--texte); }
@@ -119,6 +126,34 @@
   .extremes { display: flex; justify-content: space-between; }
   #eq-bar { margin-bottom: 4px; }
   .repartition { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--discret); font-size: .88em; margin: 6px 0 12px; }
+  .groupe { font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--discret); margin: 14px 0 0; }
+  .groupe:first-of-type { margin-top: 0; }
+  .methode-choisie { border-top: 1px solid var(--bord); margin-top: 14px; padding-top: 12px; }
+  .methode-choisie h3 { margin: 0 0 6px; font-size: 1rem; }
+  .methode-choisie p { margin: 6px 0 0; }
+  #pl-chiffres { margin-bottom: 4px; }
+  .methodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .methode { display: grid; align-content: start; gap: 4px; text-align: left; border: 1px solid var(--bord); border-radius: 10px; padding: 10px 12px; font-size: .92em; }
+  .methode:hover { border-color: var(--accent); }
+  .methode.actif { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-doux); }
+  .badge { justify-self: start; font-size: .75em; font-weight: 700; color: var(--carte); background: var(--accent); border-radius: 999px; padding: 1px 8px; }
+  .difficulte { font-size: .85em; font-weight: 600; }
+  .facteurs { display: flex; flex-wrap: wrap; gap: 4px; }
+  .facteur { font-size: .76em; border: 1px solid var(--bord); border-radius: 999px; padding: 1px 8px; color: var(--discret); cursor: help; }
+  .facteur.plus { color: var(--z4); border-color: var(--z4); }
+  .facteur.moins { color: var(--rouge); border-color: var(--rouge); }
+  .points { color: var(--z6); letter-spacing: 1px; margin-right: 4px; }
+  .points span { color: var(--bord); }
+  .volumes { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 16px 0 22px; }
+  .volumes div { flex: 1; min-width: 0; position: relative; border-radius: 4px 4px 0 0; background: var(--accent); }
+  .volumes .decharge { background: var(--z2); opacity: .5; }
+  .volumes .affutage { background: var(--z4); }
+  .volumes span { position: absolute; top: 100%; left: 0; right: 0; text-align: center; font-size: .7em; color: var(--discret); }
+  .semaine { border: 1px solid var(--bord); border-radius: 10px; padding: 8px 12px; margin-top: 8px; }
+  .semaine.decharge { background: var(--entete); }
+  .seances { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
+  .seances li { border-left: 4px solid var(--c); padding: 2px 0 2px 10px; display: grid; gap: 4px; }
+  .jour { font-size: .75em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--discret); }
   .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   tfoot td { font-weight: 700; border-bottom: 0; }
 </style>
@@ -126,11 +161,12 @@
 <body>
 <header>
   <div>
-    <h1>Profilage athlétique</h1>
+    <h1>Profilage athlétique <button type="button" class="test-cache" id="test-aleatoire" title="Données de test aléatoires" aria-label="Remplir avec des données de test aléatoires">🎲</button></h1>
     <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault (<a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology, 1989), valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
     <div class="onglets vues" role="group" aria-label="Section">
       <button type="button" class="onglet" data-vue="profil">Profil et zones</button>
       <button type="button" class="onglet" data-vue="equilibre">Répartition du volume</button>
+      <button type="button" class="onglet" data-vue="plan">Plan d'entraînement</button>
     </div>
   </div>
   <div class="onglets" role="group" aria-label="Niveau de détail">
@@ -212,6 +248,7 @@
     <section class="carte">
       <h2>Zones d'entraînement</h2>
       <div class="bandes" id="bandes"></div>
+      <div class="reperes" id="reperes" aria-hidden="true"></div>
       <div class="barre" id="barre" role="img" aria-label="Barre des 6 zones d'entraînement"></div>
       <div class="barre-allures" id="barre-allures"></div>
       <div class="echelle avance" id="echelle"></div>
@@ -259,6 +296,7 @@
 
   <section class="carte">
     <h2>Répartition par zone</h2>
+    <div class="echelle" id="eq-repere" hidden></div>
     <div class="barre" id="eq-bar" role="img" aria-label="Répartition du volume entre les 6 zones"></div>
     <div class="repartition"><span id="eq-easyTot"></span><span id="eq-hardTot"></span></div>
     <p class="note" id="eq-zoneNote" style="margin:-6px 0 12px"></p>
@@ -270,6 +308,70 @@
       </table>
     </div>
     <p class="note avance" id="eq-note"></p>
+    <p><button type="button" class="sec" data-vue="plan">Construire mon plan d'entraînement →</button></p>
+  </section>
+</div>
+
+<div class="page seul" id="vue-plan" hidden>
+  <p class="note profil-utilise" id="pl-contexte"></p>
+
+  <section class="carte">
+    <h2>1. Paramètres du plan</h2>
+    <h3 class="groupe">Semaine type</h3>
+    <div class="champs">
+      <label>Jours de course par semaine <select id="pl-seances"></select></label>
+      <label>Doublés (jours à deux séances) <select id="pl-doubles"></select></label>
+      <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
+        <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
+      </label>
+    </div>
+    <h3 class="groupe">Préparation</h3>
+    <div class="champs">
+      <label>Nombre de semaines <input id="pl-semaines" type="number" min="4" max="24" step="1" inputmode="numeric"></label>
+      <label>Cycle
+        <select id="pl-cycle"><option value="constante">Charge constante</option><option value="cycle">Semaines de charge puis de décharge</option></select>
+      </label>
+      <div class="rang" id="pl-cycleNb">
+        <label>Charge (sem.) <input id="pl-charge" type="number" min="1" max="6" step="1" inputmode="numeric"></label>
+        <label>Décharge (sem.) <input id="pl-decharge" type="number" min="1" max="2" step="1" inputmode="numeric"></label>
+      </div>
+    </div>
+    <div class="curseur-tete">
+      <label for="pl-difficulte">Difficulté de la première semaine</label>
+      <strong id="pl-diffLbl"></strong>
+    </div>
+    <input id="pl-difficulte" type="range" min="1" max="10" step="1">
+    <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
+    <p class="note" id="pl-diffNote"></p>
+    <p class="note avance">La difficulté monte de 3 niveaux jusqu'à l'affûtage. En cycle, le volume augmente de 6 % par semaine de charge ; une semaine de décharge revient à 70 % du volume, avec une séance de qualité en moins et un niveau plus bas.</p>
+  </section>
+
+  <section class="carte">
+    <h2>2. Choix de la méthode</h2>
+    <p class="note" style="margin:0 0 10px">Classées pour vous : pastilles vertes favorables, rouges défavorables (survolez-les pour le détail).</p>
+    <div class="methodes" id="pl-methodes"></div>
+    <div class="methode-choisie">
+      <h3 id="pl-titre"></h3>
+      <div id="pl-resume"></div>
+    </div>
+  </section>
+
+  <section class="carte">
+    <h2>3. Récapitulatif</h2>
+    <ul class="alertes" id="pl-alertes" hidden></ul>
+    <div class="chiffres" id="pl-chiffres"></div>
+    <div class="volumes" id="pl-volumes" role="img" aria-label="Temps de course prévu par semaine"></div>
+    <p class="note"><span class="pastille" style="background:var(--accent)"></span>Charge · <span class="pastille" style="background:var(--z2);opacity:.5"></span>Décharge · <span class="pastille" style="background:var(--z4)"></span>Affûtage</p>
+    <details class="recap"><summary>Tableau semaine par semaine</summary>
+      <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
+      <p class="note">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</p>
+    </details>
+  </section>
+
+  <section class="carte">
+    <h2>4. Semaine par semaine</h2>
+    <div id="pl-liste"></div>
+    <p class="note">Plans inspirés des principes publiés par ces entraîneurs et calculés à partir de votre profil : ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</p>
   </section>
 </div>
 
@@ -280,6 +382,7 @@
 
 <script src="endurance.js"></script>
 <script src="balance.js"></script>
+<script src="plan.js"></script>
 <script>
 (function () {
   'use strict';
@@ -289,6 +392,7 @@
   const ECHELLE = [50, 130]; // échelle de la barre des zones (% de l'allure 1 h) ; les zones ouvertes s'arrêtent aux bornes
   const EXEMPLE = [[5000, '25:00'], [10000, '53:00']];
   const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
+  const COURTS = { 1500: '1500', 5000: '5 km', 10000: '10 km', 21097: 'Semi', 42195: 'Mara.' }; // libellés des repères de la barre des zones
   const TEMPS_STANDARD = [6, 30, 60, 120, 240]; // min
   const PROFIL = ['volume', 'age', 'sexe'];
   // Repères de l'indice d'endurance : [seuil, description], retenu dès que IE > seuil
@@ -465,7 +569,15 @@
     const vmaAuDessus = (z) => z.id === 'Z5' && vmaMax > 60 / z.allureRapide; // VMA au-delà du haut de Z5
     $('#bandes').innerHTML = `<div class="bande-faible" style="flex:${frontiere - ECHELLE[0]}">Faible intensité : Z1 + Z2</div>`
       + `<div class="bande-haute" style="flex:${ECHELLE[1] - frontiere}">Intensité élevée : Z3 à Z6</div>`;
-    $('#barre').innerHTML = zones.map((z, i) => `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${largeur(z)};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`).join('');
+    // Repères des allures prédites (distances standard), en % de l'allure 1 h sur l'échelle de la barre ; libellés sur deux rangs alternés
+    const vRefKmh = E.vitesseReference(res) * 60 / 1000;
+    const reperes = E.tablePredictions(res).filter(p => Number.isFinite(p.vitesseKmh))
+      .map(p => ({ p, pos: (Math.min(ECHELLE[1], Math.max(ECHELLE[0], p.vitesseKmh / vRefKmh * 100)) - ECHELLE[0]) / (ECHELLE[1] - ECHELLE[0]) * 100 }))
+      .sort((a, b) => a.pos - b.pos);
+    const titre = ({ p }) => `${NOMS[p.distance]} : ${E.formatAllure(p.allureMinKm)} /km, ${f1(p.vitesseKmh)} km/h (${f1(p.vitesseKmh / vRefKmh * 100)} % de l'allure 1 h)`;
+    $('#reperes').innerHTML = reperes.map((r, i) => `<span class="rang${i % 2}" style="left:${r.pos.toFixed(2)}%" title="${titre(r)}">${COURTS[r.p.distance]}</span>`).join('');
+    $('#barre').innerHTML = zones.map((z, i) => `<div class="segment${z.pMin === frontiere ? ' sep' : ''}" style="flex:${largeur(z)};background:${COULEURS[i]}" title="${z.id} ${z.nom} : ${plageZone(z)} de l'allure 1 h">${z.id}</div>`).join('')
+      + reperes.map(r => `<div class="repere" style="left:${r.pos.toFixed(2)}%" title="${titre(r)}"></div>`).join('');
     $('#barre-allures').innerHTML = zones.map(z => `<div style="flex:${largeur(z)}">${allureZone(z, true)}</div>`).join('');
     $('#echelle').innerHTML = zones.filter(z => z.pMin !== null)
       .map(z => `<span style="left:${((z.pMin - ECHELLE[0]) / (ECHELLE[1] - ECHELLE[0]) * 100).toFixed(2)}%">${z.pMin} %</span>`).join('');
@@ -506,6 +618,28 @@
   $('#vider').addEventListener('click', () => { $('#lignes').innerHTML = ''; ajouterLigne(); calculer(); });
   $('#vider-profil').addEventListener('click', () => {
     PROFIL.forEach(c => { $(`#p-${c}`).value = ''; });
+    calculer();
+  });
+
+  /** Test (bouton caché à droite du titre) : coureur aléatoire (VMA 10–22 km/h, indice −12 à −3), 1 à 4 chronos tirés du modèle
+      avec ±2 % de bruit, parfois une contre-performance, la VMA ou le profil ; une donnée seule vient toujours avec un profil */
+  $('#test-aleatoire').addEventListener('click', () => {
+    const alea = (a, b) => a + Math.random() * (b - a), hasard = (p) => Math.random() < p;
+    const vma = alea(10, 22), k = alea(-12, -3) / 100, vMpm = vma * 1000 / 60;
+    const temps = (d) => { // dichotomie sur d = v(T) × T, en min
+      let a = 1, b = 600;
+      for (let i = 0; i < 50; i++) { const t = (a + b) / 2; if (vMpm * (1 + k * Math.log(t / 6)) * t < d) a = t; else b = t; }
+      return a;
+    };
+    const distances = [1500, 3000, 5000, 10000, 21097, 42195].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 4)).sort((a, b) => a - b);
+    const avecVma = hasard(0.3), avecProfil = distances.length === 1 || hasard(0.4);
+    const contre = distances.length >= 3 && hasard(0.2) ? Math.floor(Math.random() * distances.length) : -1;
+    $('#lignes').innerHTML = '';
+    distances.forEach((d, i) => ajouterLigne(String(d), E.formatTemps(Math.round(temps(d) * alea(0.98, 1.02) * (i === contre ? 1.08 : 1) * 60) / 60)));
+    $('#vvo2').value = avecVma ? (vma * alea(0.97, 1.03)).toFixed(1) : '';
+    $('#p-volume').value = avecProfil ? Math.round(alea(10, 110)) : '';
+    $('#p-age').value = avecProfil ? Math.round(alea(18, 70)) : '';
+    $('#p-sexe').value = avecProfil ? (hasard(0.5) ? 'F' : 'H') : '';
     calculer();
   });
 
@@ -552,10 +686,10 @@
     try { localStorage.setItem('affichage', simple ? 'simple' : 'avance'); } catch (e) { /* stockage indisponible */ }
   }
   document.querySelectorAll('[data-affichage]').forEach(b => b.addEventListener('click', () => choisirAffichage(b.dataset.affichage === 'simple')));
-  /** Section affichée : profil et zones, ou répartition du volume (balance.js) ; le choix est mémorisé */
+  /** Section affichée : profil et zones, répartition du volume (balance.js) ou plan (plan.js) ; le choix est mémorisé */
+  const VUES = ['profil', 'equilibre', 'plan'];
   function choisirVue(nom) {
-    $('#vue-profil').hidden = nom !== 'profil';
-    $('#vue-equilibre').hidden = nom !== 'equilibre';
+    VUES.forEach(v => { $(`#vue-${v}`).hidden = nom !== v; });
     document.querySelectorAll('.vues [data-vue]').forEach(b => {
       b.classList.toggle('actif', b.dataset.vue === nom);
       b.setAttribute('aria-pressed', b.dataset.vue === nom);
@@ -568,7 +702,7 @@
   });
   let vue = null;
   try { vue = localStorage.getItem('vue'); } catch (e) { /* stockage indisponible */ }
-  choisirVue(vue === 'equilibre' ? 'equilibre' : 'profil');
+  choisirVue(VUES.includes(vue) ? vue : 'profil');
 
   let affichage = null;
   try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
