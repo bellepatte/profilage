@@ -254,6 +254,14 @@
     }));
   }
 
+  /** Plage d'une zone en % de l'allure 1 h : « < 65 % », « 65–80 % », « > 120 % » */
+  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
+
+  /** Allures d'une zone (min/km) ; `court` pour les espaces réduits (barre des zones) */
+  const allureZone = (z, court) => (z.pMin === null ? `${court ? '>' : 'plus lent que'} ${formatAllure(z.allureRapide)}`
+    : z.pMax === null ? `${court ? '<' : 'plus rapide que'} ${formatAllure(z.allureLente)}`
+    : `${formatAllure(z.allureRapide)}${court ? '–' : ' – '}${formatAllure(z.allureLente)}`);
+
   /* ---------- Profil : estimation de l'indice quand les données manquent ---------- */
 
   // Coefficients ajustés sur 1 848 coureurs amateurs (Vickers & Vertosick, BMC Sports Sci Med Rehabil 2016) :
@@ -340,7 +348,7 @@
   }
 
   const API = {
-    parseTemps, parseDistance, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, vitesseReference,
+    parseTemps, parseDistance, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, plageZone, allureZone, vitesseReference,
     formatAllure, formatTemps, formatDuree
   };
 

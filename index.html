@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Allures et zones — indice d'endurance</title>
+<title>Profilage athlétique — allures, zones et répartition</title>
 <style>
-  :root { --fond:#eef1f5; --carte:#fff; --texte:#18202c; --discret:#4a5568; --accent:#1f6feb; --accent-doux:#e8f0fe; --bord:#d5dbe3; --bord-fort:#8a96a8; --entete:#f4f6f9; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; --ombre:0 1px 3px rgba(16,24,40,.08); }
+  :root { --fond:#eef1f5; --carte:#fff; --texte:#18202c; --discret:#4a5568; --accent:#1f6feb; --accent-doux:#e8f0fe; --bord:#d5dbe3; --bord-fort:#8a96a8; --entete:#f4f6f9; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; --ombre:0 1px 3px rgba(16,24,40,.08); --z1:#6b7f99; --z2:#4e8fd9; --z3:#2f9e8f; --z4:#5aa04a; --z5:#e0a100; --z6:#d9542b; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#2e3947; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; --ombre:none; }
   }
@@ -18,7 +18,8 @@
   h1 { font-size: 1.45rem; margin: 0; }
   header p { color: var(--discret); margin: 4px 0 0; max-width: 75ch; }
   .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-bottom: 40px; }
-  @media (min-width: 960px) { .page { grid-template-columns: 340px minmax(0, 1fr); align-items: start; } .saisie { position: sticky; top: 16px; } }
+  @media (min-width: 960px) { .page:not(.seul) { grid-template-columns: 340px minmax(0, 1fr); align-items: start; } .saisie { position: sticky; top: 16px; } }
+  .page.seul { max-width: 900px; }
   .resultats { display: grid; gap: 16px; min-width: 0; transition: opacity .2s; }
   .perime { opacity: .45; }
   .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 16px; box-shadow: var(--ombre); min-width: 0; }
@@ -105,13 +106,32 @@
   .zone-carte details { margin-top: 6px; font-size: .9em; }
   .zone-carte summary { font-weight: 400; color: var(--accent); }
   .zone-carte ol { margin: 6px 0 0; padding-left: 20px; }
+  .vues { margin-top: 10px; }
+  .vues .onglet { padding: 6px 18px; }
+  .profil-utilise { margin: 0 0 16px; }
+  .rang { display: flex; gap: 8px; }
+  .rang input { flex: 1; }
+  .curseur-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .curseur-tete:first-child { margin-top: 0; }
+  .curseur-tete label { font-weight: 600; }
+  .curseur-tete strong { font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; padding: 0; border: 0; background: none; accent-color: var(--accent); margin: 8px 0 2px; }
+  .extremes { display: flex; justify-content: space-between; }
+  #eq-bar { margin-bottom: 4px; }
+  .repartition { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--discret); font-size: .88em; margin: 6px 0 12px; }
+  .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+  tfoot td { font-weight: 700; border-bottom: 0; }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>Allures et zones d'entraînement</h1>
+    <h1>Profilage athlétique</h1>
     <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault (<a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology, 1989), valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
+    <div class="onglets vues" role="group" aria-label="Section">
+      <button type="button" class="onglet" data-vue="profil">Profil et zones</button>
+      <button type="button" class="onglet" data-vue="equilibre">Répartition du volume</button>
+    </div>
   </div>
   <div class="onglets" role="group" aria-label="Niveau de détail">
     <button type="button" class="onglet" data-affichage="simple">Simplifié</button>
@@ -119,7 +139,7 @@
   </div>
 </header>
 
-<div class="page">
+<div class="page" id="vue-profil">
   <aside class="carte saisie">
     <form id="formulaire" novalidate>
       <h2>Vos données</h2>
@@ -198,8 +218,59 @@
       <p class="note"><span class="avance">Largeur proportionnelle à la plage de % de l'allure 1 h. </span><strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
       <div class="zones-grille" id="zones-grille"></div>
       <p class="note">Allures indicatives, valables sur terrain plat et roulant : réduisez-les dans les parties techniques ou en montée.</p>
+      <p><button type="button" class="sec" data-vue="equilibre">Répartir mon volume d'entraînement par zones →</button></p>
     </section>
   </div>
+</div>
+
+<div class="page seul" id="vue-equilibre" hidden>
+  <p class="note profil-utilise" id="eq-profil"></p>
+  <p class="note" id="eq-biais"></p>
+
+  <section class="carte">
+    <div class="champs">
+      <label>Volume hebdomadaire
+        <div class="rang">
+          <input id="eq-volume" type="number" min="0" step="0.5" inputmode="decimal">
+          <div class="onglets" id="eq-unit"><button type="button" class="onglet" data-u="h">h</button><button type="button" class="onglet" data-u="km">km</button></div>
+        </div>
+      </label>
+      <label>Objectif <select id="eq-goal"></select></label>
+    </div>
+  </section>
+
+  <section class="carte">
+    <div class="curseur-tete">
+      <label for="eq-easy">Endurance (Z1+Z2) / Intensité (Z3→Z6)</label>
+      <span><strong id="eq-easyLbl"></strong> <button class="lien" id="eq-resetEasy" type="button"></button></span>
+    </div>
+    <input id="eq-easy" type="range" min="50" max="100" step="1">
+    <div class="extremes sous"><span>50 % facile</span><span>100 % facile</span></div>
+    <p class="note avance" id="eq-easyNote"></p>
+
+    <div class="curseur-tete">
+      <label for="eq-rec">Part de récupération (Z1) dans l'endurance</label>
+      <span><strong id="eq-recLbl"></strong> <button class="lien" id="eq-resetRec" type="button"></button></span>
+    </div>
+    <input id="eq-rec" type="range" min="0" max="50" step="1">
+    <div class="extremes sous"><span>0 %</span><span>50 %</span></div>
+    <p class="note avance" id="eq-recNote"></p>
+  </section>
+
+  <section class="carte">
+    <h2>Répartition par zone</h2>
+    <div class="barre" id="eq-bar" role="img" aria-label="Répartition du volume entre les 6 zones"></div>
+    <div class="repartition"><span id="eq-easyTot"></span><span id="eq-hardTot"></span></div>
+    <p class="note" id="eq-zoneNote" style="margin:-6px 0 12px"></p>
+    <div class="tableau">
+      <table>
+        <thead><tr id="eq-thead"></tr></thead>
+        <tbody id="eq-tbody"></tbody>
+        <tfoot><tr id="eq-tfoot"></tr></tfoot>
+      </table>
+    </div>
+    <p class="note avance" id="eq-note"></p>
+  </section>
 </div>
 
 <datalist id="distances">
@@ -208,12 +279,13 @@
 </datalist>
 
 <script src="endurance.js"></script>
+<script src="balance.js"></script>
 <script>
 (function () {
   'use strict';
   const E = window.Endurance;
   const $ = (sel) => document.querySelector(sel);
-  const COULEURS = ['#6b7f99', '#4e8fd9', '#2f9e8f', '#5aa04a', '#e0a100', '#d9542b'];
+  const COULEURS = [1, 2, 3, 4, 5, 6].map(n => `var(--z${n})`);
   const ECHELLE = [50, 130]; // échelle de la barre des zones (% de l'allure 1 h) ; les zones ouvertes s'arrêtent aux bornes
   const EXEMPLE = [[5000, '25:00'], [10000, '53:00']];
   const NOMS = { 1500: '1500 m', 5000: '5 km', 10000: '10 km', 21097: 'Semi-marathon', 42195: 'Marathon' };
@@ -330,6 +402,7 @@
     $('#alerte-predictions').hidden = !res.coherenceFaible;
     rendrePredictions(res);
     rendreZones(res);
+    window.Balance.setProfil(res); // la répartition du volume repart de ce profil
   }
 
   /** Graphique : % VMA selon la durée (échelle log), courbe de tendance, performances à vérifier en rouge */
@@ -379,10 +452,7 @@
 
   /* ---------- Zones ---------- */
 
-  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
-  const allureZone = (z, court) => (z.pMin === null ? `${court ? '>' : 'plus lent que'} ${E.formatAllure(z.allureRapide)}`
-    : z.pMax === null ? `${court ? '<' : 'plus rapide que'} ${E.formatAllure(z.allureLente)}`
-    : `${E.formatAllure(z.allureRapide)}${court ? '–' : ' – '}${E.formatAllure(z.allureLente)}`);
+  const { plageZone, allureZone } = E;
   const vitesseZone = (z) => (z.pMin === null ? `moins de ${f1(60 / z.allureRapide)} km/h`
     : z.pMax === null ? `plus de ${f1(60 / z.allureLente)} km/h`
     : `${f1(60 / z.allureLente)} – ${f1(60 / z.allureRapide)} km/h`);
@@ -482,6 +552,24 @@
     try { localStorage.setItem('affichage', simple ? 'simple' : 'avance'); } catch (e) { /* stockage indisponible */ }
   }
   document.querySelectorAll('[data-affichage]').forEach(b => b.addEventListener('click', () => choisirAffichage(b.dataset.affichage === 'simple')));
+  /** Section affichée : profil et zones, ou répartition du volume (balance.js) ; le choix est mémorisé */
+  function choisirVue(nom) {
+    $('#vue-profil').hidden = nom !== 'profil';
+    $('#vue-equilibre').hidden = nom !== 'equilibre';
+    document.querySelectorAll('.vues [data-vue]').forEach(b => {
+      b.classList.toggle('actif', b.dataset.vue === nom);
+      b.setAttribute('aria-pressed', b.dataset.vue === nom);
+    });
+    try { localStorage.setItem('vue', nom); } catch (e) { /* stockage indisponible */ }
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vue]');
+    if (b) { choisirVue(b.dataset.vue); window.scrollTo(0, 0); }
+  });
+  let vue = null;
+  try { vue = localStorage.getItem('vue'); } catch (e) { /* stockage indisponible */ }
+  choisirVue(vue === 'equilibre' ? 'equilibre' : 'profil');
+
   let affichage = null;
   try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
   choisirAffichage(affichage !== 'avance');
