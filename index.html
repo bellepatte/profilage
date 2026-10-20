@@ -132,6 +132,8 @@
   .methode-choisie h3 { margin: 0 0 6px; font-size: 1rem; }
   .methode-choisie p { margin: 6px 0 0; }
   #pl-chiffres { margin-bottom: 4px; }
+  .puce.actif { background: var(--accent); color: var(--carte); }
+  .puce.actif .sous { color: var(--carte); }
   .methodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
   .methode { display: grid; align-content: start; gap: 4px; text-align: left; border: 1px solid var(--bord); border-radius: 10px; padding: 10px 12px; font-size: .92em; }
   .methode:hover { border-color: var(--accent); }
@@ -141,8 +143,7 @@
   .facteurs { display: flex; flex-wrap: wrap; gap: 4px; }
   .facteur { font-size: .76em; border: 1px solid var(--bord); border-radius: 999px; padding: 1px 8px; color: var(--discret); cursor: help; }
   .facteur.plus { color: var(--z4); border-color: var(--z4); }
-  .facteur.moins { color: var(--rouge); border-color: var(--rouge); }
-  .points { color: var(--z6); letter-spacing: 1px; margin-right: 4px; }
+  .facteur.moins { color: var(--rouge); border-color: var(--rouge); }  .points { color: var(--z6); letter-spacing: 1px; margin-right: 4px; }
   .points span { color: var(--bord); }
   .volumes { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 16px 0 22px; }
   .volumes div { flex: 1; min-width: 0; position: relative; border-radius: 4px 4px 0 0; background: var(--accent); }
@@ -156,6 +157,26 @@
   .jour { font-size: .75em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--discret); }
   .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   tfoot td { font-weight: 700; border-bottom: 0; }
+  #vue-entrainement { max-width: 1100px; }
+  .zones-cible { position: relative; height: 44px; cursor: pointer; touch-action: none; user-select: none; }
+  .zones-cible .segments { position: absolute; inset: 0; display: flex; border-radius: 8px; overflow: hidden; }
+  .repere.fin { width: 1px; margin-left: -.5px; opacity: .6; box-shadow: none; }
+  .poignee { position: absolute; top: -7px; bottom: -7px; width: 8px; margin-left: -4px; border-radius: 4px; background: var(--texte); box-shadow: 0 0 0 2px var(--carte); cursor: grab; }
+  .poignee:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cible { margin: 10px 0 0; }
+  td.plan { color: var(--discret); }
+  #pl-mode { margin-bottom: 12px; }
+  .impression { display: none; }
+  @media print {
+    :root { --fond: #fff; --carte: #fff; --texte: #000; --discret: #333; --bord: #bbb; --entete: #f2f2f2; --accent-doux: #fff; --ombre: none; }
+    header, #vue-profil, .pas-imprimer, .avance { display: none !important; }
+    .impression { display: block; }
+    .page, .page.seul { display: block; max-width: none; padding: 0; }
+    .carte { border: 0; padding: 0 0 12px; box-shadow: none; }
+    .semaine { break-inside: avoid; }
+    summary { list-style: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
 </style>
 </head>
 <body>
@@ -164,9 +185,8 @@
     <h1>Profilage athlétique <button type="button" class="test-cache" id="test-aleatoire" title="Données de test aléatoires" aria-label="Remplir avec des données de test aléatoires">🎲</button></h1>
     <p>Modèle basé sur l'indice d'endurance de Péronnet et Thibault (<a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology, 1989), valable pour des efforts de moins de 5 h : au-delà, d'autres facteurs entrent en jeu.</p>
     <div class="onglets vues" role="group" aria-label="Section">
-      <button type="button" class="onglet" data-vue="profil">Profil et zones</button>
-      <button type="button" class="onglet" data-vue="equilibre">Répartition du volume</button>
-      <button type="button" class="onglet" data-vue="plan">Plan d'entraînement</button>
+      <button type="button" class="onglet" data-vue="profil">1. Profil et zones</button>
+      <button type="button" class="onglet" data-vue="entrainement">2. Entraînement</button>
     </div>
   </div>
   <div class="onglets" role="group" aria-label="Niveau de détail">
@@ -255,48 +275,65 @@
       <p class="note"><span class="avance">Largeur proportionnelle à la plage de % de l'allure 1 h. </span><strong>Z1 + Z2 est le domaine de faible intensité : il doit représenter environ 80 % de votre volume d'entraînement</strong> (à ajuster selon votre profil).</p>
       <div class="zones-grille" id="zones-grille"></div>
       <p class="note">Allures indicatives, valables sur terrain plat et roulant : réduisez-les dans les parties techniques ou en montée.</p>
-      <p><button type="button" class="sec" data-vue="equilibre">Répartir mon volume d'entraînement par zones →</button></p>
+      <p><button type="button" class="sec" data-vue="entrainement">Passer à l'entraînement : répartition et plan →</button></p>
     </section>
   </div>
 </div>
 
-<div class="page seul" id="vue-equilibre" hidden>
+<div class="page seul" id="vue-entrainement" hidden>
+  <h2 class="impression" id="impression-titre"></h2>
   <p class="note profil-utilise" id="eq-profil"></p>
-  <p class="note" id="eq-biais"></p>
 
-  <section class="carte">
+  <section class="carte pas-imprimer">
+    <h2>1. Semaine d'entraînement</h2>
     <div class="champs">
-      <label>Volume hebdomadaire
+      <label>Séances : jours de course par semaine <select id="pl-seances"></select></label>
+      <label>Doublés (jours à deux séances) <select id="pl-doubles"></select></label>
+      <label>Volume moyen par semaine
         <div class="rang">
           <input id="eq-volume" type="number" min="0" step="0.5" inputmode="decimal">
           <div class="onglets" id="eq-unit"><button type="button" class="onglet" data-u="h">h</button><button type="button" class="onglet" data-u="km">km</button></div>
         </div>
       </label>
-      <label>Objectif <select id="eq-goal"></select></label>
+      <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
+        <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
+      </label>
     </div>
   </section>
 
-  <section class="carte">
-    <div class="curseur-tete">
-      <label for="eq-easy">Endurance (Z1+Z2) / Intensité (Z3→Z6)</label>
-      <span><strong id="eq-easyLbl"></strong> <button class="lien" id="eq-resetEasy" type="button"></button></span>
+  <section class="carte pas-imprimer">
+    <h2>2. Allure cible à travailler</h2>
+    <div class="puces" id="eq-presets" role="group" aria-label="Allures de référence"></div>
+    <p class="note" style="margin:6px 0 4px">Choisissez une allure de référence, ou faites glisser le curseur sur la barre des zones (flèches du clavier : ± 0,5 %, avec Maj : ± 2 %).</p>
+    <div class="reperes" id="eq-zonesReperes" aria-hidden="true"></div>
+    <div class="zones-cible" id="eq-zones">
+      <div class="segments" id="eq-zonesSeg"></div>
+      <div class="poignee" id="eq-curseur" role="slider" tabindex="0" aria-label="Allure cible, en % de l'allure 1 h" aria-valuemin="50" aria-valuemax="130"></div>
     </div>
-    <input id="eq-easy" type="range" min="50" max="100" step="1">
-    <div class="extremes sous"><span>50 % facile</span><span>100 % facile</span></div>
-    <p class="note avance" id="eq-easyNote"></p>
-
-    <div class="curseur-tete">
-      <label for="eq-rec">Part de récupération (Z1) dans l'endurance</label>
-      <span><strong id="eq-recLbl"></strong> <button class="lien" id="eq-resetRec" type="button"></button></span>
-    </div>
-    <input id="eq-rec" type="range" min="0" max="50" step="1">
-    <div class="extremes sous"><span>0 %</span><span>50 %</span></div>
-    <p class="note avance" id="eq-recNote"></p>
+    <div class="barre-allures" id="eq-zonesAllures"></div>
+    <p id="eq-cible" class="cible" role="status"></p>
   </section>
 
   <section class="carte">
-    <h2>Répartition par zone</h2>
-    <div class="echelle" id="eq-repere" hidden></div>
+    <h2>3. Répartition par zone</h2>
+    <p class="note" id="eq-biais" style="margin:0 0 8px"></p>
+    <div class="pas-imprimer">
+      <div class="curseur-tete">
+        <label for="eq-easy">Endurance (Z1+Z2) / Intensité (Z3→Z6)</label>
+        <span><strong id="eq-easyLbl"></strong> <button class="lien" id="eq-resetEasy" type="button"></button></span>
+      </div>
+      <input id="eq-easy" type="range" min="50" max="100" step="1">
+      <div class="extremes sous"><span>50 % facile</span><span>100 % facile</span></div>
+      <p class="note avance" id="eq-easyNote"></p>
+      <div class="curseur-tete">
+        <label for="eq-rec">Part de récupération (Z1) dans l'endurance</label>
+        <span><strong id="eq-recLbl"></strong> <button class="lien" id="eq-resetRec" type="button"></button></span>
+      </div>
+      <input id="eq-rec" type="range" min="0" max="50" step="1">
+      <div class="extremes sous"><span>0 %</span><span>50 %</span></div>
+      <p class="note avance" id="eq-recNote"></p>
+    </div>
+    <div class="echelle" id="eq-repere" hidden style="margin-top:14px"></div>
     <div class="barre" id="eq-bar" role="img" aria-label="Répartition du volume entre les 6 zones"></div>
     <div class="repartition"><span id="eq-easyTot"></span><span id="eq-hardTot"></span></div>
     <p class="note" id="eq-zoneNote" style="margin:-6px 0 12px"></p>
@@ -308,48 +345,43 @@
       </table>
     </div>
     <p class="note avance" id="eq-note"></p>
-    <p><button type="button" class="sec" data-vue="plan">Construire mon plan d'entraînement →</button></p>
   </section>
-</div>
-
-<div class="page seul" id="vue-plan" hidden>
-  <p class="note profil-utilise" id="pl-contexte"></p>
 
   <section class="carte">
-    <h2>1. Paramètres du plan</h2>
-    <h3 class="groupe">Semaine type</h3>
-    <div class="champs">
-      <label>Jours de course par semaine <select id="pl-seances"></select></label>
-      <label>Doublés (jours à deux séances) <select id="pl-doubles"></select></label>
-      <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
-        <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
-      </label>
+    <h2>4. Plan d'entraînement</h2>
+    <p class="note profil-utilise" id="pl-contexte" style="margin:0 0 10px"></p>
+    <div class="onglets pas-imprimer" id="pl-mode" role="group" aria-label="Type de plan">
+      <button type="button" class="onglet" data-plan="zones">Selon ma répartition</button>
+      <button type="button" class="onglet" data-plan="methode">Méthode d'entraîneur</button>
     </div>
-    <h3 class="groupe">Préparation</h3>
-    <div class="champs">
-      <label>Nombre de semaines <input id="pl-semaines" type="number" min="4" max="24" step="1" inputmode="numeric"></label>
-      <label>Cycle
-        <select id="pl-cycle"><option value="constante">Charge constante</option><option value="cycle">Semaines de charge puis de décharge</option></select>
-      </label>
-      <div class="rang" id="pl-cycleNb">
-        <label>Charge (sem.) <input id="pl-charge" type="number" min="1" max="6" step="1" inputmode="numeric"></label>
-        <label>Décharge (sem.) <input id="pl-decharge" type="number" min="1" max="2" step="1" inputmode="numeric"></label>
+    <div class="pas-imprimer">
+      <div class="champs">
+        <label>Nombre de semaines <input id="pl-semaines" type="number" min="4" max="24" step="1" inputmode="numeric"></label>
+        <label>Cycle
+          <select id="pl-cycle"><option value="constante">Charge constante</option><option value="cycle">Semaines de charge puis de décharge</option></select>
+        </label>
+        <div class="rang" id="pl-cycleNb">
+          <label>Charge (sem.) <input id="pl-charge" type="number" min="1" max="6" step="1" inputmode="numeric"></label>
+          <label>Décharge (sem.) <input id="pl-decharge" type="number" min="1" max="2" step="1" inputmode="numeric"></label>
+        </div>
       </div>
+      <div class="curseur-tete">
+        <label for="pl-difficulte">Difficulté de la première semaine</label>
+        <strong id="pl-diffLbl"></strong>
+      </div>
+      <input id="pl-difficulte" type="range" min="1" max="10" step="1">
+      <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
+      <p class="note" id="pl-diffNote"></p>
+      <p class="note avance">La difficulté monte de 3 niveaux au fil du plan. En cycle, le volume augmente de 6 % par semaine de charge ; une semaine de décharge revient à 70 % du volume, avec une séance de qualité en moins et un niveau plus bas.</p>
     </div>
-    <div class="curseur-tete">
-      <label for="pl-difficulte">Difficulté de la première semaine</label>
-      <strong id="pl-diffLbl"></strong>
-    </div>
-    <input id="pl-difficulte" type="range" min="1" max="10" step="1">
-    <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
-    <p class="note" id="pl-diffNote"></p>
-    <p class="note avance">La difficulté monte de 3 niveaux jusqu'à l'affûtage. En cycle, le volume augmente de 6 % par semaine de charge ; une semaine de décharge revient à 70 % du volume, avec une séance de qualité en moins et un niveau plus bas.</p>
-  </section>
 
-  <section class="carte">
-    <h2>2. Choix de la méthode</h2>
-    <p class="note" style="margin:0 0 10px">Classées pour vous : pastilles vertes favorables, rouges défavorables (survolez-les pour le détail).</p>
-    <div class="methodes" id="pl-methodes"></div>
+    <div id="pl-blocMethodes" class="pas-imprimer">
+      <h3 class="groupe">Méthode</h3>
+      <p class="note" style="margin:4px 0 10px">Les plans gardent la répartition et les durées de séances propres à chaque méthode, avec vos allures. Classées pour vous : conseillées si adaptées à votre niveau, à votre volume et à votre fréquence d'entraînement, les plus simples d'abord. Pastilles vertes favorables, rouges défavorables (survolez-les pour le détail).</p>
+      <div class="puces" id="pl-filtres" role="group" aria-label="Filtrer les méthodes"></div>
+      <p class="note" id="pl-filtresNote" style="margin:4px 0 10px"></p>
+      <div class="methodes" id="pl-methodes"></div>
+    </div>
     <div class="methode-choisie">
       <h3 id="pl-titre"></h3>
       <div id="pl-resume"></div>
@@ -357,7 +389,7 @@
   </section>
 
   <section class="carte">
-    <h2>3. Récapitulatif</h2>
+    <h2>5. Récapitulatif et export</h2>
     <ul class="alertes" id="pl-alertes" hidden></ul>
     <div class="chiffres" id="pl-chiffres"></div>
     <div class="volumes" id="pl-volumes" role="img" aria-label="Temps de course prévu par semaine"></div>
@@ -366,12 +398,21 @@
       <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
       <p class="note">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</p>
     </details>
+    <div class="puces pas-imprimer" id="pl-export" role="group" aria-label="Exporter le plan" style="margin-top:14px">
+      <span class="sous">Exporter :</span>
+      <button type="button" class="puce" data-format="pdf">PDF</button>
+      <button type="button" class="puce" data-format="xlsx">Excel</button>
+      <button type="button" class="puce" data-format="csv">CSV</button>
+      <button type="button" class="puce" data-format="json">JSON</button>
+      <button type="button" class="puce" data-format="fit">Montre (.fit)</button>
+    </div>
+    <p class="note pas-imprimer">PDF : la fenêtre d'impression s'ouvre, choisissez « Enregistrer au format PDF ». Montre : une archive .zip avec un entraînement structuré (.fit) par séance, avec les cibles d'allure ; pour une montre Garmin, copiez les fichiers dans le dossier <code>GARMIN/NewFiles</code> de la montre branchée en USB ; ils peuvent aussi être importés dans des plateformes qui acceptent les entraînements .fit (par exemple intervals.icu), qui les envoient à d'autres montres.</p>
   </section>
 
   <section class="carte">
-    <h2>4. Semaine par semaine</h2>
+    <h2>6. Semaine par semaine</h2>
     <div id="pl-liste"></div>
-    <p class="note">Plans inspirés des principes publiés par ces entraîneurs et calculés à partir de votre profil : ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</p>
+    <p class="note">Plans calculés à partir de votre profil ; les méthodes d'entraîneurs sont inspirées de leurs principes publiés, ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</p>
   </section>
 </div>
 
@@ -383,6 +424,7 @@
 <script src="endurance.js"></script>
 <script src="balance.js"></script>
 <script src="plan.js"></script>
+<script src="export.js"></script>
 <script>
 (function () {
   'use strict';
@@ -686,8 +728,9 @@
     try { localStorage.setItem('affichage', simple ? 'simple' : 'avance'); } catch (e) { /* stockage indisponible */ }
   }
   document.querySelectorAll('[data-affichage]').forEach(b => b.addEventListener('click', () => choisirAffichage(b.dataset.affichage === 'simple')));
-  /** Section affichée : profil et zones, répartition du volume (balance.js) ou plan (plan.js) ; le choix est mémorisé */
-  const VUES = ['profil', 'equilibre', 'plan'];
+  /** Section affichée : profil et zones, ou entraînement (répartition, balance.js ; plan, plan.js ; exports, export.js) ;
+      le choix est mémorisé */
+  const VUES = ['profil', 'entrainement'];
   function choisirVue(nom) {
     VUES.forEach(v => { $(`#vue-${v}`).hidden = nom !== v; });
     document.querySelectorAll('.vues [data-vue]').forEach(b => {
@@ -702,7 +745,7 @@
   });
   let vue = null;
   try { vue = localStorage.getItem('vue'); } catch (e) { /* stockage indisponible */ }
-  choisirVue(VUES.includes(vue) ? vue : 'profil');
+  choisirVue(VUES.includes(vue) ? vue : vue === 'equilibre' || vue === 'plan' ? 'entrainement' : 'profil'); // anciennes vues réunies
 
   let affichage = null;
   try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
