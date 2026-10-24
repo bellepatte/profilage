@@ -8,7 +8,7 @@
   const $ = (id) => document.getElementById(id);
   const borne = (x, a, b) => Math.min(b, Math.max(a, x));
   const lerp = (a, b, l) => a + (b - a) * l;
-  const BORNES = [50, 130]; // bornes des zones ouvertes (Z1 et Z6), en % de l'allure 1 h, pour convertir temps et distance
+  const BORNES = [50, 130]; // échelle de la barre (bas de Z1, haut de Z6), en % de l'allure 1 h ; mise à jour à chaque rendu (Z6 commence à la VMA)
 
   // rec : part de Z1 dans le volume d'endurance (Z1+Z2) ; hard : répartition (en %) du volume d'intensité entre Z3..Z6
   const GOALS = {
@@ -21,8 +21,8 @@
   const DEFAUT = { V: 14 * 1000 / 60, k: -0.07, performances: [] };
   const AIMANT = 0.004; // le curseur s'aimante à une allure de référence à moins de 0,4 point de % de l'allure 1 h
   // Intensité (IF) de chaque zone pour le TSS et la conversion en distance : allure médiane de la zone (milieu de ses bornes),
-  // sauf Z1 et Z6 (zones ouvertes), fixées en % de l'allure 1 h
-  const IF_FIXE = { Z1: 0.60, Z6: 1.25 };
+  // sauf Z1 (zone ouverte), fixée à 60 % de l'allure 1 h ; Z6, ouverte aussi, est bornée sur 10 points au-delà de la VMA
+  const IF_FIXE = { Z1: 0.60 };
   // Base : 80 % du volume en Z1+Z2 (≥ 80 % de faible intensité chez les coureurs de classe mondiale, Haugen et al. 2022 ; sources
   // dans CLAUDE.md). La charge par heure de référence est celle de cette base avec la répartition d'intensité du 10 km (REF_OBJECTIF)
   // et REC_REF % de Z1 ; la part facile de chaque allure cible est ajustée (EASY_BORNES) pour retrouver cette charge.
@@ -34,7 +34,7 @@
   // écart-type que l'intensité) autour de l'allure cible ; Z2 prend de l'avance si l'allure cible y est.
   const SPECIFIQUE_FACILE = 2;
   // goal : allure de référence (clé de GOALS) ou 'perso' (allure placée sur la barre, pct en fraction de l'allure 1 h)
-  const state = { volume: 5, unit: 'h', goal: '10k', pct: 1, easy: EASY_BASE, easyAuto: true, rec: 15, recAuto: true, profil: null };
+  const state = { volume: 5, unit: 'h', goal: '10k', pct: 1, easy: EASY_BASE, easyAuto: true, rec: 15, recAuto: true, goalAuto: true, profil: null };
   let ctx = null; // allure cible, volume hebdomadaire (h), répartition et profil du dernier rendu, lus par plan.js
 
   // Indice d'endurance : mauvais (≤ −10) → accent sur l'aérobie (intensité en Z3/Z4) ;
@@ -59,8 +59,10 @@
   /** Zones : bornes finies en % de l'allure 1 h (lo, hi), IF (iff) et, avec un profil, bornes et vitesse médiane en km/h (v, vmoy) */
   function zonesBornees(res) {
     const vRef = res ? E.vitesseReference(res) * 60 / 1000 : null;
-    return E.zones(res || { V: 1, k: -0.06 }).map(z => {
-      const lo = z.pMin ?? BORNES[0], hi = z.pMax ?? BORNES[1], iff = IF_FIXE[z.id] ?? (lo + hi) / 200;
+    const Z = E.zones(res || DEFAUT);
+    BORNES[0] = Z[0].bas; BORNES[1] = Z[5].haut;
+    return Z.map(z => {
+      const lo = z.bas, hi = z.haut, iff = IF_FIXE[z.id] ?? (lo + hi) / 200;
       return { ...z, lo, hi, iff, v: res && [vRef * lo / 100, vRef * hi / 100], vmoy: res && vRef * iff };
     });
   }
@@ -73,6 +75,8 @@
     const p = state.profil || DEFAUT, v = E.tablePredictions(p, [dist])[0].vitesseKmh / (E.vitesseReference(p) * 60 / 1000);
     return Number.isFinite(v) ? v : 1;
   }
+  /** Allure de référence la plus proche de l'allure 1 h (choix par défaut tant que l'allure cible n'est pas choisie à la main) */
+  const plusProche1h = () => Object.keys(GOALS).reduce((a, k) => (Math.abs(Math.log(pctDist(GOALS[k].dist))) < Math.abs(Math.log(pctDist(GOALS[a].dist))) ? k : a));
   /** Allure cible en fraction de l'allure 1 h */
   const cible = () => (state.goal === 'perso' ? state.pct : pctDist(GOALS[state.goal].dist));
 
@@ -120,7 +124,7 @@
   const weeklyHours = () => (state.unit === 'h' ? state.volume : state.volume / (state.profil ? state.profil.vvo2Kmh * 0.72 : 10));
   const pos = (pct) => (borne(pct * 100, ...BORNES) - BORNES[0]) / (BORNES[1] - BORNES[0]) * 100; // position sur la barre des zones (%)
 
-  /** Barre des zones (échelle 50 – 130 % de l'allure 1 h), repères des allures de référence et curseur de l'allure cible */
+  /** Barre des zones (échelle de 50 % de l'allure 1 h à la fin de Z6), repères des allures de référence et curseur de l'allure cible */
   function rendreCible(Z, pct, label) {
     const profil = state.profil, vRef = profil && E.vitesseReference(profil);
     document.querySelectorAll('#eq-presets [data-goal]').forEach(b => {
@@ -131,14 +135,21 @@
     $('eq-zonesReperes').innerHTML = refs.map((r, i) => `<span class="rang${i % 2}" style="left:${pos(r.p).toFixed(2)}%">${r.g.court}</span>`).join('');
     $('eq-zonesSeg').innerHTML = Z.map((z, i) => `<div class="segment${i === 2 ? ' sep' : ''}" style="flex:${z.hi - z.lo};background:var(--z${i + 1})" title="${z.id} ${z.nom} : ${E.plageZone(z)} de l'allure 1 h${profil ? `, ${E.allureZone(z, true)} /km` : ''}">${z.id}</div>`).join('') +
       refs.map(r => `<div class="repere fin" style="left:${pos(r.p).toFixed(2)}%"></div>`).join('');
-    $('eq-zonesAllures').innerHTML = profil ? Z.map(z => `<div style="flex:${z.hi - z.lo}">${E.allureZone(z, true)}</div>`).join('') : '';
     const c = $('eq-curseur'), zone = Z.find(z => pct * 100 < z.hi) || Z[5];
     c.style.left = `${pos(pct)}%`;
+    c.setAttribute('aria-valuemin', BORNES[0]); c.setAttribute('aria-valuemax', Math.round(BORNES[1]));
     c.setAttribute('aria-valuenow', Math.round(pct * 1000) / 10);
     c.setAttribute('aria-valuetext', profil ? `${E.formatAllure(1000 / (vRef * pct))} par km, ${zone.id}` : `${fmtPct(pct * 100)} de l'allure 1 h, ${zone.id}`);
-    const t = tenue(pct);
-    const soutien = !t ? '' : t.T < 6 ? `Plus rapide que la VMA : tenue moins de 6 min (≈ ${E.formatDuree(t.T)}, ${Math.round(t.d)} m), hors du domaine du modèle.`
-      : t.T > 300 ? `Tenue théoriquement plus de 5 h (≈ ${(t.d / 1000).toFixed(0)} km) : hors du domaine du modèle, au-delà d'autres facteurs comptent.`
+    const t = tenue(pct), vm = vRef && vRef * pct; // vm : vitesse cible (m/min)
+    $('eq-saisieCible').hidden = $('eq-cibleNote').hidden = !profil;
+    if (profil) {
+      $('eq-cibleA').value = E.formatAllure(1000 / vm);
+      $('eq-cibleT').value = Number.isFinite(t.T) ? E.formatTemps(t.T) : ''; // affichés même hors du domaine du modèle (5 min à 5 h)
+      $('eq-cibleD').value = Number.isFinite(t.d) ? `${(t.d / 1000).toFixed(2).replace('.', ',')} km` : '';
+      ['A', 'T', 'D'].forEach(x => $(`eq-cible${x}`).classList.remove('invalide'));
+    }
+    const soutien = !t ? '' : t.T < 5 ? `<span class="doute">Bien plus rapide que la VMA : tenue moins de 5 min (≈ ${E.formatDuree(t.T)}, ${Math.round(t.d)} m), hors du domaine du modèle.</span>`
+      : t.T > 300 ? `<span class="doute">Tenue théoriquement plus de 5 h (≈ ${(t.d / 1000).toFixed(0)} km) : hors du domaine du modèle, au-delà d'autres facteurs comptent.</span>`
       : `Temps de soutien théorique : <strong>≈ ${E.formatDuree(t.T)}</strong>, soit <strong>≈ ${(t.d / 1000).toFixed(1).replace('.', ',')} km</strong>.`;
     $('eq-cible').innerHTML = (profil
       ? `${label} : <strong>${E.formatAllure(1000 / (vRef * pct))} /km</strong> (${kmh(vRef * pct)}) · ${fmtPct(pct * 100)} de l'allure 1 h · <strong>${zone.id}</strong> ${zone.nom}. ${soutien}`
@@ -149,9 +160,8 @@
     const profil = state.profil, Z = zonesBornees(profil), pct = cible(), perso = state.goal === 'perso';
     const g = perso ? null : GOALS[state.goal], label = perso ? 'Allure cible' : `Allure ${g.label}`, nom = perso ? "l'allure cible" : `l'allure ${g.label}`;
 
-    $('eq-profil').innerHTML = profil
-      ? `Profil utilisé : VMA <strong>${profil.vvo2Kmh.toFixed(1).replace('.', ',')} km/h</strong> · indice d'endurance <strong>${profil.IE.toFixed(1).replace('.', ',')}</strong> · allure 1 h <strong>${E.formatAllure(1000 / E.vitesseReference(profil))} /km</strong>. <button type="button" class="lien" data-vue="profil">Modifier mes données</button>`
-      : `Aucun profil : sans VMA, seules les proportions et l'unité saisie sont disponibles. <button type="button" class="lien" data-vue="profil">Saisir mes chronos</button>`;
+    $('eq-profil').innerHTML = (profil ? '' : "Aucun profil : sans VMA, seules les proportions et l'unité saisie sont disponibles. ")
+      + `<button type="button" class="lien" data-vue="profil">${profil ? 'Modifier mes données' : 'Saisir mes chronos'}</button>`;
     rendreCible(Z, pct, label);
 
     const recAuto = recObjectif(Z, pct), recConseille = Math.round(recAuto * 100);
@@ -224,7 +234,6 @@
 
     // Colonne « Plan » : remplie par plan.js (temps moyen par semaine du plan affiché, par zone)
     $('eq-thead').innerHTML = '<th>Zone</th><th></th><th class="num">% volume</th>' + (showH ? '<th class="num">Temps</th>' : '') + (showKm ? '<th class="num">Distance</th>' : '') +
-      (profil ? '<th class="num">Allure (min/km)</th>' : '') + '<th class="num">% allure 1 h</th>' +
       (tss ? '<th class="num">TSS</th><th class="num">% TSS</th>' : '') + '<th class="num" title="Temps moyen par semaine dans le plan affiché plus bas">Plan / sem.</th>';
     $('eq-tbody').innerHTML = Z.map((z, i) => `<tr>
       <td><span class="pastille" style="background:var(--z${i + 1})"></span><strong>${z.id}</strong></td>
@@ -232,24 +241,26 @@
       <td class="num">${fmtPct(t[i] * 100)}</td>
       ${showH ? `<td class="num">${fmtRange(fmtTime, rows[i].h)}</td>` : ''}
       ${showKm ? `<td class="num">${fmtRange(fmtKm, rows[i].km)}</td>` : ''}
-      ${profil ? `<td class="num">${E.allureZone(z, true)}</td>` : ''}
-      <td class="num">${E.plageZone(z)}</td>
       ${tss ? `<td class="num">${Math.round(tss[i])}</td><td class="num">${fmtPct(f[i] * 100)}</td>` : ''}
       <td class="num plan" id="eq-plan${i}"></td>
     </tr>`).join('');
-    // Allure moyenne du total : temps total / distance totale, de la plus rapide à la plus lente
-    const allureTot = profil && [sum(rows, 'h')[0] * 60 / sum(rows, 'km')[1], sum(rows, 'h')[1] * 60 / sum(rows, 'km')[0]];
     $('eq-tfoot').innerHTML = '<td>Total</td><td></td><td class="num">100 %</td>' +
       (showH ? `<td class="num">${fmtRange(fmtTime, sum(rows, 'h'))}</td>` : '') +
       (showKm ? `<td class="num">${fmtRange(fmtKm, sum(rows, 'km'))}</td>` : '') +
-      (profil ? `<td class="num">${fmtRange(E.formatAllure, [allureTot[0], allureTot[1]])}</td>` : '') + '<td></td>' +
       (tss ? `<td class="num">${Math.round(tssTot)}</td><td class="num">100 %</td>` : '') + '<td class="num plan" id="eq-planTot"></td>';
 
-    $('eq-note').textContent = "Charge (Coggan) : TSS = durée (h) × IF² × 100, avec IF = allure médiane de la zone / allure 1 h (Z1 : 60 %, Z6 : 125 %) (équivalent du FTP) ; 100 = 1 h à l'allure 1 h. " +
-      "La part facile de chaque allure cible est ajustée pour que le TSS par heure reste équivalent." + (profil
+    // Infobulle sur le TSS (charge de Coggan), ouverte au survol du « ? »
+    const aideTss = 'La colonne TSS estime la charge d\'entraînement de chaque zone.<span class="aide" tabindex="0" aria-label="Qu\'est-ce que le TSS ?" aria-describedby="aide-tss">?<span role="tooltip" id="aide-tss">'
+      + '<strong>TSS : la charge d\'entraînement (Coggan)</strong><br>Une note de fatigue : <strong>1 h à l\'allure 1 h = 100 points</strong>.<br>'
+      + '<code>TSS = durée (h) × IF² × 100</code><br>'
+      + 'IF = allure du milieu de la zone ÷ allure 1 h (Z1 fixée à 0,60). Le carré fait monter le coût plus vite que la vitesse : courir 10 % plus vite fatigue bien plus que 10 % de plus.<br>'
+      + 'Pour 1 h : Z1 ≈ 36 · Z2 ≈ 53 · Z3 ≈ 72 · Z4 ≈ 90 · Z5 ≈ 120 · Z6 ≈ 150.<br>'
+      + 'La part d\'endurance de chaque objectif est ajustée pour que la charge par heure reste équivalente d\'un objectif à l\'autre (≈ 60 TSS/h) : un objectif très intense (5 km) demande plus d\'endurance facile, un objectif centré sur la Z3 (marathon) en tolère moins.'
+      + '</span></span>';
+    $('eq-note').innerHTML = (tss ? aideTss : '') + (profil
       ? (isH ? " Fourchettes de distance calculées avec l'allure basse et l'allure haute de chaque zone."
           : " Kilométrage réparti avec l'allure médiane de chaque zone ; fourchettes de temps calculées avec ses allures basse et haute.")
-        + " Le temps d'intensité inclut uniquement l'effort, pas les récupérations entre fractions. Z1 et Z6 sont bornées à 50 % et 130 % de l'allure 1 h."
+        + " Le temps d'intensité inclut uniquement l'effort, pas les récupérations entre fractions. Z5 va de l'allure 1 h à la VMA, Z6 est au-delà de la VMA ; Z1 est bornée à 50 % de l'allure 1 h et Z6 à 10 points au-delà de la VMA."
       : " Renseignez votre profil pour obtenir les allures par zone et la conversion temps ↔ distance.") +
       " Colonne « Plan / sem. » : temps moyen par semaine dans le plan affiché (échauffements et récupérations comptés en Z1-Z2).";
 
@@ -267,8 +278,8 @@
     $('eq-recLbl').textContent = `${state.rec} %`;
     save();
     // Contexte du plan : allure de référence la plus proche (clé goal) pour les méthodes ; allure cible, temps de soutien
-    // (borné au domaine du modèle, 6 min à 5 h) et distance correspondante
-    const td = tenue(pct), T = td ? borne(td.T, 6, 300) : null;
+    // (borné au domaine du modèle, 5 min à 5 h) et distance correspondante
+    const td = tenue(pct), T = td ? borne(td.T, 5, 300) : null;
     const proche = perso ? Object.keys(GOALS).reduce((a, k) => (Math.abs(Math.log(pctDist(GOALS[k].dist) / pct)) < Math.abs(Math.log(pctDist(GOALS[a].dist) / pct)) ? k : a)) : state.goal;
     ctx = { goal: proche, preset: !perso, label: perso ? `Allure cible (≈ ${GOALS[proche].label})` : g.label, dist: perso ? (td ? td.v * T : GOALS[proche].dist) : g.dist,
       tObj: perso && td ? T : null, allure: profil ? 1000 / (E.vitesseReference(profil) * pct) : null, pct, heures: h, profil, parts: t };
@@ -284,7 +295,7 @@
     p = borne(p, BORNES[0] / 100, BORNES[1] / 100);
     const ref = Object.keys(GOALS).find(k => Math.abs(pctDist(GOALS[k].dist) - p) < AIMANT);
     if (ref) state.goal = ref; else { state.goal = 'perso'; state.pct = Math.round(p * 1000) / 1000; }
-    state.recAuto = true;
+    state.recAuto = true; state.goalAuto = false;
     planifier();
   }
 
@@ -300,7 +311,7 @@
   $('eq-rec').addEventListener('input', e => { state.rec = +e.target.value; state.recAuto = false; render(); });
   $('eq-presets').addEventListener('click', e => {
     const b = e.target.closest('[data-goal]');
-    if (b) { state.goal = b.dataset.goal; state.recAuto = true; render(); }
+    if (b) { state.goal = b.dataset.goal; state.recAuto = true; state.goalAuto = false; render(); }
   });
   const barre = $('eq-zones'), curseur = $('eq-curseur');
   const depuisX = (e) => { const r = barre.getBoundingClientRect(); choisirPct((BORNES[0] + (BORNES[1] - BORNES[0]) * borne((e.clientX - r.left) / r.width, 0, 1)) / 100); };
@@ -311,9 +322,22 @@
     if (!d) return;
     e.preventDefault();
     const p = cible() + d * (e.shiftKey ? 0.02 : 0.005);
-    state.goal = 'perso'; state.pct = Math.round(borne(p, BORNES[0] / 100, BORNES[1] / 100) * 1000) / 1000; state.recAuto = true;
+    state.goal = 'perso'; state.pct = Math.round(borne(p, BORNES[0] / 100, BORNES[1] / 100) * 1000) / 1000; state.recAuto = true; state.goalAuto = false;
     render();
   });
+  /** Allure cible saisie par durée, allure ou distance (prédiction du profil) : fraction de l'allure 1 h, null si invalide */
+  const pctDepuis = {
+    T: (p, vRef, x) => { const T = E.parseTemps(x); return T >= 5 && T <= 300 ? p.V * (1 + p.k * Math.log(T / 6)) / vRef : null; },
+    A: (p, vRef, x) => { const a = E.parseTemps(x); return a >= 2 && a <= 15 ? 1000 / a / vRef : null; },
+    D: (p, vRef, x) => { const d = E.parseDistance(x), v = d >= 1000 ? E.tablePredictions(p, [d])[0].vitesseKmh : NaN; return Number.isFinite(v) ? v * 1000 / 60 / vRef : null; }
+  };
+  for (const x of ['T', 'A', 'D']) {
+    $(`eq-cible${x}`).addEventListener('change', e => {
+      const p = state.profil, pct = p && pctDepuis[x](p, E.vitesseReference(p), e.target.value);
+      e.target.classList.toggle('invalide', !pct);
+      if (pct) { choisirPct(pct); }
+    });
+  }
   $('eq-resetEasy').addEventListener('click', () => { state.easyAuto = true; render(); });
   $('eq-resetRec').addEventListener('click', () => { state.recAuto = true; render(); });
   $('eq-unit').addEventListener('click', e => {
@@ -327,9 +351,10 @@
   /** Reçoit le dernier profil calculé par la page (VMA, indice d'endurance, zones) */
   function setProfil(res) {
     state.profil = { V: res.V, k: res.k, IE: res.IE, vvo2Kmh: res.vvo2Kmh, performances: [] };
+    if (state.goalAuto) state.goal = plusProche1h();
     render();
   }
 
-  window.Balance = { setProfil, contexte: () => ctx, zones: () => zonesBornees(state.profil) };
+  window.Balance = { setProfil, profil: () => state.profil, contexte: () => ctx, zones: () => zonesBornees(state.profil) };
   render();
 })();

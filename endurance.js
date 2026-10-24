@@ -8,38 +8,30 @@
   'use strict';
 
   const REF_MIN = 6;             // durée de référence (VMA tenue ~6 min)
-  const LIMITE_MIN = 300;        // modèle non applicable au-delà de 5 h
+  const DUREE_MIN = 5;           // modèle non applicable en dessous de 5 min
+  const LIMITE_MIN = 300;       // modèle non applicable au-delà de 5 h
   const REF_ZONE_MIN = 60;       // référence des zones : allure 1 h
   const VITESSE_KMH = [4, 30];   // bornes réalistes de vitesse moyenne (km/h)
   const ECART_MAX = 2;           // écart max (points de % VMA) entre une performance et la tendance des autres
   const ECART_DISTANCE_MIN = 0.10; // avec deux données seulement, écart minimal entre les distances
+  const BORNE_BASSE = 50;        // bas de Z1, en % de l'allure 1 h (zone ouverte, bornée pour convertir temps et distance)
+  const LARGEUR_Z6 = 10;         // largeur de Z6 (zone ouverte au-delà de la VMA), en points de % de l'allure 1 h
   const IE_HABITUEL = [-14, -2]; // bornes habituelles de l'indice d'endurance
   const DISTANCES_PREDITES = [1500, 5000, 10000, 21097, 42195];
   // Fiabilité d'une prédiction selon l'extrapolation hors de la plage saisie
-  const SEUILS_FIABILITE = [[0.10, 'Élevée'], [0.60, 'Moyenne'], [1.20, 'Faible'], [2.00, 'Très faible'], [Infinity, 'Fantaisiste']];
+  const SEUILS_FIABILITE = [[0.25, 'Élevée'], [0.50, 'Correcte'], [1.00, 'Moyenne'], [1.50, 'Faible'], [Infinity, 'Mauvaise']];
   // La VMA compte comme une donnée (chrono sur 6 min) : une donnée seule ne suffit pas sans profil
   const MESSAGE_DONNEE_UNIQUE = "Une seule donnée (performance ou VMA) ne suffit pas pour prédire : renseignez votre profil (volume, âge ou sexe) ou une autre performance.";
 
-  // Zones en % de l'allure 1 h (pMin / pMax, null = sans limite)
+  // Zones en % de l'allure 1 h (pMin / pMax, null = sans limite). Z5 s'arrête à la VMA, Z6 commence à la VMA : ces deux bornes
+  // (pMax de Z5, pMin de Z6) sont calculées par zones() ; les valeurs ci-dessous sont des valeurs types (VMA à 120 %).
   const ZONES_DEF = [
-    { id: 'Z1', nom: 'Échauffement, récupération', pMin: null, pMax: 65,
-      quand: ["En début et fin d'entraînement", "En cas de fatigue, remplacer l'entraînement en Z2 par de la Z1",
-        "Lorsque cette zone correspond à une allure spécifique de course (ex. : épreuve d'ultra-distance)"] },
-    { id: 'Z2', nom: 'Endurance fondamentale', pMin: 65, pMax: 80,
-      quand: ["À chaque entraînement, pour accumuler une grande majorité de votre volume à cette allure",
-        "Plus encore si la zone 2 correspond à une allure spécifique de course (ex. : marathon ou ultra-distance)"] },
-    { id: 'Z3', nom: 'Endurance active', pMin: 80, pMax: 90,
-      quand: ["Régulièrement pour améliorer les qualités d'endurance, mais en petite proportion (zone provoquant beaucoup de fatigue à long terme)",
-        "Spécifiquement lorsque cette zone correspond à une allure de course (ex. : marathon, semi-marathon)"] },
-    { id: 'Z4', nom: 'Tempo / seuil', pMin: 90, pMax: 100,
-      quand: ["Fréquemment pour améliorer substantiellement les capacités d'endurance, mais sur des volumes réduits (risque de cumul de fatigue à court terme)",
-        "Spécifiquement lorsque cette zone correspond à une allure de course (ex. : semi-marathon, 10 km)"] },
-    { id: 'Z5', nom: 'VMA', pMin: 100, pMax: 120,
-      quand: ["Lors de cycles de développement de la puissance aérobie (amélioration du potentiel d'endurance) et occasionnellement en maintien de qualité",
-        "Si les objectifs compétitifs correspondent aux allures de cette zone (ex. : 5 ou 10 km, fins de course)"] },
-    { id: 'Z6', nom: 'Vitesse', pMin: 120, pMax: null,
-      quand: ["Lors de cycles de développement de la puissance musculaire et aérobie et lors de séances occasionnelles de maintien de qualité",
-        "Lorsque les allures des courses visées correspondent à cette zone (ex. : demi-fond, fins de course)"] }
+    { id: 'Z1', nom: 'Échauffement, récupération', pMin: null, pMax: 65, utilite: 'Récupérer, favoriser la régénération' },
+    { id: 'Z2', nom: 'Endurance fondamentale', pMin: 65, pMax: 80, utilite: 'Développer l\'endurance aérobie' },
+    { id: 'Z3', nom: 'Endurance active', pMin: 80, pMax: 90, utilite: 'Améliorer l\'endurance à allure soutenue' },
+    { id: 'Z4', nom: 'Tempo/seuil', pMin: 90, pMax: 100, utilite: 'Améliorer la capacité à maintenir une allure élevée' },
+    { id: 'Z5', nom: 'VO2Max', pMin: 100, pMax: 120, utilite: 'Développer la puissance aérobie maximale' },
+    { id: 'Z6', nom: 'Vitesse', pMin: 120, pMax: null, utilite: 'Développer la vitesse, la puissance musculaire et aérobie' }
   ];
 
   /* ---------- Saisie et formatage ---------- */
@@ -197,7 +189,7 @@
         avertissements.push(`Les performances saisies s'accordent mal entre elles, sans qu'une seule se détache clairement : ${enumere(fautives.map(p => `le ${nomTemps(p)}`))} ${fautives.length > 1 ? 'sont' : 'est'} à vérifier. Elles pèsent sur les prédictions, qui sont donc moins fiables.`);
       }
     }
-    if (valides.some(p => p.temps < REF_MIN)) avertissements.push("Une performance dure moins de 6 min : elle est hors de la plage idéale du modèle et peut peser fortement sur la VMA.");
+    if (valides.some(p => p.temps < DUREE_MIN)) avertissements.push(`Une performance dure moins de ${DUREE_MIN} min : elle est hors de la plage de validité du modèle et peut peser fortement sur la VMA.`);
     if (valides.some(p => p.temps > LIMITE_MIN)) avertissements.push("Une performance dure plus de 5 h : le modèle n'est pas applicable à cette durée.");
     if (100 * k < IE_HABITUEL[0]) avertissements.push(`L'indice d'endurance calculé (${virgule(100 * k)}) est très éloigné des valeurs habituelles (en dessous de ${IE_HABITUEL[0]}) : vérifiez les temps saisis, en particulier l'écart entre les distances.`);
     if (100 * k > IE_HABITUEL[1]) avertissements.push(`L'indice d'endurance calculé (${virgule(100 * k)}) est anormalement proche de 0 : vérifiez les temps saisis.`);
@@ -244,18 +236,23 @@
   /** Distances prédites (m) pour une liste de temps (min) */
   const tableDistances = (res, temps) => temps.map(t => prediction(res, vitesseMpm(res, t) * t, t));
 
-  /** Zones : bornes en allure (min/km), null si la zone est ouverte */
+  /** Zones : bornes en allure (min/km), null si la zone est ouverte. Z5 va de l'allure 1 h à la VMA, Z6 est au-delà de la VMA ;
+      as et haut : bornes finies en % de l'allure 1 h (Z1 à 50 %, Z6 sur LARGEUR_Z6 points) pour convertir temps et distance */
   function zones(res) {
-    const vRef = vitesseReference(res);
-    return ZONES_DEF.map(z => ({
-      ...z,
-      allureRapide: z.pMax === null ? null : 1000 / (vRef * z.pMax / 100),
-      allureLente: z.pMin === null ? null : 1000 / (vRef * z.pMin / 100)
-    }));
+    const vRef = vitesseReference(res), pVma = 100 * res.V / vRef;
+    return ZONES_DEF.map(z => {
+      const pMin = z.id === 'Z6' ? pVma : z.pMin, pMax = z.id === 'Z5' ? pVma : z.pMax;
+      return {
+        ...z, pMin, pMax,
+        bas: pMin ?? BORNE_BASSE, haut: pMax ?? pMin + LARGEUR_Z6,
+        allureRapide: pMax === null ? null : 1000 / (vRef * pMax / 100),
+        allureLente: pMin === null ? null : 1000 / (vRef * pMin / 100)
+      };
+    });
   }
 
   /** Plage d'une zone en % de l'allure 1 h : « < 65 % », « 65–80 % », « > 120 % » */
-  const plageZone = (z) => (z.pMin === null ? `< ${z.pMax} %` : z.pMax === null ? `> ${z.pMin} %` : `${z.pMin}–${z.pMax} %`);
+  const plageZone = (z) => (z.pMin === null ? `< ${Math.round(z.pMax)} %` : z.pMax === null ? `> ${Math.round(z.pMin)} %` : `${Math.round(z.pMin)}–${Math.round(z.pMax)} %`);
 
   /** Allures d'une zone (min/km) ; `court` pour les espaces réduits (barre des zones) */
   const allureZone = (z, court) => (z.pMin === null ? `${court ? '>' : 'plus lent que'} ${formatAllure(z.allureRapide)}`
@@ -316,10 +313,19 @@
    *   - une seule donnée : la VMA (ou l'indice) vient du profil, qui doit alors être renseigné ;
    *   - chronos incohérents et profil renseigné : l'indice d'endurance vient du profil.
    */
-  function calibrerComplet(perfs, vmaKmh, profil = {}) {
+  function calibrerComplet(perfs, vmaKmh, profil = {}, horsPlage = false) {
     const estimation = estimerIE(profil), k = estimation.IE / 100;
     const valides = perfs.filter(p => p.distance > 0 && p.temps > 0);
     let res, profilUtilise = false;
+
+    // Effort hors de la plage de validité (5 min à 5 h) : refusé tant que l'utilisateur ne confirme pas (horsPlage = true)
+    const dehors = valides.filter(p => p.temps < DUREE_MIN || p.temps > LIMITE_MIN);
+    if (dehors.length && !horsPlage) {
+      const err = new Error(`Hors de la plage de validité du modèle (${DUREE_MIN} min à ${LIMITE_MIN / 60} h) : ${enumere(dehors.map(p => `${metres(p.distance)} en ${formatTemps(p.temps)}`))}. Sur ces durées, l'indice d'endurance est peu fiable (alimentation, matériel, gestion de l'effort, ou effort trop court pour la VMA).`);
+      err.horsPlage = true;
+      err.cle = dehors.map(p => `${p.distance}@${p.temps}`).join('|');
+      throw err;
+    }
 
     if (valides.length && (vmaKmh > 0 || new Set(valides.map(p => p.temps)).size >= 2)) {
       res = calibrer(valides, vmaKmh);

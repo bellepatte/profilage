@@ -42,13 +42,13 @@
 
   /* ---------- Tableaux (CSV, Excel) ---------- */
 
-  const ENTETE = ['Semaine', 'Type', 'Phase', 'Jour', 'Moment', 'Séance', 'Zone', 'Durée (min)', 'Distance (km)', 'Description'];
+  const ENTETE = ['Semaine', 'Type', 'Phase', 'Jour', 'Date', 'Moment', 'Séance', 'Zone', 'Durée (min)', 'Distance (km)', 'Description'];
   const lignes = (d) => d.semaines.flatMap(s => s.jours.flatMap(j => j.seances.map(x =>
-    [s.numero, s.type, s.phase, j.jour, x.moment, x.nom, x.zone, x.dureeMin, x.km, x.description])));
+    [s.numero, s.type, s.phase, j.jour, j.date || '', x.moment, x.nom, x.zone, x.dureeMin, x.km, x.description])));
   const allure = (m) => (m === null ? '' : `${Math.floor(m)}:${String(Math.round((m % 1) * 60)).padStart(2, '0')} /km`);
   const parametres = (d) => [['Plan', d.titre], ['Allure', d.contexte.allure], ['Allure (min/km)', allure(d.contexte.allureMinKm)],
     ['Volume (h / semaine)', Math.round(d.contexte.volumeH * 10) / 10], ['Jours de course', d.contexte.jours], ['Doublés', d.contexte.doubles],
-    ['Semaines', d.contexte.semaines], ['Cycle', d.contexte.cycle], ['Difficulté (1re semaine)', `${d.contexte.difficulte}/10`], ['Niveau estimé', d.contexte.niveau]];
+    ['Semaines', d.contexte.semaines], ['Cycle', d.contexte.cycle], ['Difficulté (1re semaine)', `${d.contexte.difficulte}/10`]];
 
   /** CSV pour Excel en français : séparateur « ; », virgule décimale, UTF-8 avec BOM */
   function csv(d) {
@@ -130,11 +130,11 @@
     const avecCrc = concat([tete, octets(w => w.u16(crcFit(tete))), donnees]);
     return concat([avecCrc, octets(w => w.u16(crcFit(avecCrc)))]);
   }
-  /** Une séance par fichier FIT, nommés dans l'ordre du plan : S01-J2-a-seuil.fit */
+  /** Une séance par fichier FIT, nommés dans l'ordre du plan : S01-J2-a-seuil.fit (plan par date : 2026-11-04-a-seuil.fit) */
   function montres(d) {
     const ascii = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 30);
     return zip(d.semaines.flatMap(s => s.jours.flatMap(j => j.seances.map((x, k) => ({
-      nom: `S${String(s.numero).padStart(2, '0')}-J${j.jour}${j.seances.length > 1 ? '-' + 'ab'[k] : ''}-${ascii(x.nom)}.fit`,
+      nom: `${j.date || `S${String(s.numero).padStart(2, '0')}-J${j.jour}`}${j.seances.length > 1 ? '-' + 'ab'[k] : ''}-${ascii(x.nom)}.fit`,
       donnees: fit(`S${s.numero}J${j.jour}${j.seances.length > 1 ? 'ab'[k] : ''} ${x.nom}`, x.etapes) })))));
   }
 
