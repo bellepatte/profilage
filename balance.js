@@ -51,6 +51,19 @@
   const save = () => { try { localStorage.setItem('balance', JSON.stringify(state)); } catch (e) { /* stockage indisponible */ } };
 
   const fmtTime = (h) => { const m = Math.round(h * 60); return Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'); };
+  /** Volume saisi → nombre (heures ou km) ; null si illisible. En heures : 5h30, 5h, 5:30, 5 h 30 min, 90min, 5,5 ou 5.5 ; en km : 40, 40,5, 40 km */
+  function lireVolume(txt, unite) {
+    const s = String(txt).trim().toLowerCase().replace(',', '.').replace(/\s+/g, '');
+    if (s === '') return 0;
+    let m;
+    if (unite === 'km') return (m = s.match(/^(\d+(?:\.\d+)?)(?:km)?$/)) ? +m[1] : null;
+    if ((m = s.match(/^(\d+)(?:h|:)(\d{1,2})?(?:min|mn|m)?$/))) return +m[2] >= 60 ? null : +m[1] + (+m[2] || 0) / 60;   // 5h30, 5h, 5:30
+    if ((m = s.match(/^(\d+)(?:min|mn)$/))) return +m[1] / 60;                                                          // 90min
+    if ((m = s.match(/^(\d+(?:\.\d+)?)(?:h)?$/))) return +m[1];                                                         // 5.5, 5.5h
+    return null;
+  }
+  const fmtVolume = () => (state.unit === 'h' ? fmtTime(state.volume) : String(Math.round(state.volume * 10) / 10).replace('.', ','));
+  let vMoy = 10; // vitesse moyenne (km/h) du volume actuel, pour convertir heures ↔ km (mise à jour à chaque rendu)
   const fmtKm = (km) => km.toFixed(1).replace('.', ',') + ' km';
   const fmtPct = (p) => (Math.round(p * 10) / 10).toString().replace('.', ',') + ' %';
   const fmtRange = (fmt, [lo, hi]) => (fmt(lo) === fmt(hi) ? fmt(lo) : `${fmt(lo)} – ${fmt(hi)}`);
@@ -141,7 +154,7 @@
     c.setAttribute('aria-valuenow', Math.round(pct * 1000) / 10);
     c.setAttribute('aria-valuetext', profil ? `${E.formatAllure(1000 / (vRef * pct))} par km, ${zone.id}` : `${fmtPct(pct * 100)} de l'allure 1 h, ${zone.id}`);
     const t = tenue(pct), vm = vRef && vRef * pct; // vm : vitesse cible (m/min)
-    $('eq-saisieCible').hidden = $('eq-cibleNote').hidden = !profil;
+    $('eq-saisieCible').hidden = !profil;
     if (profil) {
       $('eq-cibleA').value = E.formatAllure(1000 / vm);
       $('eq-cibleT').value = Number.isFinite(t.T) ? E.formatTemps(t.T) : ''; // affichés même hors du domaine du modèle (5 min à 5 h)
@@ -173,23 +186,36 @@
     const ifZ = Z.map(z => z.iff), c = ifZ.map(x => x * x * 100);
     const coutFacile = (rec) => rec * c[0] + (1 - rec) * c[1];
     const coutDur = (w) => w.reduce((s, x, i) => s + x * c[i + 2], 0);
-    const h = weeklyHours(), facteurVolume = h > 0 ? Math.pow(CHARGE_PAR_DOUBLING, Math.log2(h / REF_HOURS)) : 1;
-    const cibleTss = facteurVolume * (EASY_BASE / 100 * coutFacile(REC_REF / 100) + (1 - EASY_BASE / 100) * coutDur(GOALS[REF_OBJECTIF].hard.map(x => x / 100)));
-    const w = hardWeights(Z, pct), rec = state.recAuto ? recAuto : state.rec / 100, cF = coutFacile(rec), cD = coutDur(w);
-    // Part facile qui ramène la charge par heure à la cible : e × cF + (1 − e) × cD = cible
-    // Si l'allure cible est en zone facile (Z1/Z2), le travail spécifique est de l'endurance : la charge n'est plus tenue
-    // à l'équivalence et la part facile reste au moins égale à la base.
-    const allureFacile = profil && pct * 100 < Z[1].hi;
-    const plancher = allureFacile ? EASY_BASE : EASY_BORNES[0];
-    const eAuto = Math.min(EASY_BORNES[1], Math.max(plancher, 100 * (cD - cibleTss) / (cD - cF))) / 100;
+    // Répartition du temps entre les zones pour un volume de h heures par semaine
+    const repartir = (h) => {
+      const facteurVolume = h > 0 ? Math.pow(CHARGE_PAR_DOUBLING, Math.log2(h / REF_HOURS)) : 1;
+      const cibleTss = facteurVolume * (EASY_BASE / 100 * coutFacile(REC_REF / 100) + (1 - EASY_BASE / 100) * coutDur(GOALS[REF_OBJECTIF].hard.map(x => x / 100)));
+      const w = hardWeights(Z, pct), rec = state.recAuto ? recAuto : state.rec / 100, cF = coutFacile(rec), cD = coutDur(w);
+      // Part facile qui ramène la charge par heure à la cible : e × cF + (1 − e) × cD = cible
+      // Si l'allure cible est en zone facile (Z1/Z2), le travail spécifique est de l'endurance : la charge n'est plus tenue
+      // à l'équivalence et la part facile reste au moins égale à la base.
+      const allureFacile = profil && pct * 100 < Z[1].hi;
+      const plancher = allureFacile ? EASY_BASE : EASY_BORNES[0];
+      const eAuto = Math.min(EASY_BORNES[1], Math.max(plancher, 100 * (cD - cibleTss) / (cD - cF))) / 100;
+      const easy = state.easyAuto ? eAuto : state.easy / 100;
+      return { cibleTss, w, rec, eAuto, easy, allureFacile, t: [easy * rec, easy * (1 - rec), ...w.map(p => (1 - easy) * p)] };
+    };
+    // Volume en heures par semaine : tel quel, ou, saisi en km, kilométrage / vitesse moyenne pondérée de la répartition par zone (vitesse du milieu
+    // de chaque zone, pondérée par son temps). La répartition dépend elle-même du volume (charge par heure) : point fixe, quelques itérations
+    // à partir d'une première estimation (72 % de la VMA).
+    let h = weeklyHours(), R = repartir(h);
+    if (state.unit === 'km' && profil) {
+      for (let i = 0; i < 5; i++) { h = state.volume / Z.reduce((s, z, k) => s + R.t[k] * z.vmoy, 0); R = repartir(h); }
+    }
+    const { cibleTss, w, rec, eAuto, easy, allureFacile } = R;
+    vMoy = profil ? Z.reduce((s, z, k) => s + R.t[k] * z.vmoy, 0) : 10;
     if (state.easyAuto) { state.easy = Math.round(eAuto * 100); $('eq-easy').value = state.easy; }
-    const easy = state.easyAuto ? eAuto : state.easy / 100;
     $('eq-resetEasy').textContent = state.easyAuto ? 'auto (charge équivalente)' : `revenir au conseillé (${Math.round(eAuto * 100)} %)`;
     $('eq-easyNote').textContent = `Base : ${EASY_BASE} % du volume en Z1+Z2. Pour ${nom} à ≈ ${fmtTime(h)}/semaine, ${Math.round(eAuto * 100)} % : le temps d'intensité est ajusté pour que la charge reste ` +
       `équivalente d'une allure cible à l'autre (≈ ${Math.round(cibleTss)} TSS par heure : une heure en Z5 coûte plus de TSS qu'une heure en Z3)${allureFacile ? `. ${nom[0].toUpperCase() + nom.slice(1)} est en zone facile : le travail spécifique est de l'endurance, la part facile reste au moins à ${EASY_BASE} %, quitte à charger moins que les autres allures` : ''}, et elle baisse de ${Math.round((1 - CHARGE_PAR_DOUBLING) * 100)} % à chaque doublement du volume au-delà de ${REF_HOURS} h (davantage de facile, moins de récupération possible).`;
 
     // Parts de temps (t) et de TSS (f) de chaque zone
-    const t = [easy * rec, easy * (1 - rec), ...w.map(p => (1 - easy) * p)];
+    const t = R.t;
     const tssH = t.reduce((s, x, i) => s + x * c[i], 0), f = t.map((x, i) => x * c[i] / tssH);
 
     const isH = state.unit === 'h';
@@ -232,9 +258,22 @@
     $('eq-easyTot').textContent = `Endurance ${state.easy} % du volume — ${part(rows.slice(0, 2))}`;
     $('eq-hardTot').textContent = `Intensité ${100 - state.easy} % du volume — ${part(rows.slice(2))}`;
 
+    // Infobulle sur le TSS (charge de Coggan), dans l'en-tête de colonne : première apparition du terme
+    const aideTss = '<span class="aide fixe" tabindex="0" aria-label="Qu\'est-ce que le TSS ?"><span aria-hidden="true">?</span><span role="tooltip">'
+      + '<strong>TSS : la charge d\'entraînement (Coggan)</strong><br>Une note de fatigue : <strong>1 h à l\'allure 1 h = 100 points</strong>.<br>'
+      + '<code>TSS = durée (h) × IF² × 100</code><br>'
+      + 'IF = allure du milieu de la zone ÷ allure 1 h (Z1 fixée à 0,60). Le carré fait monter le coût plus vite que la vitesse : courir 10 % plus vite fatigue bien plus que 10 % de plus.<br>'
+      + 'Pour 1 h : Z1 ≈ 36 · Z2 ≈ 53 · Z3 ≈ 72 · Z4 ≈ 90 · Z5 ≈ 120 · Z6 ≈ 150.<br>'
+      + 'La part d\'endurance de chaque objectif est ajustée pour que la charge par heure reste équivalente d\'un objectif à l\'autre (≈ 60 TSS/h) : un objectif très intense (5 km) demande plus d\'endurance facile, un objectif centré sur la Z3 (marathon) en tolère moins.'
+      + '</span></span>';
+    const aide = (nom, texte) => `<span class="aide fixe" tabindex="0" aria-label="Aide : ${nom}"><span aria-hidden="true">?</span><span role="tooltip">${texte}</span></span>`;
     // Colonne « Plan » : remplie par plan.js (temps moyen par semaine du plan affiché, par zone)
-    $('eq-thead').innerHTML = '<th>Zone</th><th></th><th class="num">% volume</th>' + (showH ? '<th class="num">Temps</th>' : '') + (showKm ? '<th class="num">Distance</th>' : '') +
-      (tss ? '<th class="num">TSS</th><th class="num">% TSS</th>' : '') + '<th class="num" title="Temps moyen par semaine dans le plan affiché plus bas">Plan / sem.</th>';
+    $('eq-thead').innerHTML = `<th>Zone${aide('zone', "Les 6 zones d'intensité, de Z1 (récupération) à Z6 (vitesse, au-delà de la VMA), définies par rapport à l'allure 1 h.")}</th><th></th>` +
+      `<th class="num">% volume${aide('% volume', "Part du volume hebdomadaire passée dans la zone : c'est la <strong>répartition visée</strong> (par défaut 80 % en Z1 + Z2, le reste en intensité autour de l'allure cible).")}</th>` +
+      (showH ? `<th class="num">Temps${aide('temps', "Temps passé dans la zone chaque semaine, d'après le volume saisi. Quand le volume est en km, c'est une fourchette (allure basse et allure haute de la zone).")}</th>` : '') +
+      (showKm ? `<th class="num">Distance${aide('distance', "Kilomètres parcourus dans la zone chaque semaine. Fourchette calculée avec l'allure basse et l'allure haute de la zone (ou allure médiane quand le volume est en km).")}</th>` : '') +
+      (tss ? `<th class="num">TSS${aideTss}</th><th class="num">% TSS${aide('% TSS', "Part de la charge d'entraînement totale (TSS) apportée par la zone. Une zone rapide pèse plus lourd que sa part de temps : 10 % du temps en Z5 peut faire 20 % de la charge.")}</th>` : '') +
+      `<th class="num">Plan / sem.${aide('plan par semaine', "Temps moyen par semaine dans chaque zone <strong>dans le plan construit</strong> (étape 3), toutes semaines confondues (charge, décharge, affûtage). À comparer avec la répartition visée : un écart important signale un plan qui s'éloigne de la cible. Échauffements et retours au calme comptent en Z2 et Z1, les séances du club avec leur temps par zone.")}</th>`;
     $('eq-tbody').innerHTML = Z.map((z, i) => `<tr>
       <td><span class="pastille" style="background:var(--z${i + 1})"></span><strong>${z.id}</strong></td>
       <td class="sous">${z.nom}</td>
@@ -249,15 +288,7 @@
       (showKm ? `<td class="num">${fmtRange(fmtKm, sum(rows, 'km'))}</td>` : '') +
       (tss ? `<td class="num">${Math.round(tssTot)}</td><td class="num">100 %</td>` : '') + '<td class="num plan" id="eq-planTot"></td>';
 
-    // Infobulle sur le TSS (charge de Coggan), ouverte au survol du « ? »
-    const aideTss = 'La colonne TSS estime la charge d\'entraînement de chaque zone.<span class="aide" tabindex="0" aria-label="Qu\'est-ce que le TSS ?" aria-describedby="aide-tss">?<span role="tooltip" id="aide-tss">'
-      + '<strong>TSS : la charge d\'entraînement (Coggan)</strong><br>Une note de fatigue : <strong>1 h à l\'allure 1 h = 100 points</strong>.<br>'
-      + '<code>TSS = durée (h) × IF² × 100</code><br>'
-      + 'IF = allure du milieu de la zone ÷ allure 1 h (Z1 fixée à 0,60). Le carré fait monter le coût plus vite que la vitesse : courir 10 % plus vite fatigue bien plus que 10 % de plus.<br>'
-      + 'Pour 1 h : Z1 ≈ 36 · Z2 ≈ 53 · Z3 ≈ 72 · Z4 ≈ 90 · Z5 ≈ 120 · Z6 ≈ 150.<br>'
-      + 'La part d\'endurance de chaque objectif est ajustée pour que la charge par heure reste équivalente d\'un objectif à l\'autre (≈ 60 TSS/h) : un objectif très intense (5 km) demande plus d\'endurance facile, un objectif centré sur la Z3 (marathon) en tolère moins.'
-      + '</span></span>';
-    $('eq-note').innerHTML = (tss ? aideTss : '') + (profil
+    $('eq-note').innerHTML = (profil
       ? (isH ? " Fourchettes de distance calculées avec l'allure basse et l'allure haute de chaque zone."
           : " Kilométrage réparti avec l'allure médiane de chaque zone ; fourchettes de temps calculées avec ses allures basse et haute.")
         + " Le temps d'intensité inclut uniquement l'effort, pas les récupérations entre fractions. Z5 va de l'allure 1 h à la VMA, Z6 est au-delà de la VMA ; Z1 est bornée à 50 % de l'allure 1 h et Z6 à 10 points au-delà de la VMA."
@@ -282,7 +313,7 @@
     const td = tenue(pct), T = td ? borne(td.T, 5, 300) : null;
     const proche = perso ? Object.keys(GOALS).reduce((a, k) => (Math.abs(Math.log(pctDist(GOALS[k].dist) / pct)) < Math.abs(Math.log(pctDist(GOALS[a].dist) / pct)) ? k : a)) : state.goal;
     ctx = { goal: proche, preset: !perso, label: perso ? `Allure cible (≈ ${GOALS[proche].label})` : g.label, dist: perso ? (td ? td.v * T : GOALS[proche].dist) : g.dist,
-      tObj: perso && td ? T : null, allure: profil ? 1000 / (E.vitesseReference(profil) * pct) : null, pct, heures: h, profil, parts: t };
+      tObj: perso && td ? T : null, allure: profil ? 1000 / (E.vitesseReference(profil) * pct) : null, pct, heures: h, volKm: state.unit === 'km' && profil ? state.volume : null, profil, parts: t };
     document.dispatchEvent(new Event('balance')); // le plan d'entraînement (plan.js) repart de ce contexte
   }
 
@@ -301,12 +332,18 @@
 
   // Initialisation des contrôles
   $('eq-presets').innerHTML = Object.entries(GOALS).map(([k, g]) => `<button type="button" class="puce" data-goal="${k}">${g.label}</button>`).join('');
-  $('eq-volume').value = state.volume;
+  $('eq-volume').value = fmtVolume();
   $('eq-easy').value = state.easy;
   $('eq-rec').value = state.rec;
   document.querySelectorAll('#eq-unit button').forEach(b => b.classList.toggle('actif', b.dataset.u === state.unit));
 
-  $('eq-volume').addEventListener('input', e => { state.volume = Math.max(0, +e.target.value || 0); render(); });
+  // Saisie du volume (formats d'heures : 5h30, 5:30, 5,5 ; km : 40) : calcul à la frappe, valeur remise en forme en quittant le champ
+  $('eq-volume').addEventListener('input', e => {
+    const v = lireVolume(e.target.value, state.unit);
+    e.target.classList.toggle('invalide', v === null);
+    if (v !== null) { state.volume = v; render(); }
+  });
+  $('eq-volume').addEventListener('change', e => { e.target.classList.remove('invalide'); e.target.value = fmtVolume(); });
   $('eq-easy').addEventListener('input', e => { state.easy = +e.target.value; state.easyAuto = false; render(); });
   $('eq-rec').addEventListener('input', e => { state.rec = +e.target.value; state.recAuto = false; render(); });
   $('eq-presets').addEventListener('click', e => {
@@ -343,8 +380,13 @@
   $('eq-unit').addEventListener('click', e => {
     const u = e.target.dataset.u;
     if (!u) return;
+    if (u !== state.unit && state.volume > 0) { // le volume saisi est converti (vitesse moyenne pondérée de la répartition par zone) : heures au pas de 5 min, km entiers
+      state.volume = u === 'km' ? Math.round(state.volume * vMoy) : Math.round(state.volume / vMoy * 12) / 12;
+    }
     state.unit = u;
     document.querySelectorAll('#eq-unit button').forEach(b => b.classList.toggle('actif', b === e.target));
+    $('eq-volume').classList.remove('invalide');
+    $('eq-volume').value = fmtVolume();
     render();
   });
 

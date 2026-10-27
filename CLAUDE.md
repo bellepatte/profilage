@@ -1,4 +1,4 @@
-# CLAUDE.md — Profilage athlétique (allures et zones)
+# CLAUDE.md — Profil d'endurance (allures et zones)
 
 ## Objectif
 
@@ -15,21 +15,37 @@ Interface et contenus **en français**. Ne pas introduire de dépendance externe
   colonne : résumé compact et non collant (`#synthese`), saisie repliable (`#saisie`), alertes, zones, prédictions, courbe de
   tendance ; recalcul automatique pendant la frappe (délai 300 ms), sans bouton « Calculer ». Une ligne à moitié remplie est
   ignorée ; une erreur grise les derniers résultats (`.perime`) au lieu de les masquer.
-  Deux modes d'affichage (choix dans l'en-tête, mémorisé en `localStorage`, « Simplifié » par défaut) : le **simplifié** montre
-  la saisie (profil d'entraînement compris) et la synthèse (groupes de travail et fiabilité) ; tout le reste (indice d'endurance,
-  zones, courbe) porte la classe `avance` ; les prédictions restent visibles en simplifié. Le mode
-  « distances selon chronos » n'existe qu'en avancé.
+  **Import des résultats FFA** (bouton `#ffa-ouvrir` dans « Mes chronos », `ffa.js`, `ffa-collecte.php`) : le navigateur ne peut pas lire athle.fr (pas de CORS,
+  vérifié dans Chrome : « Failed to fetch »). Un script PHP (`ffa-collecte.php`, lancé par cron une fois par jour sur le serveur web (lancement web possible seulement si la constante `CLE_WEB` est renseignée : `ffa-collecte.php?cle=…`, 403 sinon ; `&diag=1` ou `--diag` : diagnostic (PHP ≥ 7.1, extensions, droits d'écriture, accès aux deux sites, nombre de courses Courses 80) ; hors ligne de commande la constante `STDERR` n'existe pas, d'où `journalErreur()` ; les constantes `const` doivent être déclarées en tête de fichier, avant tout appel) :
+  `php ffa-collecte.php [sortie.json]`, PHP ≥ 7.4) lit la base de résultats du **club 080072** (`frmclub`, liste complète sans nom : une page = 250 lignes, pagination
+  `frmposition`), **les lignes du tableau alternent deux classes (`""` et `bg-background-light-grey`, effet zèbre) et chaque ligne est suivie d'une ligne de détail `detail-row` : il faut prendre toutes les lignes sauf `detail-row`, sinon la moitié des chronos manque**, pour les saisons année−1, année, année+1 (**la saison de la base suit l'année civile**, vérifié : `frmsaison=2026` = janvier à décembre 2026, tri par date
+  décroissante ; la colonne Date n'a pas d'année : année = saison, ramenée d'un an si la date tombe dans le futur), et écrit `ffa-resultats.json` limité aux 12 derniers mois (`MOIS_FENETRE`, même fenêtre que `ffa.js`) (fichier à côté de
+  `index.html`, ignoré par git, non écrasé si la collecte échoue). Ne sont gardées que (1) les lignes avec un **niveau** (colonne « Niveau » : compétition labellisée, donc
+  mesurée) et (2) les lignes **sans niveau qui sont une course du challenge Courses 80** (niveau affiché « C80 » ; chronométrage à puce, règles FFA, distance respectée) : le
+  script répertorie d'abord les courses du challenge (`https://courses80.fr/archive/`, tableau JSON `let data = [...]` dans la page : date, nom, distance ; 14 derniers mois, au plus
+  un marathon ; les classements eux-mêmes sont des PDF hétérogènes qu'on ne lit pas), puis les retrouve dans les chronos des adhérents de la base FFA : même date, même distance
+  (à 3 %), même lieu (`dansChallenge` : mots de la ville et du libellé de l'épreuve contre le nom de la course, préfixe commun de 5 lettres au moins ; table
+  `LIEUX_COURSES80` pour les noms sans lieu : « 4 saisons » → Amiens, « Jules Verne » → Amiens, « Flesselloise » → Flesselles ; mots génériques ignorés) ; si la liste Courses 80
+  est illisible, la collecte échoue et l'ancien fichier est conservé. Tout cela sur route ou piste dont la distance se lit dans le libellé (`5 Km Route`, `10 Km Route`, `1/2 Marathon`, `Marathon`, `3 000m`… ; trails, marche, haies,
+  relais, cross, triathlon, résultats en points exclus), avec un chrono (rang + temps ; « NP », abandons ignorés) et une vitesse entre 5 et 30 km/h. La colonne Résultat
+  est « rang. temps officiel (temps réel) » : le temps entre parenthèses est le temps réel à la puce, celui qui est retenu. `ffa.js` (chargé avec un paramètre de version `?v=aaaammjj` dans `index.html`, à changer à chaque modification pour contourner le cache du navigateur) charge le JSON
+  (`fetch`, donc depuis le serveur web, pas en `file://`), cherche l'athlète (nom et prénom dans n'importe quel ordre, accents et casse ignorés, début de mot
+  accepté, homonymes proposés au choix), garde les 12 derniers mois, affiche **tous** les chronos groupés par distance (badges « meilleur chrono » et « plus récent »,
+  un seul coché par distance, hors plage 5 min – 5 h grisé) dans une fenêtre `<dialog>` à cocher, puis envoie `ffa-chronos` ({ chronos: [{ distance, temps (min) }], athlete }) :
+  `index.html` remplit la ligne de même distance, sinon une ligne vide, et recalcule.
+  Un seul mode d'affichage, le détaillé (l'ancien commutateur « Simplifié / Avancé », la classe `avance` et la clé `localStorage` `affichage` ont été
+  supprimés) : tout est toujours affiché, y compris le mode « distances selon chronos ».
   **Groupes de travail** (tuile `groupes()`) : groupe VMA = VMA, groupe seuil = allure 1 h, arrondis au km/h (l'unité est
   affichée), avec la valeur exacte et l'allure en indication. Les entraînements de VMA courte et de vitesse souffrent peu d'une
   endurance faible, pas ceux de VMA longue et de seuil : on constitue donc deux groupes par athlète.
-  Charte graphique « Doux + Entreprise » (choisie parmi `maquette-chartes.html`, n° 26) : en-tête en bandeau dégradé bleu (`--bleu` #1583ff, tiré du logo) vers menthe (`--menthe`), logo `logo-lpn80.png` (Les Pieds Nicleys) dans une pilule blanche (`.logo`), cartes arrondies à ombre bleutée, tuiles à filet bleu / menthe, en-têtes de tableau teintés. `--accent` (#0e6ee0) reste le bleu des textes (contraste). Le fichier `logo-lpn80.png` doit rester à côté de `index.html`.
+  Charte graphique « Doux + Entreprise » (choisie parmi des maquettes de chartes, retirées du projet) : en-tête en bandeau dégradé bleu (`--bleu` #1583ff, tiré du logo) vers menthe (`--menthe`), logo `logo-lpn80.png` (Les Pieds Nicleys) dans une pilule blanche (`.logo`), cartes arrondies à ombre bleutée, tuiles à filet bleu / menthe, en-têtes de tableau teintés. `--accent` (#0e6ee0) reste le bleu des textes (contraste). Le fichier `logo-lpn80.png` doit rester à côté de `index.html`.
   La saisie (lignes de chronos, VMA, profil) est mémorisée en `localStorage` (clé `saisie`) à chaque calcul et restaurée au rechargement ; sans saisie mémorisée, les exemples grisés s'affichent. L'onglet Entraînement reprend en tête le même cartouche de synthèse que le profil (`#synthese-entrainement`, même HTML que `#synthese`, rempli par `rendre()`), suivi d'un lien discret « Modifier mes données » (`#eq-profil`, rendu par `balance.js`).
   Onglet 1 nommé « Profil ». Les zones (`#zones-profil`, avancé) sont le volet « 1. Mes zones d'entraînement » de l'onglet « 2. Entraînement » (les autres blocs sont numérotés 2 à 6). Après rechargement (saisie vide), le volet reste affiché d'après le profil mémorisé par Balance (`Balance.profil()`). La définition du TSS (Coggan) n'est plus en bas du cadre « Répartition » : c'est une infobulle (`.aide`, `aideTss` dans `balance.js`) sur le « ? » de la note `#eq-note`. Le sous-volet « Répartition par zone » s'ouvre sur un encadré `.info` « Que faire ici ? » (curseurs, bouton auto, tableau). Pas de doublon : la barre de l'allure cible n'affiche plus les allures par zone, et le tableau de répartition n'a plus les colonnes « Allure » et « % allure 1 h » (elles sont dans la fiche des zones). Pied de page `#references` : références des sources (Péronnet & Thibault, Vickers & Vertosick). Plus de lignes « Données utilisées / Qualité de l'ajustement / Profil » sous le profil d'entraînement.
   Zones : barre `#pz-barre` (non cliquable, seuls repères : allure 1 h et VMA, en bleu sous la
   barre), tableau compact `#pz-tableau` (zone, % de l'allure 1 h, allure, vitesse, utilité) ; volet « Les zones, une simplification » (continuum, seul lien factuel : plus c'est intense,
   moins longtemps on tient). Noms : Z4 « Tempo/seuil », Z5 « VO2Max » (dans `ZONES_DEF`). Classes préfixées `pz-` (celles de
   `.barre`, `.repere`, `.segment` servent à Balance). La note « Pourquoi 5 h au maximum ? » est une infobulle (.aide, bouton « ? » au survol ou au focus) à la fin de la phrase du pied de page ; la courbe de tendance garde sa propre note.
-  `maquette-profil.html` : maquette d'origine de cet écran, plus utilisée.  Saisie souple (`parseTemps`, `parseDistance`) : temps `42:20`, `42'20`, `42min`, `1h20`, `1h20m30s`, `20s` ;
+  Saisie souple (`parseTemps`, `parseDistance`) : temps `42:20`, `42'20`, `42min`, `1h20`, `1h20m30s`, `20s` ;
   distances `5000`, `5 km`, `10k`, `semi`, `marathon` (sans unité, une valeur < 100 est lue en km). En quittant
   un champ, la saisie est convertie au format standard (5000, 1:20:00). La correspondance vitesse et allure
   est affichée partout où l'une des deux apparaît (lignes de saisie, VMA, synthèse, prédictions, zones).
@@ -38,15 +54,23 @@ Interface et contenus **en français**. Ne pas introduire de dépendance externe
 - `endurance.js` : moteur de calcul, pur JavaScript, sans DOM. Exporte `window.Endurance`
   (et `module.exports` pour les tests Node).
 
-- Mode simplifié : l'onglet « 2. Entraînement » (classe `avance`) est masqué, et on revient au profil si l'on y était. Pas de bouton « Passer à l'entraînement » : on change d'onglet par l'en-tête.
+- Pas de bouton « Passer à l'entraînement » : on change d'onglet par l'en-tête.
 - Deux onglets (`VUES`, choix mémorisé en `localStorage` clé `vue`, les anciennes valeurs `equilibre` / `plan` mènent au
   second) : « 1. Profil » (point d'entrée) et « 2. Entraînement » (`#vue-entrainement`), en 6 blocs (le bloc 1 est « Mes zones d'entraînement », avancé) :
   2. Mon objectif (allure cible, balance.js), 3. Ma semaine d'entraînement (jours de course `pl-seances`, doublés avec, à droite, un résumé `#pl-resumeSemaine` : séances par semaine, jours de course, doublés, repos, durée moyenne par séance ; moment de l'intensité, volume moyen en h ou km ; message informatif `.info` : le cumul de plusieurs sports n'est pas géré),
-  4. Plan d'entraînement (bascule « Personnalisé » (construit sur la répartition) 
-  / « Méthode d'entraîneur », avec en tête, en mode Personnalisé seulement, le sous-volet « Répartition par zone » (#eq-repartition, balance.js, avancé), semaines, cycle, difficulté, méthodes), 5. Récapitulatif et export, 6. Semaine par semaine.
-  Chaque bloc est un volet repliable (`details.volet`, ouvert par défaut) ; en mode simplifié, le sous-volet « Répartition par zone » du bloc 4
-  est masqué (classe `avance`, ses éléments restent dans le DOM pour Balance et le plan).
+  4. Plan d'entraînement (liste unique de méthodes dont l'« Spécifique LPN » (construite sur la répartition)
+  est la première, avec, pour elle seule, le sous-volet « Répartition par zone » (#eq-repartition, balance.js, avancé), semaines, cycle, difficulté, méthodes), 5. Récapitulatif et export, 6. Semaine par semaine.
+  Chaque bloc est un volet repliable (`details.volet`, ouvert par défaut).
   Les plans reprennent les zones du profil : Z5 de l'allure 1 h à la VMA (répétitions de Z5 à 95 – 100 % de VMA), Z6 au-delà de la VMA.
+- **Onglet Entraînement pas à pas** (refonte UX) : barre d'étapes `#etapes` (1 Objectif, 2 Ma semaine, 3 Mon plan, 4 Mes séances) et quatre sections
+  `.etape[data-etape]` affichées une à la fois (`choisirEtape()`, boutons `data-aller` « Suivant / Précédent », étape mémorisée en `localStorage`, clé
+  `etape`). Étape 1 : objectif (curseur, champs durée / allure / distance, repli « Mes zones d'entraînement » `#zones-profil`) ; étape 2 : semaine
+  et résumé ; étape 3 en trois blocs numérotés (`.bloc-plan`) : 1 Méthode (liste déroulante personnalisée (bouton `#pl-methodeBtn` + `ul` `#pl-methodeListe`, `role="listbox"`), puis panneau `.methode-choisie` : titre `#pl-titre`, fiche `#pl-fiche`, notes et repli `#pl-resume`, repli « Ajuster la répartition par zone (facultatif) » `#eq-repartition` visible seulement pour Spécifique LPN ; puis la liste déroulante #pl-methode et la fiche #pl-fiche en tête du bloc), 2 Durée et calendrier (semaines ou dates, compétitions), 3 Charge et difficulté (cycle, difficulté) ; plus de bascule Personnalisé / Méthode (`state.mode` supprimé : `state.methode` vaut `'zones'` ou l'id d'une méthode, l'ancien `mode: 'zones'` mémorisé est converti) ; étape 4 : alertes, tuiles, histogramme,
+  export, semaine par semaine, tableau récapitulatif. Les textes d'explication sont des info-bulles `.aide` (pastille « ? » au survol ou au
+  focus, recadrées dans la fenêtre par `recadrerAide`) ou des replis `details.mini` ; ne pas remettre de paragraphes d'aide à l'écran. Placement des « ? » : au début de l'élément expliqué (titre de l'étape, titre des replis « Mes zones d'entraînement » et « Ajuster la répartition » : un clic sur le « ? » d'un `summary` n'ouvre pas le repli) ; l'aide du TSS est dans l'en-tête de la colonne TSS du tableau de répartition (`aideTss`, classe `.aide.fixe` : infobulle en position fixe calculée par `recadrerAide`, car `.tableau` défile et rognerait une infobulle absolue). À l'impression
+  seule l'étape 4 reste (les autres portent `pas-imprimer`). Tous les ids d'avant la refonte sont conservés (sauf `eq-cibleNote`, supprimé).
+  Vérification d'affichage : Edge headless échoue ; servir le dossier par un petit serveur Node en local (`localhost`) et ouvrir la page dans Chrome
+  (extension Claude in Chrome, qui refuse `file://`), avec `localStorage` prérempli par un script injecté (vue, étape, saisie).
 - `balance.js` : répartition du volume et de la charge (TSS) hebdomadaire entre les 6 zones selon l'allure cible. Exporte
   `window.Balance.setProfil(res)`, appelé par `rendre()` à chaque calcul réussi : VMA, indice et zones viennent de `Endurance`
   (aucune saisie de VMA/IE dans Balance). Le dernier profil est mémorisé (`localStorage`, clé `balance`) ; sans profil, seules
@@ -82,10 +106,9 @@ performance and world running records*, J Appl Physiol 1989 (doi:10.1152/jappl.1
 ## Règles métier à respecter
 
 - **Zones** (en % de l'allure 1 h, `ZONES_DEF`) : Z1 < 65 ; Z2 65–80 ; Z3 80–90 ;
-  Z4 90–100 ; Z5 de l'allure 1 h à la VMA (≈ 105 à 145 % selon l'indice d'endurance) ; Z6 au-delà de la VMA (zones() calcule ces deux bornes depuis es.V ; as et haut donnent les bornes finies : Z1 à 50 %, Z6 sur LARGEUR_Z6 = 10 points). Texte d'utilité de chaque zone dans `ZONES_DEF` (champ `utilite`).
-- **Fiabilité d'une prédiction** selon l'extrapolation de la distance hors de la plage saisie
-  (`SEUILS_FIABILITE`) : Élevée ≤ 25 % ; Correcte ≤ 50 % ; Moyenne ≤ 100 % ; Faible ≤ 150 % ;
-  Mauvaise au-delà. Si les données sont incohérentes (`coherenceFaible`), la fiabilité baisse d'un cran. Une VMA connue compte comme un chrono sur 6 min. Sans performance ni VMA connue, « Indicative ».
+  Z4 90–100 ; Z5 de l'allure 1 h à la VMA (≈ 105 à 145 % selon l'indice d'endurance) ; Z6 au-delà de la VMA (zones() calcule ces deux bornes depuis 
+es.V ; as et haut donnent les bornes finies : Z1 à 50 %, Z6 sur LARGEUR_Z6 = 10 points). Texte d'utilité de chaque zone dans `ZONES_DEF` (champ `utilite`).
+- **Fiabilité d'une prédiction** (angFiabilite, en durées d'effort) : marge d'erreur sur la vitesse = incertitude de l'indice × ln × (1 + ln / `LN_COURBE`), avec ln = |ln(durée visée / durée du chrono le plus proche)| (l'erreur d'indice se propage en ln(T/6), un peu plus vite quand l'extrapolation est très longue), plus une dérive au-delà du semi : un saut `SAUT_LONG` (4 %) dès que la durée visée dépasse le semi et le chrono le plus proche, puis `DERIVE_LONGUE` (7,5 %) par durée de semi dépassée (DUREE_SEMI = 105 min, médianes Vickers & Vertosick 2016 : 1 h 39 hommes, 1 h 56 femmes), appliquée progressivement selon l'écart (pleine à partir d'un rapport ×2, LN_DERIVE) pour qu'une cible égale à un chrono saisi ne soit pas pénalisée. Incertitude : celle du profil (stimation.incertitude, ±2,5 à ±4) quand l'indice vient du profil, INCERT_MESURE = 1,5 quand il est calculé sur des chronos (la VMA saisie compte comme chrono à 6 min). Niveaux (SEUILS_MARGE) : Élevée ≤ 4,5 % ; Correcte ≤ 6 % ; Moyenne ≤ 9 % ; Faible ≤ 13 % ; Mauvaise au-delà (seuils choisis, non validés par une étude). Plancher « Correcte » tant que les données sont cohérentes (ni coherenceFaible ni ieDouteux) et que chronos et durée visée ne dépassent pas le semi et que le rapport de durées (visée / chrono le plus proche) reste ≤ ×5 (`RAPPORT_PLANCHER`). Données incohérentes : un cran plus bas ; indice hors de `IE_BORD` ([−12 ; −4], proche des bornes habituelles) : un cran plus bas. Sans performance ni VMA, « Indicative ». Fiabilité du cartouche (iabiliteProfil) : moyenne arrondie de celles de la VMA (6 min) et de l'allure 1 h ; la tuile affiche le détail (`fiabiliteDetail` : « VMA : … · Allure 1 h : … ») et une infobulle `.aide` explique le calcul.
 - **Contrôles** : vitesses hors 4–30 km/h, indice ≥ 0 et, avec exactement deux données, un écart de
   distances inférieur à 10 % (`ECART_DISTANCE_MIN`, la VMA comptant comme VMA × 6 min) bloquent le calcul ; doublons et indice sous −14
   (`IE_HABITUEL`) sont des alertes. La VMA saisie compte partout comme une performance (VMA × 6 min,
@@ -133,7 +156,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   scores et séances des méthodes), `preset` (course en fin de plan seulement pour une allure de référence), temps de soutien
   borné à 5 min – 5 h, `parts` (parts de temps des 6 zones).
 
-- Zones de Profilage (% de l'allure 1 h = FTP). Z1 et Z6, ouvertes, sont bornées par `bas` / `haut` de `E.zones` (`BORNES` suit la zone 6 à chaque rendu) pour convertir temps
+- Zones du profil d'endurance (% de l'allure 1 h = FTP). Z1 et Z6, ouvertes, sont bornées par `bas` / `haut` de `E.zones` (`BORNES` suit la zone 6 à chaque rendu) pour convertir temps
   et distance. IF de la zone = allure médiane (milieu des bornes) / allure 1 h, sauf Z1 fixée à 60 % (`IF_FIXE`) ;
   la même vitesse médiane sert à convertir temps ↔ distance. TSS d'une zone = durée (h) × IF² × 100 (coût par heure croissant de Z1 à Z6).
 - **Base : 80 % du volume en Z1+Z2** (`EASY_BASE`) : ≥ 80 % du volume en faible intensité chez les coureurs de très haut niveau (Haugen et
@@ -144,7 +167,11 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   centré sur Z3 (marathon, ≈ 70–75 % facile). Le TSS par heure est donc identique d'un objectif à l'autre (≈ 60 TSS/h, ≈ 300 pour 5 h).
 - **Volume** : `cible` est multipliée par 0,95 à chaque doublement du volume hebdomadaire au-delà de 5 h (`CHARGE_PAR_DOUBLING`, `REF_HOURS`)
   et divisée de même en dessous : à fort volume, charge par heure plus basse donc plus de facile ; à faible volume, moins de facile
-  (davantage de temps de récupération). Heures : volume en h, ou km / (0,72 × VMA, sinon 10 km/h). Ex. 5 km, IE −8,8 : 78 % à 2,5 h, 92 % à 20 h.
+  (davantage de temps de récupération). Champ de volume `#eq-volume` (texte, `lireVolume`/`fmtVolume`) : en h il accepte `5h30`, `5h`, `5:30`, `5 h 30 min`, `90min`, `5,5`, `5.5` ; en km `40`, `40,5`, `40 km` ; calcul à la frappe, valeur remise en forme au blur,
+  bordure rouge si illisible (dernière valeur valide gardée) ; changer d'unité convertit la valeur (`vMoy`, vitesse moyenne pondérée du dernier rendu ; heures au pas de 5 min, km entiers : un aller-retour peut dériver de quelques minutes).
+  Heures : volume en h tel quel ; saisi en km avec un profil : km / vitesse moyenne pondérée de la répartition par zone (Σ part de temps × vitesse du milieu de la zone,
+  `vmoy` = allure 1 h × IF), par point fixe (`repartir(h)` dans `render`, 5 itérations, la répartition dépendant du volume par la charge par heure), première estimation 0,72 × VMA ;
+  sans profil : 10 km/h (`c.heures` du plan = cette valeur ; le tableau de répartition et l'étape 4 donnent le même nombre d'heures). Ex. 5 km, IE −8,8 : 78 % à 2,5 h, 92 % à 20 h.
 - **Allure de l'objectif dans l'endurance** (`recObjectif`) : les poids de Z1 et Z2 sont multipliés par 1 + 2 × gaussienne (`SPECIFIQUE_FACILE`,
   même écart-type) autour de l'allure de l'objectif, issue du profil ; si elle est en Z2 (ex. marathon avec VMA 10 et mauvais IE), la part de
   Z1 conseillée baisse (≈ 9 % au lieu de 12 %) au profit de Z2. L'intensité se recentre sur la zone la plus proche de l'allure de course.
@@ -164,8 +191,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
 
 ## Plan d'entraînement (`plan.js`)
 
-- **Deux modes** (`state.mode`) : `zones` (par défaut, `ZONES_DOC`) construit le plan sur la répartition de Balance ; `methode`
-  affiche les méthodes d'entraîneurs (bloc `#pl-blocMethodes`), qui gardent leur répartition et leurs durées de séances
+- **Une liste de méthodes** (`state.methode`) : `zones` (par défaut, `ZONES_DOC`, nommée « Spécifique LPN » : optimiser une allure spécifique selon des critères paramétrables, à placer après des cycles de préparation générale ; carte en tête de liste, avertissement ZONES_DOC.avertissement en .info-box) construit le plan sur la répartition de Balance, ajustable ; les autres sont les méthodes d'entraîneurs, qui gardent leur répartition et leurs durées de séances
   (la colonne « Plan / sem. » montre l'écart avec la répartition visée). Plan de 4 semaines par défaut.
 - Mode `zones` (`semaineZones`, hypothèses) : minutes d'effort de Z3 à Z6 = volume de la semaine × part de la zone. Z6 sous
   4 min → lignes droites de 20 s après un footing ; allure cible de semi / marathon en Z3-Z4 → une partie dans la sortie longue
@@ -178,14 +204,47 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   min/km) pour les exports ; `enveloppe()` habille toute séance de qualité.
 
 - Blocs 4 à 6 de l'onglet Entraînement : plan (mode, préparation, difficulté ; en mode méthode, une fiche par méthode : titre,
-  public, épreuves visées, difficulté athlétique, mise en œuvre, durée du plan, prérequis manquants ; sous les cartes, résumé et repli « Principes et source »), récapitulatif (alertes,
+  public, épreuves visées, difficulté athlétique, mise en œuvre, durée du plan, prérequis manquants ; sous la fiche, résumé et repli « Principes et source »), récapitulatif (alertes,
   tuiles séances / temps / distance / qualité, histogramme, repli « Tableau semaine par semaine », exports), semaine par semaine. Distances estimées par séance (`km`, avec profil) : allure moyenne de la zone (`aZ`, Z1 à 60 %,
   Z6 au milieu de ses bornes), fractions à leur allure et récupérations en Z1 (`kmS`), course = distance de l'objectif.
+  **Semaine par semaine = « agenda »** (variante choisie par l'utilisateur parmi 20 maquettes, retirées du projet) : un jour = une ligne `ol.seances > li` avec un bloc de date coloré par la zone de la 1re séance (`blocDate` : numéro du jour et jour de la semaine, ou « Jour k » sans date), le corps au centre (nom, zone, texte) et à droite le kilométrage estimé (`fKm1`, « ≈ 8,5 km », absent sans profil) au-dessus de la durée. Un doublé = plusieurs `.seance` dans le même `li`.
+- **Type de volume** (`state.volType` : 'cible', 'max', 'min' ; cases exclusives `pl-volMax` / `pl-volMin` sous le volume, étape 2) :
+  dans `calendrier`, tous les facteurs de semaine sont multipliés par `kVol` : maxi → la semaine la plus chargée vaut le volume, mini →
+  la semaine de charge la plus légère vaut le volume (choix de l'utilisateur : décharge, affûtage et semaine de l'objectif restent allégés,
+  donc sous le mini). Marge de 5 min (arrondis des séances). Maxi : dans `volumes`, une semaine de compétition est plafonnée au volume,
+  courses et échauffements compris. Footings portés au minimum en mode maxi : alerte « Volume maxi incompatible » (bloquante). Textes :
+  `volRef()`, contexte « volume maxi / mini », tuile « Temps de course », exports (`typeVolume`).
+- **Qualité autour des compétitions** : (1) LPN, semaine où `qMax` réduit le nombre de séances de qualité : le temps d'intensité est
+  réduit au prorata (`kComp` = séances gardées / séances prévues), au lieu d'être entassé dans les séances restantes. (2) `placerJours`
+  reçoit les dates de toutes les compétitions hors footing et de l'objectif (`datesCourses`) : celles des semaines voisines à 3 jours
+  ou moins (`Rq`) écartent aussi la qualité (ex. course le dimanche, pas de qualité le lundi), sans repousser la qualité en fin de
+  semaine (distance plafonnée à 3 jours). (3) Le nombre de créneaux de qualité possibles compte les jours à 3 jours au moins des
+  courses et non consécutifs ; les séances en trop sont retirées (note sous la semaine). Contrôle : `t3.js` (scratchpad), 285
+  configurations (19 méthodes × 5 scénarios de courses × 4 à 6 jours), aucune qualité à moins de 3 jours d'une course.
+- **Plusieurs courses le même jour** (plan par date) : `construire` regroupe les courses de la semaine par date (`jourCourse`) ; un jour
+  porte toutes ses courses (libellés « 1re course », « 2e course » dans `moments`, en-tête « n courses le même jour »), et n'occupe qu'un
+  jour de course. `placerJours` reçoit une date par jour (souple si toutes ses courses sont en footing). Chaque course garde son
+  échauffement. Une course intermédiaire prend son propre nom d'allure (`nomObj` dans `contexteCourse`).
+- **Échauffement des compétitions** (`course()`, `ECHAUFFEMENT_COURSE`, `echCourse`) : en Z2, selon la zone de la course (`zoneObj`, donc selon l'engagement : à fond, sans forcer, à la cool, en footing) :
+  Z6 30 min, Z5 20 min, Z4 15 min, Z3 10 min, aucun en Z1 et Z2. La séance « Course » dure échauffement + course (étape `echauffement` pour les montres), compte en Z2 dans `parts` et dans la distance ;
+  son temps est déduit du volume de la semaine comme celui de la course (`volumes`, `pool`, volume en km) ; aucune récupération (retour au calme, footing de récupération, doublé) le jour d'une compétition.
+- **Téléphone** : aucune ligne ne doit dépasser la largeur de l'écran (sinon le navigateur dézoome ou fait défiler en horizontal). Les grilles `.champs` utilisent
+  `minmax(0, 1fr)` (une colonne sous 520 px), `.rang` passe à la ligne, marges réduites sous 520 px, bouton d'étape actif plus large. Vérification : page chargée dans un
+  `<iframe>` de 390 / 360 / 320 px, `scrollWidth` de chaque étape comparé à `clientWidth` et liste des éléments qui dépassent (hors conteneurs à défilement comme `.tableau`).
+- **Conventions d'affichage** : chaque section et étape a une icône (`.ico` : 👋 ⏱️ 🔮 📉 🎯 📅 🧭 📋 ; sous-parties 🏃 📏 👥 🧭 📆 📈 🏁) ; les petites notes
+  statiques sont dans des infobulles `.aide` (« ? ») ou des `details.mini` repliés, pas en clair. Alertes : `listeAlertes(el, liste)` (plan.js) les classe
+  ⛔ `a-err` (incohérence, incompatible, prérequis), ⚠️ `a-warn` (défaut), ℹ️ `a-info` (tient lieu, doublés, club écarté, moins de 6 semaines…), les trie
+  dans cet ordre et replie au-delà de 3. Séances : icône par type (`iconeSeance` : ⚡ qualité, 🛣️ sortie longue, 🏃 footing, 💤 récupération, 👥 club,
+  🏁 course) et puce de zone `zoneChip` ; en-tête de semaine : badge du type (`.badge`) et puces 🗓️ ⏱️ 📏 ⚡ 📶 📝 ; notes de semaine `.note-sem` (📝).
+  Conseils `.info-box.conseil` (💡), contexte du plan `.contexte` (🎯). Règles : celles de Spécifique LPN sont toutes dans `ZONES_DOC.principes`
+  (source unique, affichée « Règles de construction ») ; `REGLES_COMMUNES` ne garde que ce qui vaut pour tous les plans.
+- **Sortie longue = séance la plus longue de la semaine** (`construire`, durée et distance) : `sl` est relevée jusqu'à la plus longue séance de qualité ou du club (`besoin`, au plus `slPlafond = min(slMax0, limite exacte)`), les footings (et footing + lignes/accélérations, `sousLimite`) restent sous elle ; le volume est conservé (les footings raccourcissent). Si le plafond (méthode ou longueur maximale) l'empêche, la séance la plus longue « tient lieu de sortie longue » (suffixe du nom) et la dernière séance s'appelle « Sortie facile » (« Sortie avec fin rapide » si elle a du travail). Sans effet les semaines de course (la course remplace la sortie longue).
+- **Longueur maximale d'une séance** (étape 2, facultative : `state.limite` + `state.limiteU` `min` | `km`, champ `#pl-limite`, bornes `bornesLimite` : minimum 20 min (`LIMITE_MIN` ; en km, la distance de 20 min à l'allure de Z2), maximum 300 min ou 60 km ; changer d'unité convertit à l'allure moyenne de Z2, 6 min/km sans profil). `limiteDe(c)` → `c.limite = { min, km, txt }` (une distance est convertie en durée à l'allure moyenne de Z2 ; une séance de qualité est aussi contrôlée sur sa distance `km`). Effets dans `construire` : sortie longue et footings plafonnés (`slMax = min(slMax0, lim5)`, par pas de 5 min ; footing + lignes droites ou accélérations compris : `sousLimite`) ; séances de qualité ramenées sous la limite par `reduire()` (échauffement et retour au calme inchangés, travail multiplié par k, la séance se régénère avec `echelle × k` ; en Spécifique LPN les blocs sont raccourcis ensemble dans `semaineZones`, et l'effort retiré est reporté sur les autres séances de qualité qui ont de la place, puis sur de nouvelles séances de qualité jusqu'à `maxS` ; `coupe` = effort qu'on n'a pas pu replacer) ; compétitions et séances du club non limitées. Alertes (`aLimite`, étape 2 et étape 3) : incompatible avec l'objectif (5 km et 10 km seulement : la séance la plus longue doit couvrir au moins 5 km ou 10 km ; semi et marathon : pas de minimum, seul le volume global compte), incompatible avec le volume (jours × limite + doublés < volume visé), volume plafonné, qualité raccourcie (`coupe`), séances impossibles à raccourcir (2 répétitions minimum : `trop`), séance du club au-dessus de la limite. Export : champ `limite` (feuille Paramètres).
 - Paramètres : jours de course par semaine (3–7, clé `seances`), doublés (autant que de jours, 6 au plus : `optionsDoubles`
-  ramène la valeur si les jours baissent ; le jour de la sortie longue est doublé en dernier ; pas de doublé la semaine de
+  ramène la valeur si les jours baissent ; jamais le jour de la sortie longue ; pas de doublé la semaine de
   course), durée du plan (`state.horizon`, `#pl-horizon`) : soit un nombre de semaines (4–24), soit « Jusqu'à la date de
   l'objectif » (`debut`, `fin` : `horizon()` donne les semaines entières entre les deux, bornées à 4 – 52 `SEMAINES_MAX`, avec alerte
-  hors bornes ; les semaines portent leurs dates `debut` / `fin`) ; cycle (charge constante, ou x semaines de charge + n de décharge ; encadré repliable « Quel cycle choisir ? », .aide-cycle, avec avantages et inconvénients de chaque cycle),
+  hors bornes ; les semaines portent leurs dates `debut` / `fin`) ; cycle (`state.cycle` : `auto` par défaut, `constante`, ou `cycle` réglable x semaines de charge + n de décharge ; **automatique** (`cycleAuto(c, N, h)`) : constante sous 6 semaines avant l'affûtage, sinon 3 + 1 (2 + 1 sous 8 semaines), et avec des compétitions intermédiaires (mode par date, courses en footing exclues) la longueur de charge de 2 à 5 semaines dont les décharges tombent le mieux sur la semaine d'une course (poids légère 1, modérée 2, forte 3) ou la suivante (× 0,8), à égalité la plus proche du défaut ; `calendrier()` renvoie le cycle effectif, affiché dans `#pl-cycleAuto` et exporté (« cycle 4 + 1 (automatique) ») ; une méthode à `constant` impose la charge constante ; encadré repliable « Quel cycle choisir ? », .aide-cycle, avec avantages et inconvénients de chaque cycle),
   difficulté de la 1re semaine (1–10 : séries courtes et récupérations longues → séries longues et récupérations courtes).
 - **Compétitions intermédiaires** (mode par date seulement, `state.courses` = [{ date, d (m) }], `#pl-courses`, bouton « + Ajouter une
   compétition », épreuves `COURSES` de 1 500 m au marathon, ou « Autre distance… » saisie librement : 8 km, 12000, semi ; `perso`, `txt`) : `appliquerCompetitions()` ajuste les semaines selon la charge de la course,
@@ -203,14 +262,14 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   de la cible (le plan garde son rythme), plus une « dette » de récupération `DETTE` = 25 % du TSS des courses la semaine précédente,
   50 % la semaine suivante et 25 % la deuxième (hypothèses), en partie absorbée par une semaine de décharge ou d'affûtage (déjà allégée
   de `(1 − facteur) × tssRef`). Plancher `PLANCHER_TSS` = 30 % de la cible ; conversion en temps au TSS horaire de référence, le temps des
-  courses s'ajoute (`volumes` dans `construire`). **Équilibre par zone** (plan personnalisé) : le temps d'une compétition dans sa zone
+  courses s'ajoute (`volumes` dans `construire`). **Équilibre par zone** (Spécifique LPN) : le temps d'une compétition dans sa zone
   se déduit du temps prévu pour cette zone la semaine de la course (`partsSem`, parts par zone de chaque semaine) ; s'il le dépasse
   (ex. 5 km de 19 min en Z5 pour 11 min prévues), alerte : les autres semaines cèdent l'excédent si elles le peuvent (au plus
   `ABSORBE_ZONE` = 50 % de leur temps dans la zone : « le temps en Z5 des autres semaines est réduit de x % »), sinon on retire ce qui
   peut l'être (−50 %) et l'alerte dit que l'équilibre du plan ne peut pas être respecté. Le temps libéré revient en Z2. Séances de qualité limitées (`qMax` : 1 ou 0 la semaine de la course et la suivante, 1 la 2e semaine après une forte) ;
   la course remplace la sortie longue (`contexteCourse()`, sans doublés). Plusieurs compétitions la même semaine : charge (TSS) cumulée pour le niveau, aucune séance de qualité, la dernière course remplace la sortie longue et les précédentes un footing chacune (`w.courses`, `extra` dans `construire`). Notes en bleu sous la semaine, semaine étiquetée « Compétition »
   (barre rouge du graphique). Course sans date, avant le début ou à partir de la date de l'objectif : ignorée avec alerte.
-  En mode par date, le plan personnalisé a aussi un affûtage et la course finale (comme les méthodes).
+  En mode par date, Spécifique LPN a aussi un affûtage et la course finale (comme les méthodes).
   **Calendrier réel** (mode par date, `placerJours()`) : chaque jour d'entraînement porte sa date (`w.dates`, affichée « lun. 26 oct. » à la
   place de « Jour k », `date` ISO dans `donnees`). Les jours de course tombent aux dates des compétitions (la dernière semaine s'arrête à la
   date de l'objectif) ; les autres jours sont choisis par énumération des combinaisons pour avoir des écarts réguliers (cycliques sur une
@@ -219,30 +278,45 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   qualité à moins de 3 jours d'une course (retirée, avec note), qualité placée au créneau le plus éloigné des courses ; semaine finale
   raccourcie : footings retirés d'abord. Sans date cohérente (plan trop court), les jours restent « Jour k ».
   Qualité jamais deux jours de suite autour d'une course (choix glouton des créneaux les plus éloignés des courses).
-  **Règles communes** (`REGLES_COMMUNES`, repli « Règles communes à tous les plans » sous le résumé, personnalisé et méthodes) : cycle,
-  affûtage, compétitions (TSS, dette, qualité limitée, pas de doublé), équilibre par zone (personnalisé), calendrier. Les garder
+  **Règles communes** (`REGLES_COMMUNES`, repli « Règles communes à tous les plans » sous le résumé, Spécifique LPN et méthodes) : cycle,
+  affûtage, compétitions (TSS, dette, qualité limitée, pas de doublé), équilibre par zone (Spécifique LPN), calendrier. Les garder
   conformes au code. En mode par date, la dernière semaine finit toujours par l'objectif, même sans affûtage (plan de moins de
   6 semaines : alerte « la course finale arrive sans semaine allégée »). L'alerte « Beaucoup d'intensité… » (`exces`) ignore les
   semaines où la qualité est volontairement limitée autour d'une compétition (`qMax` fini). Exports : colonne « Date » (CSV, Excel)
   et fichiers montre nommés par date en mode par date. Pour les méthodes, `tssRef` est estimé avec la répartition de Balance
   (approximation : la méthode a sa propre répartition).
-  Contrôle fait (54 plans par date, personnalisé et 5 méthodes, 3 à 7 jours, 3 compétitions) : courses à leur date, objectif présent,
+  Contrôle fait (54 plans par date, Spécifique LPN et 5 méthodes, 3 à 7 jours, 3 compétitions) : courses à leur date, objectif présent,
   aucune qualité deux jours de suite ni à moins de 3 jours d'une course.
   Infobulle des barres de l'histogramme : temps, TSS (Σ temps par zone × IF² × 100, IF de `Balance.zones()`) et temps par zone.
 - Calendrier : le niveau monte de `PROGRESSION` (3) jusqu'à l'affûtage. Cycle : +6 % de volume par semaine de charge
-  (`CHARGE_PAS`, centré sur 1), décharge à 70 % (`DECHARGE`), une qualité en moins, niveau −1. Affûtage : 1 semaine (0,6) ou
-  2 pour semi/marathon si ≥ 10 semaines (0,75 puis 0,55) ; aucune sous 6 semaines. La dernière semaine d'affûtage finit par la course.
+  (`CHARGE_PAS`, centré sur 1), décharge à 70 % (`DECHARGE`) avec le même nombre de séances de qualité mais allégées de moitié
+  (`DECHARGE_Q` : travail de qualité = 50 % d'une semaine de charge, plutôt que d'en retirer une), niveau −1. Affûtage : 1 semaine (0,6) ou
+  2 pour semi/marathon si ≥ 10 semaines (0,75 puis 0,55) ; aucune sous 6 semaines. La dernière semaine d'affûtage finit par la course ;
+  la semaine de l'objectif (`finale` dans `volumes`) a une charge de 50 % de la référence (`OBJECTIF_CHARGE`) en gardant la fréquence,
+  sans durée maximale de footing (si les footings minimaux la dépassent : alerte « volume juste »).
 - Séances de qualité : 1 (3 séances), 2 (4–5) ou 3 (6–7), plafonné par `maxQ` de la méthode. Fractions : `series()` interpole
   durée de répétition, travail total et récupération (en part de la répétition) selon le niveau, × facteur de volume
-  √(h/5) borné à [0,7 ; 1,4]. Échauffement 20 min, retour au calme 10 min. Allures prédites par le moteur (`tablePredictions`).
-- Volume facile : sortie longue = max(28 % du volume, 1,5 part), plafond 2 h 30 (Hanson : 26 km) ; le reste en footings égaux,
-  de 30 min au minimum et pas plus longs que la sortie longue (alertes « volume juste » et « volume élevé »).
-- Doublés : la 2e séance est un footing Z2 de `DOUBLE_PART` (0,6) footing, borné à 20–45 min (`DOUBLE_BORNES`) et pas plus long
-  que le footing principal, pris sur le volume facile ; placée d'abord les jours faciles, puis le soir des jours de qualité.
+  √(h/5) borné à [0,7 ; 1,4]. Échauffement selon la zone (`echauffement(c, zone)`) : 20 min en Z5, 15 si une longueur maximale de séance est fixée ;
+  Z6 + 5 min, Z4 − 5 min, Z3 − 10 min ; retour au calme 10 min. Allures prédites par le moteur (`tablePredictions`).
+- **Deux jeux de règles dans construire** (lpn = doc === ZONES_DOC, c.lpn) : les règles ci-dessous sont celles de Spécifique LPN ; les méthodes d'entraîneurs gardent leurs règles propres, qu'on ne modifie pas (constantes _M : footing minimal 30 min, sortie longue = max(28 % du volume, 1,5 footing) plafonnée à 150 min, doublé de 0,6 footing borné à 20–45 min y compris le jour de la sortie longue, footings ≤ 1 h la semaine de l'objectif, alerte doublés sous 7 h). Seules la cohérence « sortie longue = séance la plus longue » et la longueur maximale s'appliquent à tous.
+- Volume facile (Spécifique LPN, `construire`, branche `lpn`) : pas de séance « sortie longue » réservée ni de règle de calcul, une logique en 3 temps. 1) Le lendemain
+  d'une séance de qualité : un footing court et très facile (`EF_MIN` 20 min), passé en Z1 par `recupZ1` dans la limite de la part de Z1 visée (Z1 plafonné à la
+  cible, pas systématique). 2) Sortie longue spécifique à l'objectif si le volume le permet : minimum `SL_MIN_SEMI` 90 min / `SL_MIN_MARATHON` 120 min
+  (« minimum syndical », atteint progressivement : × `lerp(0,7 ; 1, w.frac)` × facteur de la semaine) ; rien pour 5 et 10 km ; si le volume ne suffit pas, elle est
+  réduite (`slCourte`, alerte) ; si les autres séances sont au plafond, elle absorbe le surplus. 3) Le reste du volume va aux autres séances faciles
+  (`partage()`) : durées par pas de 5 min qui alternent haut / bas (jamais deux séances voisines identiques, on évite la monotonie) ; sans minimum d'objectif, le
+  dernier jour fait partie du partage et reste la plus longue séance facile. Volume saisi en km (`c.volKm`, `Balance.contexte().volKm`) : la somme des km des
+  séances vaut le volume × facteur de la semaine (les séances faciles couvrent le reste à l'allure Z2), pas la conversion km → temps. Ensuite la séance la plus longue
+  (en km, en durée sans profil) prend le nom : une séance de qualité si c'est elle (suffixe « tient lieu de sortie longue », pas de footing long à côté), sinon un
+  footing (« Sortie longue ») ; si plusieurs séances sont à égalité en tête (ex. toutes au plafond de longueur), il n'y a pas de sortie longue (alerte de
+  cohérence volume / plafond de séance). Plafond `SL_MAX` 300 min.
+- Doublés : la 2e séance est un footing Z2 de la durée des autres footings (pas de part ni de bornes), pris sur le volume facile ;
+  jamais le dernier jour de la semaine (celui de la sortie longue pour les méthodes) ; placée d'abord les jours faciles, puis le soir des jours de qualité. Utiles à partir de
+  `DOUBLES_SEANCES` (5) séances par semaine : ils libèrent des jours de repos (alerte en dessous).
   Affichage par jour. Option « Séance d'intensité les jours de doublé » (`moment` : matin, midi, soir, sans importance par
   défaut ; visible s'il y a des doublés) : `moments()` place la séance de qualité au moment choisi (midi : footing « matin ou
   soir » ; sans importance : pas de libellé, « ordre au choix »). Deux séances de même nature (double seuil norvégien, deux
-  footings) restent « Matin / Soir ». Alerte sous `DOUBLE_VOLUME` (7 h/sem.) : à faible volume, les doublés servent peu.
+  footings) restent « Matin / Soir ».
 - Méthode norvégienne (`doubleSeuil`) : séances `SEUIL_NO_LONG` (5–10 min, allure semi – 30 km) et `SEUIL_NO_COURT`
   (1 min 30 – 3 min, allure 10 – 15 km), récupérations brèves, plus `COTES_COURTES` (Z6). Chaque doublé va d'abord à un jour
   de seuil, avec le soir le format complémentaire (`SEUIL_NO`) ; les doublés restants sont des footings. Travail au seuil
@@ -275,8 +349,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
 - Galloway : course-marche à toutes les sorties, ratio selon l'allure de sortie longue (`allureGalloway` = allure marathon
   + 2 min par mile ; `RATIOS_GALLOWAY` = sa table par mile, de 4 min / 30 s à 8:00 /mile jusqu'à 10 s / 30 s à 16:00 /mile).
   3 jours de course (`joursMax`), footings ≤ 45 min (hypothèse : sorties de semaine courtes), une qualité par semaine
-  (`GAL_RYTHME` : 3 à 6 min à l'allure de l'objectif, récupération en marchant ; durées = hypothèse, Galloway donnant des
-  distances), mile magique (`GAL_MM`) toutes les 2 semaines, accélérations-glissées. Sortie longue jusqu'à 42 km pour le
+  (jeu de côtes, puis répétitions à l'allure de l'objectif : voir « Galloway : trois livres lus » plus bas), mile magique (`GAL_MM`) toutes les 2 semaines, accélérations-glissées. Sortie longue jusqu'à 42 km pour le
   marathon. Doublés −0,5. Difficulté 1/5. Sources ✔ : jeffgalloway.com « Train for a Marathon Finish » (ratios, allure de
   sortie longue, 26 miles, entraînement croisé lundi / mercredi / vendredi) ; ✗ : « Magic Mile » et Active.com (résumés).
 - Méthodes retirées à la demande de l'utilisateur, à ne pas rajouter : Coach Patrice ; Brun et Vollmer (valeurs de % de VMA
@@ -313,12 +386,20 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
 - Méthodes (`DOCTRINES`) : Daniels, Lydiard, Seiler (polarisé), Pfitzinger, Hanson, Canova, Billat, norvégienne, Cottereau,
   Heubi, McMillan, Tinman, Magness, Kellogg, Galloway, Fitzgerald, Norwegian Singles (sirpoc), Rousset ; chacune a des phases (séances de qualité par priorité, type de sortie longue) et un `score` par objectif (adéquation de 0 à 3,
   qui sert seulement à afficher les épreuves visées). **Aucune méthode n'est recommandée** : pas de classement, de filtre ni de
-  badge ; la méthode affichée par défaut est la première de la liste. La liste est triée par difficulté athlétique (croissante) par
-  défaut ; `#pl-tri` et `#pl-triSens` (`state.tri`, `state.triDesc`, mémorisés) trient par difficulté athlétique, mise en œuvre,
-  durée du plan, épreuves visées (plus courtes d'abord) ou public (ordre alphabétique), croissant ou décroissant (`TRIS`).
-  Astérisque `*` (`limitee`) sur les méthodes aux sources limitées, faute de texte de l'auteur sur les phases et les séances : Daniels,
-  Lydiard, Seiler, Pfitzinger, Hanson, Canova, Billat, norvégienne, Tinman, Fitzgerald (voir « Consolidation » et les sources de chaque méthode).
-  Mention « old school » (`ancienne: true` dans `FICHES`, pastille `.badge-old` à côté du titre de la fiche) sur les méthodes anciennes issues de l'entraînement traditionnel : Lydiard, Cottereau, Rousset, Heubi, Galloway (liste modifiable).
+  badge ; la méthode affichée par défaut est Spécifique LPN. Le choix se fait dans une liste déroulante (`#pl-methodeBtn` / `#pl-methodeListe`, 
+  Spécifique LPN en tête, puis les méthodes par difficulté athlétique croissante, `parDifficulte`) ; la fiche de la méthode choisie (`#pl-fiche`) remplace les anciennes tuiles et le tri (`TRIS`, `state.tri` supprimés).
+  Astérisque `*` (`limitee`) sur les méthodes aux sources limitées, faute de texte de l'auteur sur les phases et les séances : Billat, Tinman (Canova a perdu l'astérisque après lecture de ses articles FIDAL de 1996 et 1998 et de ses fils LetsRun ; Daniels, Pfitzinger, Hanson, Fitzgerald et Lydiard ont perdu l'astérisque après lecture de leur livre, dossier `books/`, Seiler et la norvégienne après lecture d'un article de référence, Norwegian Singles après lecture du livre de Copeland) (voir « Consolidation » et les sources de chaque méthode).
+  La mention « old school » (pastille `.badge-old`, champ `ancienne` de `FICHES`) a été retirée à la demande de l'utilisateur : ne pas la remettre.
+  Message informatif visible pour tous les plans (étape 2 « Ma semaine », sous le volume, `.info-box`) : une semaine d'entraînement prise comme base d'un plan doit être au plus à peine plus chargée que les précédentes, dans le doute garder le même volume.
+  **Séances au club** (étape 2, deux cases `#pl-club1` / `#pl-club2`, `state.club1` / `state.club2`, constantes `CLUB`, `seanceClub()`) : lundi, « séance de PPG dont footing » comptée comme 40 min de Z2 pour la charge ; jeudi, « séance piste » de
+  charge moyenne équivalente à 1 h de Z2 + 15 min à VMA (75 min : 60 de Z2 + 15 de Z5), comptée comme une séance de qualité. Intégrées chaque semaine si compatibles par `construire()` : elles se déduisent du volume (`volP = vol − clubT`) et des parts par zone (`horsClub()` : Z2 et Z5 du
+  club retirés de la répartition, reliquat en Z2), occupent un des jours de course (`jourLibres`), et la séance du jeudi retire une séance de qualité du plan (`nbQ − clubQ`). En mode par date elles sont placées à leur vrai jour de semaine
+  (lundi, jeudi) par `placerJours(..., clubs)` (le plan n'y place pas de séance de qualité à côté de celle du jeudi) ; sans dates, lundi en tête et jeudi en 4e jour. Alertes (`aClub`, affichées à l'étape 2 et en tête des alertes de
+  l'étape 4) : un seul jour libre, séance du club écartée certaines semaines (Spécifique LPN : `clubsSemaine(i)` n'intègre une séance du club que si son Z2 tient dans le
+  Z1 + Z2 prévu et son Z5 dans le Z5 prévu cette semaine-là, avec les autres séances du club ; sinon elle est remplacée par une séance du plan et une note sous la semaine l'indique ;
+  les méthodes d'entraîneurs gardent le club chaque semaine ; libellé du champ : « chaque semaine si compatible avec le plan »), séance de qualité du jeudi tenant lieu de séance
+  de qualité du plan, séance du jeudi à moins de 3 jours d'une compétition ou de l'objectif (mode par date). Limites : les séances du club ne sont pas retirées une semaine de compétition ; une semaine partielle sans lundi ou jeudi
+  perd la séance correspondante (son volume reste déduit).
   Fiche (`FICHES`, hypothèses de conception) : public visé, `plan` (durée habituelle), `mise` (simple, moyenne, complexe),
   prérequis `h` (volume, h / semaine) et `j` (jours de course) ; `ie` (Billat, norvégienne : fractions longues à VMA ou au seuil)
   ajoute une alerte si l'indice d'endurance est ≤ −10 (reflet de la capacité du moment ou d'un choix d'entraînement, formulé sans jugement). Pas de
@@ -329,16 +410,100 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   Prérequis » sur la fiche et alerte dans le bloc 5 pour la méthode choisie, sans effet sur le plan ; `joursMax` : alerte au-delà.
   **Rapport volume / fréquence / objectif** (`rapportSemaine`, `RAPPORT`, alerte `#pl-alerteSemaine` du bloc 1, toutes méthodes) :
   volume sous un minimum pour l'objectif (5 km 1,5 h ; 10 km 2 h ; semi 3 h ; marathon 4 h par semaine), durée moyenne par séance
-  au-dessus d'un maximum (75, 90, 105, 120 min) ou séances de moins de 30 min par jour de course (hypothèses). Ex. 3 séances en
+  au-dessus d'un maximum (75, 90, 105, 120 min) ou séances de moins de 20 min par jour de course (même minimum que la longueur maximale) (hypothèses). Ex. 3 séances en
   2 h pour un marathon, 4 séances en 10 h pour un 10 km.
-  Note de difficulté par méthode (`difficulte` : [1–5, justification], libellés `NIVEAUX_METHODE` de Débutant à Avancé) :
+  Note de difficulté par méthode (`difficulte` : [1–5, justification], affichée sur 3 niveaux par `niveau3` : 1 – 2 Débutant, 3 Intermédiaire, 4 – 5 Avancé, avec trois ronds HTML `.ronds` (même taille, remplis jusqu au niveau, vert / ambre / orangé via `--z4` / `--z5` / `--z6`, à droite de chaque ligne de la liste) dans la liste et la fiche ; Spécifique LPN vaut 3 : intermédiaire) :
   Seiler 1, Lydiard 2, Daniels 3, Billat 4 (fractions longues à VMA très éprouvantes, le reste accessible), Pfitzinger 4,
   Hanson 4, Canova 5, norvégienne 4, Cottereau 1, Heubi 3, McMillan 2, Tinman 2, Magness 4, Kellogg 4, Galloway 1, Fitzgerald 2, Norwegian Singles 3, Rousset 3. Une séance peut porter un avertissement (`alerte`,
   ex. `VMA_TLIM`), affiché en rouge dans sa description.
 - **Hypothèses à valider** : tous les nombres de `SEANCES`, `SPE`, les phases, scores et la progression sont des choix de
   conception inspirés des principes publiés, pas les plans des auteurs. Sans profil, pas d'allures (temps de course estimé à 10 km/h).
 - Consolidation des sept premières méthodes (recherche du 20/10/2026, sources secondaires ; livres non lus) :
-  - Daniels : I de 3 à 5 min (`VMA_LONG`), T 1 min de récupération pour 5 min (`SEUIL`), R ≤ 2 min et récupération 2 – 3 fois la
+  - **Daniels : livre lu (PDF du dossier `books/`, texte extrait en scratchpad) ✔.** Plafonds par séance confirmés (chap. 4, 14, 15) : T ≤ 10 % du kilométrage
+    hebdomadaire (et 15 miles), I ≤ plus petit de 8 % et 10 km, R ≤ plus petit de 5 % et 8 km, M ≤ 20 % (30 % sous 64 km/sem.), sortie longue
+    ≤ 25 % (30 % sous 64 km/sem.) et 150 min ; récupération T 1 min pour 5 à 6 min, I égale ou un peu moindre, R 2 à 3 fois l'effort. Phases (chap. 10) :
+    I base facile + lignes droites ; II répétitions R (2 séances, 2 jours faciles entre) ; III intervalles I (2 par semaine pour les distances longues, 1 + R pour
+    les courtes) ; IV seuil T (+ quelques R de 200 m en fin de séance), I abandonnés si des courses les remplacent. `limitee` retiré. Anciennes notes :
+  - **Pfitzinger : *Advanced Marathoning* (4e éd. 2025) lu ✔** (`limitee` retiré). Quatre blocs : endurance (tempo + footings avec lignes droites + sortie moyenne-longue,
+    sorties avec allure marathon), seuil et endurance (tempo 30 – 45 min jusqu'à deux fois par semaine, un VO2max occasionnel), préparation à la course (VO2max
+    5 × 600 m – 1 km à allure 5 km, récupération 50 – 90 % ; plus de seuil pour le marathon : lignes droites à la place ; courses de 8 – 15 km), affûtage de 3 semaines.
+    Seuil lactique = allure tenable 1 h ; tempo continu préféré aux fractions pour le marathon, pas de double seuil ; au plus 3 séances dures par semaine ; semaine de
+    récupération à 80 % du volume ; sortie longue ≤ 21 – 22 miles (24 pour les expérimentés).
+  - **Hanson : livre lu ✔** (`limitee` retiré) : le code était déjà conforme (vitesse à allure 5 – 10 km puis force à allure marathon − 10 s/mile, tempo à allure marathon de 4 – 5 miles
+    à 10 miles, sortie longue ≤ 16 miles et ≤ 25 – 30 % du volume) ; textes précisés.
+  - **Fitzgerald (80/20) : livre lu ✔** (`limitee` retiré). Plans du livre : 9 semaines (5 km : 3 de base, 5 de pointe, 1 d'affûtage), 12 (10 km : 6, 4, 2), 15 (semi : 6, 7 – 8, 1 – 2),
+    18 (marathon : 9, 7, 2), une semaine de récupération sur trois ; la base est plus proche de 90/10 (montée du volume), la pointe à 80/20. Code : fin de la phase de base selon
+    l'objectif (`f` fonction du contexte), `partQualite` propre à la phase de base (0,15 contre 0,25 ensuite : option de phase, qui l'emporte sur celle de la méthode). Zones du livre
+    (par rapport au seuil lactique en FC) : 3 « modérée » = entre seuil ventilatoire et seuil lactique (96 – 100 %), 4 – 5 « élevée » ; footings en zones 1 – 2.
+  - **Lydiard : *Running to the Top* lu ✔** (`limitee` retiré). Base d'au moins 3 mois (4 – 5 de préférence), puis ≈ 4 semaines de côtes, ≈ 4 d'anaérobie (3 jours durs par semaine, répétitions
+    d'au moins 600 m, jamais d'« interval training » chiffré), 6 de coordination avec une course de mise en jambes par semaine, sortie longue de 1 h à 1 h 30 en période de course, 2 semaines
+    sans rien de rapide après un semi ou un marathon. Code : `finLydiard()` place les 14 dernières semaines (4 + 4 + 6) et les réduit proportionnellement sous 23 semaines.
+  - **McMillan : *YOU (Only Faster)* lu ✔.** Plans de 12 semaines + modules de 4 semaines (volume, séances de base : steady state et leg speed, côtes, puis « prep stamina » avant le 5 et
+    le 10 km, « prep speed » avant le semi et le marathon), 24 semaines au plus, semaine 4 de récupération. Code : les deux phases intermédiaires échangent nom et séances selon la distance
+    (`nom` de phase peut être une fonction du contexte). Tempo 15 – 40 min (court pour un Speedster, long pour un Endurance Monster), fractions de tempo 6 – 15 min, cruise intervals 3 – 8 min.
+    Le type de coureur est en réalité auto-évalué (questionnaire) ; l'appli le déduit de l'indice d'endurance (approximation).
+  - **Heubi : *Courir longtemps* lu ✔** (OCR bruité). Le livre utilise le même indice d'endurance (Péronnet) : EMA à 80 – 90 % de VMA, durée de séance selon l'indice ; VMA courte 30 s – 1 min 15
+    à 100 – 105 % (récupération égale), longue 1 min 15 – 4 min à 90 – 95 % (récupération moitié), 15 – 25 min d'effort ; préparation générale ≥ 12 semaines, spécifique 9 – 11 semaines (2 cycles
+    séparés d'une semaine allégée) ; sortie longue 1 h – 1 h 15 (10 km), ≈ 1 h 30 (semi), 1 h 30 – 1 h 45 (marathon). Textes précisés, code inchangé (déjà conforme).
+  - **Galloway : trois livres lus ✔, fusionnés en une seule méthode galloway** (course-marche + pyramide). Course-marche : *Marathon: You Can Do It!* (2001) et *Half-Marathon: You Can Do It!* (2013) : programmes de 26 semaines,
+    sortie longue de 3 miles +1 par semaine jusqu'à 10 puis une semaine sur deux (toutes les 3 semaines après 18 miles), règle des deux minutes (3 minutes après une sortie manquée), marche d'une minute toutes les 3 à 5 min
+    (toutes les 4 min vers 18 – 20 miles, toutes les 3 min au-delà de 23), mile magique (marathon × 1,3, semi × 1,2 ; 4 derniers tests, on écarte le plus lent), objectif réaliste 3 % (5 % au mieux), plan chronométré :
+    jeu de côtes puis répétitions d'un mile à l'allure marathon (marche ≥ 4 min), week-ends alternés. Pyramide : *Galloway's Book on Running* (1984) : base 50 %, côtes 15 %, vitesse 35 % ; avant la vitesse, 1 an
+    de course, 2 – 3 mois d'aérobie, 4 – 6 semaines de côtes ; vitesse 8 semaines au plus (12 – 14 pour le marathon), une séance par semaine un peu plus vite que l'allure de course (440 yards pour le 10 km et moins,
+    jusqu'à 20 : GAL84_440 ; un mile pour le semi et le marathon : GAL_MILE) ; sortie longue une semaine sur deux (slUneSur2) jusqu'à 20 % de plus que la course (slKm : 16, 24, 29, 45 km pour 5 km, 10 km, semi, marathon).
+    Synthèse : trois phases (base aérobie, jeu de côtes 4 semaines, vitesse 8 ou 12 semaines), placées par inPhase(avant, total) (réduites si le plan est court) ; course-marche conservée à toutes les sorties (les avancés du
+    livre de 1984 peuvent s'en passer) ; 3 jours de course (joursMax) ; mile magique toutes les 2 semaines à la place de la séance de vitesse. Difficulté 2/5. Non modélisé : les week-ends « off » à demi-distance, les 5 km de course,
+    le fartlek libre. La méthode galloway84 a été fusionnée dans galloway (ne plus la recréer).
+    Phases en semaines avant la course via `finPhase(avant, total)` (base, côtes 4, vitesse 8 ou 12, réduites si le plan est court). Difficulté 2/5 ; marche en option pour les débutants seulement (non modélisée).
+  - **Billat : *La physiologie de l'entraînement et de la performance sportive* (De Boeck, 2021) lu ✔** (manuel de physiologie : peu de plans, mais une **table de prescription par % de VAM** au chap. 6,
+    cohérente avec Tlim ≈ 6 min à VMA du modèle). Intensité → part du temps limite par répétition → récupération (W = durée de l'effort) : 120 – 115 % : 25 % (30 – 37 s), r = 4 W ; 110 – 105 % : 25 – 50 %
+    (45 – 90 s), r = 2 W ; 100 – 95 % : 33 – 50 % (2 – 3 min), r = 1 W ; 90 – 85 % : 50 – 75 % (7 – 12 min), r = 0,5 W ; seuil (≈ 1 h) : 25 – 75 % (15 – 45 min), r = 5 min. Code : séances `BIL_105`,
+    `BIL_88`, `BIL_SEUIL` (allures `v105_110`, `v85_90`), phases VMA courte (30-30 + 105 – 110 %), VMA longue (½ Tlim + grand seuil), spécifique (allure de course + 85 – 90 %). `limitee` conservé (la méthode reste
+    une synthèse). Non repris : l'entraînement en accélération (BillaTraining : pyramides de vitesse auto-rythmées, 2 séances de 20 à 30 min par semaine), sans prescription chiffrée.
+    **publications.billatraining.com** (165 PDF en libre accès, liste rendue par JavaScript : lue avec Chrome, anchors `a[href*=".pdf"]` ; téléchargement direct possible : `…/publications/<année>/<fichier>.pdf`) : lus (texte, pdfjs) :
+    revue *Interval training for performance* I et II (Sports Med 2001 : formats d'Åstrand, 5 × 50 % du temps limite à VMA 1/1 + 2 × 20 min au seuil 4/1, ou 60 – 75 % du temps limite deux fois par semaine, progrès en 4 semaines),
+    15-15 autour de la vitesse critique (Int J Sports Med 2001 : 100 % / 70 % de VMA garde 14 min à VO2max, `BIL_1515`, ajouté à la phase « VMA courte » avec `rotation`), marathoniens d'élite (8 semaines : 180 km par semaine, 11 % de la
+    distance au-dessus de l'allure 10 km, une séance à allure 3 000 m et une à 10 000 m par semaine, sortie longue > 1 h 45 tous les 10 jours dont 10 km à allure marathon ; score du marathon relevé à 1,5). Téléchargés mais non lus à fond
+    (scans sans texte) : 1999 « Interval training at VO2max: effects on aerobic performance and overtraining markers », 1994 – 1995 temps limite à 90 – 100 – 105 % de VMA. À lire si besoin : 2003 coureurs kényans, 2004 coureurs masters au
+    seuil de lactate stable, 2005 perspectives du marathon, 2018 accélérations constantes auto-rythmées (BillaTraining).
+    **Lecture complète (deuxième passe, ~35 PDF téléchargés)** : scans rendus en PNG et lus (1999 surentraînement : semaine type de 6 séances, **une seule séance à VMA par semaine** ; trois séances n'apportent rien de plus et élèvent la
+    noradrénaline : la phase « VMA courte » alterne désormais les trois types de VMA (30-30, 15-15, 105 – 110 %) avec le seuil, via `rotation` et une liste de 6 séances ; 1995 : temps limite d'élite 17 min à 90 %, 5 min 20 à 100 %, 2 min 56 à
+    105 % de VMA, vitesse critique ≈ 86 % de VMA, le modèle Péronnet – Thibault réglé sur IE −9,6 donne 17 min à 90 % et 3,6 min à 105 %). Textes : 2003 Heubert (protocole de 4 semaines, 25 → 75 % du temps limite, total = 1,5 fois
+    le temps limite, récupération moitié ou égale à 50 % de VMA), 2001 Demarle (8 semaines : 2 séances à 93 % de VMA + 3 footings à 60 – 70 %), 2004 masters (6 semaines de 2 séances au seuil de lactate stable : 3 × 10 → 3 × 20 min et 2 × 15 →
+    2 × 30 min, +6 min par semaine), 2003 Kényans (deux écoles : tempo 15 % du volume ou haute vitesse 2 séances par semaine), 2005 marathon (2 séances de vitesse par semaine toute l'année, 95 % du seuil sur la 1re moitié). Sans apport pour le
+    plan : accélérations (2017 – 2018, modélisation et rats), pacing et dérive cardiaque (2020 – 2022), cyclisme, chevaux, souris, natation, 2012 (cyclisme, puissance décroissante).
+  - **Consolidation par le web (sources primaires lues, 2026)** : *Seiler* (`limitee` retiré) : Seiler et Tønnessen, Sportscience 2009 (zones en %VO2max / lactate, 75 – 80 / 5 / 15 – 20 % chez les élites, « trou noir de
+    l'intensité » : plan visé 77 / 3 / 20 %, réalisé 65 / 21 / 14 % chez des coureurs de loisir, intervalles 4 min pour 2 min de récupération, 1 – 3 séances intenses par semaine chez les élites) ; *norvégienne*
+    (`limitee` retiré) : Casado, Foster, Bakken, Tjelta, IJERPH 2023, lu via Chrome (MDPI refuse WebFetch, 403) : 3 – 4 séances au seuil (lactate 2 – 4,5 mmol/L, Bakken 2,3 – 3,0) + 1 séance VO2max, 150 – 180 km par semaine, sortie
+    longue ≤ 21 km, 2 000 – 3 000 m près de l'allure semi ou 400 – 1 000 m entre allure 5 et 10 km, 8 – 12 km de travail, récupération 20 s – 1 min 30 ; période de compétition : deux séances au seuil de moins ; données
+    observationnelles, 1 500 – 5 000 m, marathon incertain ; *Tinman* (astérisque conservé : semaine type = anecdote d'un master) : présentation de Schwartz (2016, PDF lu avec pdfjs) : vitesse critique tenue 30 – 35 min,
+    6 × 1 km à CV + 6 × 200 m à allure 1 600 m (maximum 8 × 1 km), progressions (récupération 90 → 75 → 60 s, répétitions plus longues, plus rapides), `cv` passé de 30 – 40 à 30 – 35 min ; *Canova* (astérisque conservé) : blocs
+    spéciaux d'après Fast Running (secondaire), non repris. Non consolidé : Billat (synthèse), Tinman (semaine), Canova (pas de plan publié) ; Norwegian Singles consolidé ensuite par le livre de Copeland.
+  - **runningwritings.com (John Davis, blog de science de l'entraînement) épluché** : *Canova* (recension du livre de 1999, 2023 : périodes introductive 6 – 8 / fondamentale 8 – 10 / spéciale 6 – 8 / spécifique 6 – 8 semaines,
+    tableau des % de l'allure marathon par séance, sorties longues spécifiques 30 – 35 km à 96 – 98 %, adaptations pour amateurs 60 – 80 % du volume) ; *Bakken* (entretien traduit, 2024 : doubles seuil matin 6 – 10 min / après-midi 1 min, 45/15,
+    200 m, 15 – 20 km de seuil par jour double, 70 – 80 km par semaine au pic, sorties longues ≤ 45 min – 1 h, séquence avant course) ; *Kristoffer Ingebrigtsen* (2025 : semaine de ≈ 90 km, mardi 8 × 1 000 m, jeudi 4 – 5 × 2 000 m, samedi
+    3 × 3 000 m ou 3 × 10 min) ; *vitesse critique* (2024 : CS− ≈ 95 % de l'allure 5 km, CS+ ≈ 100 %, formats 8 × 1 km, 10 × 3 min, 4 × 2 km) ; *30-30 vs fractions longues* (étude 2025 citée : moins de temps > 90 % VO2max). Autres articles non repris :
+    calculateurs de seuil / CV / VO2max et de LT1 / zone 2 à partir du 5 km (apps.runningwritings.com), principes de l'entraînement marathon moderne (phases générale, de soutien, spécifique, séances à % de l'allure marathon),
+    plans à pourcentages (10 km, semi sub-70), récupérations des intervalles ; son livre *Marathon Excellence for Everyone* (non lu, pourrait nourrir une méthode « marathon à pourcentages »).
+  - **Canova : sources primaires lues** (`limitee` retiré ; périodes générale / fondamentale / spéciale du marathon, `plan` 20 – 26 semaines) : articles du Centro Studi FIDAL (centrostudi.fidal.it, *Atleticastudi* 2/1996 « Moderne strategie
+    per l'allenamento della maratona » et 4-5-6/1998 « La via italiana alla maratona », PDF scannés : pas de couche de texte, rendus en PNG avec pdfjs + @napi-rs/canvas puis lus visuellement) : travail spécial entre 97 et 103 % de
+    l'allure de course sur la moitié à deux tiers de sa durée, tables 2 à 6 (allures en % de l'allure marathon, séances, volumes), périodes 6 – 8 / 8 – 10 / 6 – 8 semaines, deux types de marathoniens (résistant / rapide). Fils LetsRun lus via
+    Chrome (`get_page_text`) : 2959804 (fondamental par distance : 1,10 – 1,20 fois plus lent que l'allure de course pour le marathon), 4213844 (pas de microcycle symétrique, exemple de semaine pour 10 000 m, modulation), 3958030
+    (séances spécifiques marathon). PDF de Davis (« Something New in Training », 2011) : le serveur refusait le téléchargement direct (403) ; lu en chargeant pdf.js dans l'onglet runningwritings.com puis en recopiant le texte dans le
+    DOM de la page pour contourner le filtre de sortie de `javascript_tool` (qui bloque certaines chaînes). Le code des séances `CAN@` et `CAN_PROG@` était déjà conforme à ces tables ; seuls les textes ont été enrichis.
+  - **patricedouge.com/training/philosophies** (page lue : 10 résumés secondaires avec une semaine type chacun : Lydiard, Daniels, Canova, Pfitzinger, Tinman, Hudson, Norwegian Singles, Mantz / Eyestone, Hansons, polarisé 80/20 ; site d'un tiers,
+    Patrice Douge, sans rapport avec l'utilisateur ; « Coach Patrice », dont la méthode a été retirée de l'appli, est l'utilisateur lui-même) : rien de plus fiable que les sources primaires déjà lues ; certains chiffres divergent (fondamental de Canova à 80 – 87 % de l'allure marathon contre 1,1 – 1,2 fois plus lent
+    chez Canova lui-même ; Norwegian « singles » en intervalles LT1 / LT2 avec lactate, différent du livre de Copeland). Deux méthodes absentes de l'appli : **Hudson** (livre *Run Faster*, non lu : phases introductive 6 – 8 semaines,
+    fondamentale 6 – 8, d'affûtage 4 – 6 ; efforts I à V sans allures ; côtes de 8 – 10 s, fartlek 1-2-3-2-1, longue progressive 14 miles + 3 miles, 4 × 1 mile à effort 10 km ; page incohérente sur la part spécifique) et **Mantz / Eyestone**
+    (longues progressives 16 / 18 + 4 / 20 + 6 / 22 + 8 miles à allure marathon, récupération la 5e semaine ; résumé d'interviews). Non ajoutées : sources secondaires.
+  - **Classement de fiabilité des sources (état après les lectures de 2026)** — mesure la qualité de ce qu'on a lu, pas l'efficacité de la méthode. A (livre de l'auteur lu, chiffres vérifiés) : Daniels, Pfitzinger, Hanson,
+    McMillan, Galloway, Fitzgerald, Heubi (OCR bruité), Norwegian Singles ; B (auteur lu mais partiel, ou synthèse d'études) : Canova (ses articles et fils, pas le livre de 1999), Lydiard, Magness, Billat, Seiler (pas de plan publié),
+    norvégienne (revue observationnelle), Rousset (blog, non validé) ; C (sources partielles ou secondaires) : Tinman (présentation de Schwartz, semaine d'après un témoignage), Kellogg (posts LetsRun,
+    sortie longue une semaine sur deux déduite). Cottereau est passé de C à B après lecture de ses articles de Jogging International (2016, jogging-international.net : « Montez en puissance ! », « Marcher en courant… »,
+    « 100 km, vous pouvez le faire », propos dans « 6 façons d'augmenter son endurance ») : séance intense définie par FC > 80 % FCM, marathon 2 – 4 × 15 min à 80 – 90 % FCM (récupération 5 – 7 min à 60 – 75 %), 10 km efforts de 3 à 5 min (80 – 97 %,
+    récupération 2 – 5 min), semi 80 – 95 %, 1 500 m ≈ 100 % ; une séance intense par semaine (jusqu'à tous les 4 jours selon le niveau) ; course lente à ≈ 80 % de la vitesse tenable ; 90 % du temps à 60 – 75 % FCM ; marche (2 min toutes les 15 – 20 min en
+    sortie longue ; marathon : arrêts de 45 s aux ravitaillements) ; affûtage (dernière longue 6 – 7 jours avant, 2 – 3 séances de 25 – 35 min à 55 – 70 %). `COT_DURE` passe à 3 – 5 min, `COT_DOUCE` marathon à 2 – 4 × 15 min. Limites communes : les plans en images (Hanson, Fitzgerald, Lydiard) n'ont pas pu être lus tableau par tableau ; tous les nombres de `SEANCES` restent des choix de conception.
+  - Daniels (notes d'avant lecture) : I de 3 à 5 min (`VMA_LONG`), T 1 min de récupération pour 5 min (`SEUIL`), R ≤ 2 min et récupération 2 – 3 fois la
     durée ; plafonds par séance T 10 %, I 8 %, R 5 % du volume (`plafonds`, appliqués au temps), M ≤ 20 %, sortie longue ≤ 2 h 30.
     ✔ coachray.nz « Jack Daniels running intensity », notes Goodreads, forum Running Ahead.
   - Lydiard : base 8 – 12 semaines au moins, côtes 3 – 6 semaines en circuits trois fois par semaine (`LYD_CIRCUIT`),
@@ -370,14 +535,17 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
     - Hanson : force = allure marathon − 10 s par mile (table 3.4 du livre citée dans les fils 2653585 / 5514948, extraits de
       recherche ✔) ; formats 6 × 1 mile à 2 × 3 miles, 400 – 800 m de trot (`FORCE`, récupération ≥ 2 min 30).
   - **Norwegian Singles (sirpoc)** (`singles`, ajoutée d'après le dossier `forum/`, fil « Norwegian singles », courseapied.net, message 139941 et suivants,
-    sources secondaires ✗ : résumé du livre de Copeland, avis de Bakken traduit, table de niveaux d'un pratiquant ; astérisque) : trois séances sous le
-    seuil par semaine (`NS_COURT` 3 – 4 min à allure 15 km, `NS_MOYEN` 6 – 8 min à allure semi, `NS_LONG` 9 – 12 min à allure 30 km, récupération 1 min,
-    `nsFractions` : temps sous le seuil par séance de 18 à 40 min selon le niveau, table de niveaux 1 à 8 du forum), `rotation` (une séance de chaque type,
-    en tournant si moins de trois), `constant` (pas de décharge) et `sansAffutage` (pas d'affûtage, pas de course sauf plan par date), `partQualite` 0,25
-    (19 % du temps au niveau 1, 23 % au niveau 2, 25 % ensuite), footings ≤ 60 min, lignes droites facultatives. Non adaptée à plus de 10 h par semaine,
-    à un pic de forme, à la variété ; au moins 4 h 30 par semaine, 6 sorties recommandées. Difficulté 3/5. La méthode norvégienne (double seuil) y renvoie
-    pour sa variante sans doublé.
-  - **Rousset** (`rousset`, blog courirautroman.unblog.fr « Courir au naturel aut'roman », lu : texte et images des tableaux ✔ ; « old school ») :
+  - **Norwegian Singles (sirpoc)** (singles) : **livre de Copeland (2025) lu ✔** (limitee retiré), en plus du fil orum/ (courseapied.net, message 139941 et suivants : table de niveaux 1 à 8 d'un pratiquant). Trois séances
+    sous le seuil par semaine : NS_COURT 3 min à allure 12 – 15 km (récupération 1 min), NS_MOYEN 5 – 6 min à allure 20 km (1 min 15), NS_LONG 10 – 12 min à allure 25 – 30 km (1 min 45) ; 
+sFractions : temps sous le seuil
+    par séance de 18 à 40 min selon le niveau. Semaines types du livre de 4 h à 9 h (long mardi, moyen jeudi, court samedi, sortie longue facile dimanche ; 4 – 4,5 h : porte d'entrée, 2 × 10 min à 95 % de l'allure marathon ;
+    8 h : 4 × 10, 6 × 6, 10 × 3, sortie longue 105 min ; 9 h : footings en deux séances), table d'allures à partir du 5 km (3 min : +6,5 %, 6 min : +9 %, 10 min : +12,5 % environ, non reprise), 75 / 25 % facile / sous le seuil,
+    +1 min de travail pour +4 min de footing, au moins un mois par niveau, échauffement 10 min sans lignes droites, FC 10 – 15 battements sous le seuil à la 1re répétition, ralentir après une mauvaise nuit ; 5 km = une séance de la semaine, affûtage
+    court pour 10 km et semi (tableaux du livre), affûtages longs déconseillés à faible volume ; marathon : pas un plan à part entière (≥ 2 ans de pratique). 
+otation, constant (pas de décharge), sansAffutage (code), partQualite 0,25
+    (19 % du temps au niveau 1, 23 % au niveau 2, 25 % ensuite), footings ≤ 60 min, lignes droites facultatives. Non adaptée à plus de 10 h par semaine, à un pic de forme, à la variété. Difficulté 3/5. La méthode norvégienne
+    (double seuil) y renvoie pour sa variante sans doublé.
+  - **Rousset** (`rousset`, blog courirautroman.unblog.fr « Courir au naturel aut'roman », lu : texte et images des tableaux ✔) :
     pyramide en km (route : 55 % footings, 25 % endurance active, 12 % résistance quantitative, 5 % qualitative, 2 % vitesse, 1 % vitesse pure ; piste :
     75 / 10 / 10 / 2 / 2 / 1), cycles de ≈ 10 jours sans jour imposé (marathon : 2 résistance quantitative, 3 endurance active, 1 sortie longue, 4 footings,
     éventuellement 1 résistance vitesse), 3 à 4 jours de « repos relatif » ensuite, sortie longue de 25 – 30 km dont 10 km à allure marathon (`SL_SPE`).
@@ -460,3 +628,6 @@ charge entre objectifs (choix de conception, pas un résultat de recherche).
   à confirmer sur des coureurs du public visé si des données sont disponibles.
 - Affichage téléphone vérifié en capture à 390 px ; reste à tester sur un vrai appareil (saisie tactile).
 - Les tests de non-régression ne sont pas dans le projet : les ajouter si le projet doit évoluer.
+
+- **Feu de fiabilité** : dans le cartouche profil (et la colonne Fiabilité des prédictions), un feu tricolore `feu(niveau)` accompagne le libellé : vert = Élevée/Correcte, orange = Moyenne/Faible, rouge = Mauvaise/Incertaine.
+ La fiabilité du cartouche (`E.fiabiliteProfil`) est la moyenne arrondie des rangs de fiabilité de la VMA (6 min) et de l'allure 1 h ; « Incertaine » (rouge) si données incohérentes.

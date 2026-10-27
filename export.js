@@ -47,8 +47,9 @@
     [s.numero, s.type, s.phase, j.jour, j.date || '', x.moment, x.nom, x.zone, x.dureeMin, x.km, x.description])));
   const allure = (m) => (m === null ? '' : `${Math.floor(m)}:${String(Math.round((m % 1) * 60)).padStart(2, '0')} /km`);
   const parametres = (d) => [['Plan', d.titre], ['Allure', d.contexte.allure], ['Allure (min/km)', allure(d.contexte.allureMinKm)],
-    ['Volume (h / semaine)', Math.round(d.contexte.volumeH * 10) / 10], ['Jours de course', d.contexte.jours], ['Doublés', d.contexte.doubles],
-    ['Semaines', d.contexte.semaines], ['Cycle', d.contexte.cycle], ['Difficulté (1re semaine)', `${d.contexte.difficulte}/10`]];
+    ['Volume (h / semaine)', Math.round(d.contexte.volumeH * 10) / 10], ['Type de volume', { max: 'maxi', min: 'mini' }[d.contexte.typeVolume] || 'cible'], ['Jours de course', d.contexte.jours], ['Doublés', d.contexte.doubles],
+    ['Semaines', d.contexte.semaines], ['Cycle', d.contexte.cycle], ['Difficulté (1re semaine)', `${d.contexte.difficulte}/10`],
+    ...(d.contexte.limite ? [['Longueur maximale d\'une séance', d.contexte.limite]] : [])];
 
   /** CSV pour Excel en français : séparateur « ; », virgule décimale, UTF-8 avec BOM */
   function csv(d) {

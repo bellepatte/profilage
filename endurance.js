@@ -18,8 +18,20 @@
   const LARGEUR_Z6 = 10;         // largeur de Z6 (zone ouverte au-delà de la VMA), en points de % de l'allure 1 h
   const IE_HABITUEL = [-14, -2]; // bornes habituelles de l'indice d'endurance
   const DISTANCES_PREDITES = [1500, 5000, 10000, 21097, 42195];
-  // Fiabilité d'une prédiction selon l'extrapolation hors de la plage saisie
-  const SEUILS_FIABILITE = [[0.25, 'Élevée'], [0.50, 'Correcte'], [1.00, 'Moyenne'], [1.50, 'Faible'], [Infinity, 'Mauvaise']];
+  // Fiabilité d'une prédiction : marge d'erreur sur la vitesse (% de la VMA), calculée sur les durées d'effort.
+  //   marge = incertitude de l'indice × |ln(durée visée / durée du chrono le plus proche)|   (l'erreur d'indice se propage en ln(T/6))
+  //         + DERIVE_LONGUE × (dépassement du semi) / DUREE_SEMI × min(1, |ln| / LN_DERIVE)      (au-delà du semi, l'indice n'est plus linéaire)
+  // Vickers & Vertosick (2016) : Riegel correct jusqu'au semi (médianes 1 h 39 hommes, 1 h 56 femmes), très optimiste au marathon.
+  const NIVEAUX_FIABILITE = ['Élevée', 'Correcte', 'Moyenne', 'Faible', 'Mauvaise'];
+  const SEUILS_MARGE = [4.5, 6, 9, 13, Infinity];
+  const RAPPORT_PLANCHER = 5;    // rapport de durées maximal (visée / chrono le plus proche) pour le plancher « Correcte » : 30 min → 6 min
+  const LN_COURBE = 3.5;         // l'erreur croît plus vite que ln(T) quand l'extrapolation est très longue (la courbe de tendance s'éloigne)
+  const DUREE_SEMI = 105;        // min, durée moyenne d'un semi chez les amateurs
+  const INCERT_MESURE = 1.5;     // points d'indice : indice calculé sur des chronos, plus précis que le profil (±2,5 à ±4)
+  const DERIVE_LONGUE = 7.5;     // % de marge ajoutés par durée de semi au-delà du semi
+  const IE_BORD = [-12, -4];     // indice d'endurance proche des bornes habituelles (IE_HABITUEL) : VMA et prédictions peu crédibles
+  const SAUT_LONG = 4;          // % de marge ajoutés dès que la durée visée dépasse le semi, hors des chronos saisis
+  const LN_DERIVE = Math.LN2;    // extrapolation (ln) à partir de laquelle la dérive s'applique pleinement
   // La VMA compte comme une donnée (chrono sur 6 min) : une donnée seule ne suffit pas sans profil
   const MESSAGE_DONNEE_UNIQUE = "Une seule donnée (performance ou VMA) ne suffit pas pour prédire : renseignez votre profil (volume, âge ou sexe) ou une autre performance.";
 
@@ -31,7 +43,7 @@
     { id: 'Z3', nom: 'Endurance active', pMin: 80, pMax: 90, utilite: 'Améliorer l\'endurance à allure soutenue' },
     { id: 'Z4', nom: 'Tempo/seuil', pMin: 90, pMax: 100, utilite: 'Améliorer la capacité à maintenir une allure élevée' },
     { id: 'Z5', nom: 'VO2Max', pMin: 100, pMax: 120, utilite: 'Développer la puissance aérobie maximale' },
-    { id: 'Z6', nom: 'Vitesse', pMin: 120, pMax: null, utilite: 'Développer la vitesse, la puissance musculaire et aérobie' }
+    { id: 'Z6', nom: 'Vitesse', pMin: 120, pMax: null, utilite: 'Développer le profil force/vitesse' }
   ];
 
   /* ---------- Saisie et formatage ---------- */
@@ -215,21 +227,42 @@
     return (lo + hi) / 2;
   }
 
-  /** Fiabilité d'une prédiction selon l'extrapolation de la distance hors de la plage saisie */
-  function fiabilitePrediction(res, distance) {
-    const d = res.performances.map(p => p.distance);
-    if (res.vmaSaisie > 0) d.push(res.V * REF_MIN); // VMA connue = chrono de référence sur 6 min
-    if (!d.length) return 'Indicative';
-    const dMin = Math.min(...d), dMax = Math.max(...d);
-    const extrapolation = distance > dMax ? (distance - dMax) / dMax : distance < dMin ? (dMin - distance) / dMin : 0;
-    // Données incohérentes : un cran plus bas
-    const i = SEUILS_FIABILITE.findIndex(([max]) => extrapolation <= max) + (res.coherenceFaible ? 1 : 0);
-    return SEUILS_FIABILITE[Math.min(i, SEUILS_FIABILITE.length - 1)][1];
+  /** Rang de fiabilité (0 = Élevée … 4 = Mauvaise) d'une prédiction à la durée `duree` (min) ; null sans donnée */
+  function rangFiabilite(res, duree) {
+    const t = res.performances.map(p => p.temps);
+    if (res.vmaSaisie > 0) t.push(REF_MIN); // VMA connue = chrono de référence sur 6 min
+    if (!t.length) return null;
+    const ln = Math.min(...t.map(x => Math.abs(Math.log(duree / x)))); // écart (ln) au chrono le plus proche
+    const lointain = t.reduce((a, x) => (Math.abs(Math.log(duree / x)) === ln ? x : a), t[0]);
+    const incert = res.profilUtilise && res.estimation ? res.estimation.incertitude : INCERT_MESURE;
+    const derive = ((duree > DUREE_SEMI && duree > lointain ? SAUT_LONG : 0) + DERIVE_LONGUE * Math.max(0, Math.max(duree, lointain) - DUREE_SEMI) / DUREE_SEMI) * Math.min(1, ln / LN_DERIVE);
+    let rang = SEUILS_MARGE.findIndex(max => incert * ln * (1 + ln / LN_COURBE) + derive <= max);
+    // Jusqu'au semi l'indice est assez linéaire : chronos cohérents = au moins « Correcte », tant que l'extrapolation reste modérée
+    if (!res.coherenceFaible && !res.ieDouteux && Math.max(...t, duree) <= DUREE_SEMI && ln <= Math.log(RAPPORT_PLANCHER)) rang = Math.min(rang, 1);
+    if (res.coherenceFaible) rang++; // données incohérentes : un cran plus bas
+    if (res.IE < IE_BORD[0] || res.IE > IE_BORD[1]) rang++; // indice proche des limites du modèle : un cran plus bas
+    return Math.min(rang, NIVEAUX_FIABILITE.length - 1);
   }
+  const fiabilitePrediction = (res, duree) => {
+    const i = rangFiabilite(res, duree);
+    return i === null ? 'Indicative' : NIVEAUX_FIABILITE[i];
+  };
+
+  /** Fiabilité du profil : moyenne (arrondie) des fiabilités de la VMA (6 min) et de l'allure 1 h */
+  function fiabiliteProfil(res) {
+    const rangs = [REF_MIN, REF_ZONE_MIN].map(t => rangFiabilite(res, t));
+    if (rangs.includes(null)) return 'Indicative';
+    return NIVEAUX_FIABILITE[Math.round((rangs[0] + rangs[1]) / 2)];
+  }
+  /** Détail de la fiabilité du profil : VMA (6 min) et allure 1 h */
+  const fiabiliteDetail = (res) => {
+    const [vma, allure] = [REF_MIN, REF_ZONE_MIN].map(t => fiabilitePrediction(res, t));
+    return { vma, allure };
+  };
 
   const prediction = (res, distance, temps) => {
     const v = distance / temps;
-    return { distance, temps, allureMinKm: 1000 / v, vitesseKmh: kmh(v), fiabilite: fiabilitePrediction(res, distance) };
+    return { distance, temps, allureMinKm: 1000 / v, vitesseKmh: kmh(v), fiabilite: fiabilitePrediction(res, temps) };
   };
   /** Chronos prédits pour une liste de distances (m) */
   const tablePredictions = (res, distances = DISTANCES_PREDITES) => distances.map(d => prediction(res, d, predireTemps(res, d)));
@@ -354,7 +387,7 @@
   }
 
   const API = {
-    parseTemps, parseDistance, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, plageZone, allureZone, vitesseReference,
+    parseTemps, parseDistance, calibrer, calibrerComplet, estimerIE, pctVma, tablePredictions, tableDistances, zones, plageZone, allureZone, vitesseReference, fiabiliteProfil, fiabiliteDetail,
     formatAllure, formatTemps, formatDuree
   };
 

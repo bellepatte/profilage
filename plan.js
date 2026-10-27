@@ -9,24 +9,39 @@
   const lerp = (a, b, l) => a + (b - a) * l;
   const borne = (x, a, b) => Math.min(b, Math.max(a, x));
 
-  const ECHAUFFEMENT = 20, RETOUR = 10, EF_LEGER = 30; // min : autour d'une séance de qualité ; footing avant les lignes droites
+  // Deux jeux de règles : Spécifique LPN (nos règles, ci-dessous : constantes LPN) et les méthodes d'entraîneurs (leurs règles propres, qu'on ne
+  // modifie pas : constantes sans suffixe, ou `_M`). c.lpn et la variable `lpn` de construire() choisissent le jeu.
+  const RETOUR = 10; // min : retour au calme d'une séance de qualité
+  const ECHAUFFEMENT = 20; // méthodes : échauffement
+  // Spécifique LPN : échauffement selon la zone : 20 min en Z5 (15 si la longueur de séance est contrainte), Z6 + 5 min, Z4 - 5 min, Z3 - 10 min
+  const ECHAUFFEMENT_Z = { Z3: -10, Z4: -5, Z5: 0, Z6: 5 };
+  const echauffement = (c, zone) => (c.lpn ? (c.limite ? 15 : 20) + (ECHAUFFEMENT_Z[zone] || 0) : ECHAUFFEMENT);
   const PROGRESSION = 3; // niveaux de difficulté gagnés entre la première et la dernière semaine avant l'affûtage
   const CHARGE_PAS = 0.06, DECHARGE = 0.7; // volume : +6 % par semaine de charge d'un bloc ; 70 % en semaine de décharge
-  const SL_PART = 0.28, SL_MAX = 150, EF_MIN = 30; // sortie longue : part du volume hebdomadaire et plafond (min) ; footing minimal
-  const DOUBLE_PART = 0.6, DOUBLE_BORNES = [20, 45], DOUBLE_VOLUME = 7; // 2e séance d'un doublé : part d'un footing, bornes (min) ; volume (h) en dessous duquel les doublés servent peu
+  const DECHARGE_Q = 0.5; // LPN : en décharge, le travail de qualité est la moitié de celui d'une semaine de charge (méthodes : une séance en moins)
+  const OBJECTIF_CHARGE = 0.5; // LPN : semaine de l'objectif, charge ramenée à 50 % de la référence
+  const SL_MAX = 300, EF_MIN = 20, EF_LEGER = 15; // LPN : plafond de la sortie longue (min) ; footing minimal ; footing avant les lignes droites
+  const SL_MIN_SEMI = 90, SL_MIN_MARATHON = 120; // LPN : sortie longue minimale (min) du semi et du marathon, atteinte progressivement (« minimum syndical »)
+  const DOUBLES_SEANCES = 5; // LPN : nombre de séances par semaine à partir duquel un doublé est utile (libère des jours de repos)
+  const SL_PART_M = 0.28, SL_MAX_M = 150, EF_MIN_M = 30; // méthodes : sortie longue (part du volume, plafond en min), footing minimal
+  const DOUBLE_PART_M = 0.6, DOUBLE_BORNES_M = [20, 45], DOUBLE_VOLUME_M = 7; // méthodes : 2e séance d'un doublé (part d'un footing, bornes en min) ; volume (h) sous lequel les doublés servent peu
   // Allure spécifique (allure de l'objectif) : durée d'une fraction et volume total, en part du temps de course prédit
   const SPE = { '5k': { rep: [0.1, 0.25], tot: [0.6, 1.2] }, '10k': { rep: [0.08, 0.2], tot: [0.4, 0.8] },
     semi: { rep: [0.06, 0.15], tot: [0.35, 0.7] }, marathon: { rep: [0.04, 0.1], tot: [0.15, 0.35] } };
-  // mode : 'zones' (plan construit sur la répartition de Balance) ou 'methode' (méthode d'un entraîneur)
-  const state = { mode: 'zones', seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'cycle', charge: 3, decharge: 1, difficulte: 4, methode: null, tri: 'difficulte', triDesc: false };
+  // methode : 'zones' (Spécifique LPN, construite sur la répartition de Balance) ou l'identifiant d'une méthode d'entraîneur
+  const state = { seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'auto', charge: 3, decharge: 1, difficulte: 4, methode: null, club1: false, club2: false, limite: null, limiteU: 'min', volType: 'cible' };
 
   try {
     const s = JSON.parse(localStorage.getItem('plan') || '{}');
     for (const c of Object.keys(state)) if (c in s) state[c] = s[c];
+    if (s.mode === 'zones') state.methode = 'zones'; // ancien choix « Personnalisé » (devenu Spécifique LPN)
   } catch (e) { /* stockage indisponible */ }
-  if (state.mode !== 'methode') state.mode = 'zones';
-  state.triDesc = state.triDesc === true;
+  if (!state.methode) state.methode = 'zones'; // Spécifique LPN est le choix par défaut
+  if (!['auto', 'constante', 'cycle'].includes(state.cycle)) state.cycle = 'auto';
   if (state.horizon !== 'date') state.horizon = 'semaines';
+  if (state.limiteU !== 'km') state.limiteU = 'min';
+  if (!['max', 'min'].includes(state.volType)) state.volType = 'cible'; // volume saisi : cible, maxi ou mini
+  if (!(state.limite > 0)) state.limite = null;
   state.courses = Array.isArray(state.courses) ? state.courses.filter(x => x && typeof x.date === 'string' && (x.d === null || Number.isFinite(x.d))) : [];
   state.courses.forEach(x => { if (x.prepa && !x.effort) x.effort = 'sansForcer'; delete x.prepa; }); // ancien choix « sans forcer »
   const save = () => { try { localStorage.setItem('plan', JSON.stringify(state)); } catch (e) { /* stockage indisponible */ } };
@@ -80,6 +95,8 @@
     v100: { nom: '100 – 105 % de VMA', min: pv(100, 105) },
     v90: { nom: '90 – 95 % de VMA', min: pv(90, 95) },
     v95_100: { nom: '95 – 100 % de VMA', min: pv(95, 100) },
+    v85_90: { nom: '85 – 90 % de VMA', min: pv(85, 90) }, // Billat
+    v105_110: { nom: '105 – 110 % de VMA', min: pv(105, 110) },
     // Heubi : endurance active à 80 – 85 % de VMA, placée selon l'indice d'endurance (85 % pour une bonne endurance)
     ema: { nom: c => `${emaPct(c)} % de VMA (endurance active, selon votre indice d'endurance)`, min: c => pv(emaPct(c) - 1, emaPct(c) + 1)(c) },
     // McMillan : allures des courses de 1 h 15 à 2 h 30 (steady), 40 min à 1 h 15 (tempo), 25 à 45 min (cruise), 1500 m à 5 km (speed)
@@ -88,14 +105,14 @@
     mcCruise: { nom: 'allure de course de 25 à 45 min (cruise)', min: c => [allureT(c, 45), allureT(c, 25)] },
     mcSpeed: { nom: 'allure 1500 m – 5 km (speed)', min: c => [allureDist(c, 5000), allureDist(c, 1500)] },
     // Tinman : vitesse critique ≈ allure tenue environ 30 min ; allure 1 mile pour les fractions courtes de fin de séance
-    cv: { nom: 'vitesse critique (≈ allure tenue 30 à 40 min)', min: c => [allureT(c, 40), allureT(c, 30)] },
+    cv: { nom: 'vitesse critique (≈ allure tenue 30 à 35 min)', min: c => [allureT(c, 35), allureT(c, 30)] },
     mile: { nom: 'allure 1 mile', min: c => allureDist(c, 1609) },
     deuxMiles: { nom: 'allure 2 miles (≈ 3200 m), relâché', min: c => allureDist(c, 3219) },
     // Galloway : sortie longue à l'allure marathon + 2 min par mile (≈ + 1 min 15 /km)
     galSL: { nom: 'allure de sortie longue Galloway (marathon + 2 min par mile)', min: c => allureGalloway(c) },
     // Norwegian Singles (sirpoc) : fractions sous le seuil à allure 15 km (courtes), semi (moyennes) et 30 km (longues)
     a15: { nom: 'allure 15 km', min: c => allureDist(c, 15000) },
-    aSemi: { nom: 'allure semi-marathon', min: c => allureDist(c, 21097) },
+    a20: { nom: 'allure 20 km', min: c => allureDist(c, 20000) },
     a30: { nom: 'allure 30 km', min: c => allureDist(c, 30000) },
     // Rousset : résistance vitesse ≈ 95 – 100 % de sa vitesse sur la distance (150 à 200 m), soit environ 130 – 140 % de VMA
     rVitesse: { nom: '95 – 100 % de votre vitesse sur la distance (≈ 135 % de VMA)', min: pv(130, 140) },
@@ -125,6 +142,35 @@
   /** Somme de répartitions par zone ({ Z1: min, … }) */
   const ajoute = (...ps) => ps.reduce((a, p) => { for (const k in p) a[k] = (a[k] || 0) + p[k]; return a; }, {});
 
+  /* ---------- Longueur maximale d'une séance (étape 2, facultative) ---------- */
+
+  // Limite en durée, ou en distance convertie en durée à l'allure moyenne de Z2 (6 min/km sans profil). min : durée limite, km : distance
+  // limite (null en durée), txt : texte des alertes
+  // Minimum : 20 min (en km, la distance de 20 min à l'allure de Z2) ; maximum : 5 h ou 60 km
+  const LIMITE_MIN = EF_MIN;
+  const allureZ2 = (c) => (c.profil ? aZ(c, 'Z2') : 6);
+  const bornesLimite = (c) => (state.limiteU === 'km' ? [Math.ceil(LIMITE_MIN / allureZ2(c) * 2) / 2, 60] : [LIMITE_MIN, 300]);
+  function limiteDe(c) {
+    if (!(state.limite > 0)) return null;
+    const km = state.limiteU === 'km', allure = allureZ2(c), n = state.limite;
+    const min = Math.max(LIMITE_MIN, km ? n * allure : n);
+    return { min, km: km ? n : null, txt: km ? `${n.toLocaleString('fr-FR')} km${c.profil ? ` (≈ ${fD(min)})` : ''}` : fD(n) };
+  }
+  /** Séance (durée, et distance si la limite est en km) au-dessus de la limite c.limite */
+  const depasse = (c, x) => !!c.limite && (x.duree > c.limite.min + 0.01 || !!(c.limite.km && x.km && x.km > c.limite.km + 0.01));
+  /** Séance ramenée sous la limite : regen(k) la refait avec un travail multiplié par k (échauffement et retour au calme inchangés) */
+  function reduire(c, x, regen) {
+    const L = c.limite, fixe = (x.echauf ?? echauffement(c, x.zone)) + RETOUR;
+    let k = 1, y = x;
+    for (let n = 0; n < 8 && depasse(c, y); n++) {
+      const r = [(L.min - fixe) / Math.max(1, y.duree - fixe)];
+      if (L.km && y.km) r.push(L.km / y.km);
+      k *= Math.max(0.3, Math.min(...r) * 0.97);
+      y = regen(k);
+    }
+    return y;
+  }
+
   /* ---------- Séances ---------- */
 
   // Fractions : durée d'une répétition et travail total (min) selon le niveau l (0 à 1) et le facteur de volume s ;
@@ -144,10 +190,10 @@
     return { travail: t, km, texte: `${fD(t)} en continu${km ? ` (≈ ${km.toFixed(1).replace('.', ',')} km)` : ''} ${al(c, cle)}`, etapes: [{ t: 'effort', duree: t, allure: plageA(c, cle) }] };
   }
   // Norwegian Singles : temps de travail sous le seuil par séance de 18 à 40 min selon le niveau (table de niveaux du forum courseapied.net,
-  // 8 niveaux), récupération de 1 min ; court : répétitions de 3 – 4 min, moyen : 6 – 8 min, long : 9 – 12 min
+  // 8 niveaux) ; livre de Copeland : court 3 min (récupération 1 min, allure 12 – 15 km), moyen 5 – 6 min (1 min 30, allure 20 km), long 10 – 12 min (1 min 30 à 2 min, allure 25 – 30 km)
   const nsFractions = (c, l, s, rep, cle) => {
-    const W = borne(lerp(18, 40, l) * s, 18, 40), r = arrondi(lerp(rep[0], rep[1], l)), n = Math.max(2, Math.round(W / r));
-    return fractions(c, { r, n, rc: 1, travail: n * r + (n - 1) }, cle, 'en trottinant ou à l\'arrêt');
+    const W = borne(lerp(18, 40, l) * s, 18, 40), r = arrondi(lerp(rep[0], rep[1], l)), n = Math.max(2, Math.round(W / r)), rc = r < 5 ? 1 : r < 8 ? 1.25 : 1.75;
+    return fractions(c, { r, n, rc, travail: n * r + (n - 1) * rc }, cle, 'en trottinant ou à l\'arrêt');
   };
   const NS_CONSEIL = "Sous le seuil, intensité contrôlée : fréquence cardiaque juste sous celle du seuil lactique à la dernière répétition (effort 6 – 7 sur 10) ; finir en pouvant en refaire. Si la fatigue s'accumule, baissez l'allure.";
   const tRef = (c) => Math.max(c.tObj, 60); // échelle des séances à allure objectif longues (Hanson, Canova)
@@ -174,8 +220,17 @@
       const n = Math.max(6, Math.round(lerp(8, 20, l) * s)), nbS = Math.ceil(n / 12), par = Math.ceil(n / nbS);
       return { travail: nbS * par + (nbS - 1) * 3, effort: nbS * par / 2, km: c.profil && nbS * par * 0.75 * c.profil.V / 1000 + (nbS - 1) * 3 / aZ(c, 'Z1'), texte: `${nbS > 1 ? `${nbS} séries de ` : ''}${par} × (30 s ${al(c, 'vma')}, 30 s à 50 % de VMA${c.profil ? ` (${fA(2000 / c.profil.V)})` : ''})${nbS > 1 ? ', 3 min de trot entre les séries' : ''}` };
     } },
+    // Billat et al. 2001 (Int J Sports Med) : 15 s / 15 s autour de la vitesse critique (≈ 86 % de VMA) : 100 % / 70 % de VMA, l'amplitude la plus faible garde 14 min à VO2max (le double d'une amplitude de 60 / 110 %)
+    BIL_1515: { nom: '15-15 (amplitude réduite)', zone: 'Z5', gen: (l, s, c) => {
+      const n = Math.max(20, Math.round(lerp(28, 48, l) * s)), nbS = Math.ceil(n / 24), par = Math.ceil(n / nbS);
+      return { travail: nbS * par / 2 + (nbS - 1) * 3, effort: nbS * par / 4, km: c.profil && nbS * par * 0.425 * c.profil.V / 1000 + (nbS - 1) * 3 / aZ(c, 'Z1'), texte: `${nbS > 1 ? `${nbS} séries de ` : ''}${par} × (15 s ${al(c, 'vma')}, 15 s à 70 % de VMA${c.profil ? ` (${fA(1000 / (0.7 * c.profil.V))})` : ''})${nbS > 1 ? ', 3 min de trot entre les séries' : ''}` };
+    } },
     INTERVALLES_LONGS: { nom: 'Intervalles longs', zone: 'Z5', gen: (l, s, c) => fractions(c, series(l, s, [4, 8], [16, 32], [0.5, 0.25]), 'k10', 'en trottinant') },
     // Daniels : cruise intervals de 5 à 15 min, 1 min de récupération pour 5 min d'effort
+    // Billat (livre, chap. 6, table de prescription par % de VAM) : répétitions en fraction du temps limite, récupération en multiple de l'effort
+    BIL_105: { nom: 'Fractions courtes à 105 – 110 % de VMA', zone: 'Z5', gen: (l, s, c) => fractions(c, series(l, s, [0.75, 1.5], [8, 15], [2, 2]), 'v105_110', 'en trottinant') },
+    BIL_88: { nom: 'Fractions longues à 85 – 90 % de VMA', zone: 'Z4', gen: (l, s, c) => fractions(c, series(l, s, [7, 12], [14, 36], [0.5, 0.5]), 'v85_90', 'en trottinant') },
+    BIL_SEUIL: { nom: 'Seuil en grandes fractions', zone: 'Z4', gen: (l, s, c) => fractions(c, series(l, s, [15, 30], [30, 75], [0.25, 0.15]), 'seuil', 'en trottinant') },
     SEUIL: { nom: 'Seuil (T)', zone: 'Z4', gen: (l, s, c) => fractions(c, series(l, s, [5, 15], [15, 35], [0.2, 0.2]), 'seuil', 'en trottinant') },
     // Lydiard : circuit de côte (montée en bondissant, descente rapide et relâchée, accélérations à plat), 2 à 4 tours
     LYD_CIRCUIT: { nom: 'Circuit de côte', zone: 'Z5', gen: (l, s, c) => {
@@ -207,15 +262,15 @@
     // (3 à 4 min, récupération de même durée) ; pas de VMA courte
     COT_DOUCE: { nom: 'Résistance douce', zone: 'Z3', gen: (l, s, c) => {
       const m = c.goal === 'marathon';
-      return fractions(c, series(l, s, m ? [15, 15] : [10, 12], m ? [30, 45] : [20, 30], m ? [0.47, 0.33] : [0.5, 0.4]), 'rDouce', 'en trottinant très lentement');
+      return fractions(c, series(l, s, m ? [15, 15] : [10, 12], m ? [30, 60] : [20, 30], m ? [0.47, 0.33] : [0.5, 0.4]), 'rDouce', 'en trottinant très lentement');
     } },
     COT_DURE: { nom: 'Résistance dure', zone: 'Z5',
       conseil: "Échauffement conseillé par Cottereau : 15 min d'endurance, 2 à 3 min de marche, 5 min de résistance douce, 1 à 2 min de marche, 6 à 7 lignes droites progressives d'environ 20 s. À la fin, vous devez pouvoir refaire autant de répétitions à la même vitesse.",
-      gen: (l, s, c) => fractions(c, series(l, s, [3, 4], [9, 16], [1, 1]), 'rDure', 'en trottinant très lentement') },
+      gen: (l, s, c) => fractions(c, series(l, s, [3, 5], [9, 20], [1, 0.8]), 'rDure', 'en trottinant très lentement') },
     // Norwegian Singles (sirpoc) : trois séances sous le seuil par semaine (court, moyen, long), sans VO2max
     NS_COURT: { nom: 'Sous-seuil court', zone: 'Z4', conseil: NS_CONSEIL, gen: (l, s, c) => nsFractions(c, l, s, [3, 4], 'a15') },
-    NS_MOYEN: { nom: 'Sous-seuil moyen', zone: 'Z4', conseil: NS_CONSEIL, gen: (l, s, c) => nsFractions(c, l, s, [6, 8], 'aSemi') },
-    NS_LONG: { nom: 'Sous-seuil long', zone: 'Z4', conseil: NS_CONSEIL, gen: (l, s, c) => nsFractions(c, l, s, [9, 12], 'a30') },
+    NS_MOYEN: { nom: 'Sous-seuil moyen', zone: 'Z4', conseil: NS_CONSEIL, gen: (l, s, c) => nsFractions(c, l, s, [5, 6], 'a20') },
+    NS_LONG: { nom: 'Sous-seuil long', zone: 'Z4', conseil: NS_CONSEIL, gen: (l, s, c) => nsFractions(c, l, s, [10, 12], 'a30') },
     // Rousset : endurance active (train à allure marathon – semi, tempo-route en fractions à allure 10 km – semi), résistance quantitative (VMA,
     // récupération courue sans jamais s'arrêter), résistance qualitative et vitesse (récupérations longues et passives), diagonales
     ROU_TRAIN: { nom: 'Train (endurance active)', zone: 'Z3', gen: (l, s, c) => continu(c, lerp(20, 45, l) * s, 'mcSteady') },
@@ -263,7 +318,10 @@
       return { travail: n * 2.7, effort: n * 0.15, km: 0.4, texte: `${n} × 8 à 10 s de sprint en côte (Z6, puissance), récupération complète de 2 à 3 min en marchant` };
     } },
     // Galloway : fractions à l'allure de l'objectif (en durée), récupération en marchant ; mile magique = test toutes les 2 semaines
-    GAL_RYTHME: { nom: "Allure de l'objectif", zone: 'obj', gen: (l, s, c) => fractions(c, series(l, s, [3, 6], [12, 24], [0.6, 0.4], 2), 'obj', 'en marchant') },
+    // Galloway, Marathon: You Can Do It! : répétitions « miles » à l'allure de l'objectif, marche d'au moins 4 min entre elles (en durée, pas en distance)
+    GAL_MILE: { nom: "Répétitions à l'allure de l'objectif", zone: 'obj', gen: (l, s, c) => fractions(c, series(l, s, [6, 11], [18, 66], [0.4, 0.4], 2), 'obj', 'en marchant (4 min au moins)') },
+    // Galloway, livre de 1984 : répétitions de 440 yards (≈ 1 min 30 à 2 min) un peu plus vite que l'allure de l'objectif, jusqu'à 20, récupération en trottinant
+    GAL84_440: { nom: 'Répétitions courtes (440 yards)', zone: 'Z5', gen: (l, s, c) => fractions(c, series(l, s, [1.25, 2], [6, 30], [1, 0.8], 2), 'k10', 'en trottinant') },
     GAL_MM: { nom: 'Mile magique (test)', zone: 'Z5',
       conseil: "Le temps obtenu recale les allures : allure marathon ≈ temps du mile × 1,3 ; sortie longue ≈ temps × 1,3 + 2 min par mile. Les pauses de marche sont permises.",
       gen: (l, s, c) => {
@@ -333,19 +391,19 @@
     const [base, a] = id.split('@'), arg = Number(a), S = SEANCES[base], r = S.gen(l, s, c, arg);
     const nom = typeof S.nom === 'function' ? S.nom(arg) : S.nom, z = typeof S.zone === 'function' ? S.zone(arg) : S.zone, zone = z === 'obj' ? c.zoneObj : z;
     if (S.leger) return { nom, zone, leger: true, travail: 0, extra: r.travail, lignes: r.texte };
-    return enveloppe(c, id, nom, zone, r, S);
+    return { ...enveloppe(c, id, nom, zone, r, S), echelle: s }; // echelle : facteur de volume, pour la ramener sous la limite de longueur
   }
   /** Séance de qualité complète : échauffement, corps de séance r ({ travail, effort, km, texte, etapes, parts }), retour au calme.
       effort : temps à l'allure de la séance, sans les récupérations (plafonds de Daniels) ; parts : minutes par zone, les
       récupérations comptent en Z1, l'effort dans la zone de la séance (sauf si r.parts le détaille) ; etapes : pour les montres */
   function enveloppe(c, id, nom, zone, r, S = {}) {
-    const effort = r.effort ?? r.travail;
-    return { id, nom, zone, qualite: true, travail: r.travail, effort, duree: arr5(ECHAUFFEMENT + RETOUR + r.travail),
-      km: c.profil ? (ECHAUFFEMENT + RETOUR) / aZ(c, 'Z2') + r.km : null,
-      parts: ajoute({ Z2: ECHAUFFEMENT, Z1: RETOUR }, r.parts || { Z1: r.travail - effort, [zone]: effort }),
-      etapes: [{ t: 'echauffement', duree: ECHAUFFEMENT, allure: plageZ(c, 'Z2') }, ...(r.etapes || [{ t: 'effort', duree: r.travail, nom }]),
+    const effort = r.effort ?? r.travail, echauf = echauffement(c, zone);
+    return { id, nom, zone, qualite: true, echauf, travail: r.travail, effort, duree: arr5(echauf + RETOUR + r.travail),
+      km: c.profil ? (echauf + RETOUR) / aZ(c, 'Z2') + r.km : null,
+      parts: ajoute({ Z2: echauf, Z1: RETOUR }, r.parts || { Z1: r.travail - effort, [zone]: effort }),
+      etapes: [{ t: 'echauffement', duree: echauf, allure: plageZ(c, 'Z2') }, ...(r.etapes || [{ t: 'effort', duree: r.travail, nom }]),
         { t: 'retour', duree: RETOUR, allure: plageZ(c, 'Z1') }],
-      texte: `Échauffement ${ECHAUFFEMENT} min en Z2 · ${r.texte} · retour au calme ${RETOUR} min en Z1.${S.alerte ? ` <strong class="doute">${S.alerte}</strong>` : ''}${S.conseil ? ` <em>${S.conseil}</em>` : ''}` };
+      texte: `Échauffement ${echauf} min en Z2 · ${r.texte} · retour au calme ${RETOUR} min en Z1.${S.alerte ? ` <strong class="doute">${S.alerte}</strong>` : ''}${S.conseil ? ` <em>${S.conseil}</em>` : ''}` };
   }
   // Footing suivi de lignes droites (séance légère) : le quart du temps des lignes droites compte en Z6
   const avecFooting = (x, d, c) => ({ ...x, duree: arr5(d + x.extra), km: c.profil ? (d + x.extra) / aZ(c, 'Z2') : null,
@@ -366,41 +424,70 @@
   // Footing en Z2, ou de récupération en Z1 (plan selon la répartition)
   const footing = (d, c, z = 'Z2') => ({ nom: z === 'Z1' ? 'Footing de récupération' : 'Footing', zone: z, duree: d, travail: 0, km: c.profil ? d / aZ(c, z) : null,
     parts: { [z]: d }, etapes: [{ t: 'footing', duree: d, allure: plageZ(c, z) }], texte: `${fD(d)} en ${zt(c, z)}${courseMarche(c)}.` });
-  const course = (c) => ({ nom: 'Course', zone: c.zoneObj, duree: c.tObj, travail: 0, km: c.dist / 1000, parts: { [c.zoneObj]: c.tObj },
-    etapes: [{ t: 'effort', duree: c.tObj, allure: c.profil && [c.allureObj * 0.99, c.allureObj * 1.01], nom: c.label }],
-    texte: `${c.label}${c.profil ? ` : objectif ≈ ${E.formatTemps(c.tObj)}, ${al(c, 'obj')}` : ''}. Échauffement léger avant le départ.` });
+  // Séances du club (cases à cocher de l'étape 2), chaque semaine si compatibles avec le plan (voir clubsSemaine dans construire) : lundi, « séance de PPG dont footing », comptée comme 40 min
+  // en Z2 pour la charge ; jeudi, « séance piste », de charge moyenne équivalente à 1 h en Z2 + 15 min à VMA (compte comme une séance de qualité).
+  // Elles comptent dans le volume, occupent un jour de course et, par le jeudi, une séance de qualité.
+  const CLUB = [{ id: 'club1', jour: 'lundi', dow: 1, duree: 40, parts: { Z2: 40 }, travail: 0 },
+    { id: 'club2', jour: 'jeudi', dow: 4, duree: 75, parts: { Z2: 60, Z5: 15 }, travail: 15 }];
+  const clubsActifs = () => CLUB.filter(k => state[k.id]);
+  const seanceClub = (k, c) => (k.id === 'club1'
+    ? { nom: 'Séance de PPG dont footing (club, lundi)', zone: 'Z2', duree: 40, travail: 0, km: c.profil ? 40 / aZ(c, 'Z2') : null, parts: { Z2: 40 }, club: true,
+      etapes: [{ t: 'footing', duree: 40, allure: plageZ(c, 'Z2') }],
+      texte: 'Séance de PPG (préparation physique générale) dont footing, au club : comptée comme 40 min en Z2 pour la charge (distance estimée à l\'allure moyenne de Z2).' }
+    : { nom: 'Séance piste (club, jeudi)', zone: 'Z5', duree: 75, travail: 15, qualite: true, effort: 15, km: c.profil ? 60 / aZ(c, 'Z2') + 15 / (1000 / c.profil.V) : null, parts: { Z2: 60, Z5: 15 }, club: true,
+      etapes: [{ t: 'footing', duree: 60, allure: plageZ(c, 'Z2') }, { t: 'effort', duree: 15, allure: c.profil && [1000 / c.profil.V * 0.99, 1000 / c.profil.V * 1.01], nom: 'Z5, équivalent à 15 min à VMA' }],
+      texte: `Séance piste au club, de charge moyenne équivalente à ${fD(60)} en ${zt(c, 'Z2')} plus 15 min à VMA${c.profil ? ` (${fA(1000 / c.profil.V)})` : ''} (distance estimée sur cette base).` });
+  // Échauffement avant une compétition, en Z2, selon la zone de la course : Z6 30 min, Z5 20 min, Z4 15 min, Z3 10 min, aucun en Z1 et Z2 (course en footing
+  // comprise). Il s'ajoute au volume de la semaine ; aucune récupération (retour au calme, footing de récupération) n'est prévue le jour d'une compétition.
+  const ECHAUFFEMENT_COURSE = { Z3: 10, Z4: 15, Z5: 20, Z6: 30 };
+  const echCourse = (c) => ECHAUFFEMENT_COURSE[c.zoneObj] || 0;
+  const course = (c) => {
+    const ech = echCourse(c);
+    return { nom: 'Course', zone: c.zoneObj, duree: c.tObj + ech, travail: 0, km: c.dist / 1000 + (ech && c.profil ? ech / aZ(c, 'Z2') : 0),
+      parts: ech ? ajoute({ Z2: ech }, { [c.zoneObj]: c.tObj }) : { [c.zoneObj]: c.tObj },
+      etapes: [...(ech ? [{ t: 'echauffement', duree: ech, allure: plageZ(c, 'Z2') }] : []), { t: 'effort', duree: c.tObj, allure: c.profil && [c.allureObj * 0.99, c.allureObj * 1.01], nom: c.label }],
+      texte: `${ech ? `Échauffement ${ech} min en ${zt(c, 'Z2')}, puis ` : ''}${c.label}${c.profil ? ` : objectif ≈ ${E.formatTemps(c.tObj)}, ${al(c, 'obj')}` : ''}.${ech ? '' : ' Échauffement léger avant le départ.'} Pas de récupération ce jour-là.` };
+  };
 
   /* ---------- Méthodes ---------- */
 
   // phases : f = fin de la phase en part des semaines avant l'affûtage ; q = séances de qualité par ordre de priorité ; sl = sortie longue.
   // score : adéquation à l'objectif (0 à 3) ; ie : poids du biais d'indice d'endurance (+ : favorisée par une bonne endurance)
+  // fin d'une phase, `avant` semaines avant la course dans un plan de `total` semaines pour la fin de préparation (réduit proportionnellement si le plan est plus court, base : 40 % au moins)
+  const finPhase = (avant, total = 14) => { const W = horizon().W; return 1 - avant * Math.min(1, 0.6 * W / total) / W; };
+  const finLydiard = finPhase;
   const DOCTRINES = [
     { id: 'daniels', nom: 'Daniels', titre: 'Jack Daniels : quatre phases, allures E, M, T, I, R',
-      source: "Daniels J., Daniels' Running Formula, Human Kinetics (3e éd. 2014) ; résumés : Coach Ray (« Jack Daniels running intensity »), notes de lecture Goodreads, forum Running Ahead.",
+      source: "Daniels J., Daniels' Running Formula, Human Kinetics (chap. 4 : plafonds par séance ; chap. 10 : les quatre phases ; chap. 14 : plans de cross).",
       resume: "Chaque séance a un but précis et une allure tirée du niveau du coureur : endurance (E), marathon (M), seuil (T), intervalles VO2max (I), répétitions de vitesse (R). Quatre phases : fondation, qualité initiale, transition (la plus dure), qualité finale.",
-      principes: ['Deux séances de qualité par semaine, plus une sortie longue.', "Seuil (T) : répétitions de 5 à 15 min, environ 1 min de récupération pour 5 min d'effort ; au plus 10 % du volume hebdomadaire par séance.",
-        "Intervalles (I) : 3 à 5 min, récupération égale ou un peu plus courte que l'effort ; au plus 8 % du volume hebdomadaire.", "Répétitions (R) : 2 min au plus par répétition, récupération de 2 à 3 fois la durée (et non la distance) ; au plus 5 % du volume hebdomadaire.",
-        'Allure marathon (M) : au plus 20 % du volume hebdomadaire ; sortie longue de 2 h 30 au plus (hors ultra).',
+      principes: ["Un seul nouveau type d'effort par phase : base facile (avec lignes droites), puis répétitions R (vitesse, sans fatigue aérobie), puis intervalles I, puis seuil T en fin de saison. Les phases précédentes sont entretenues par une séance.",
+        'Deux séances de qualité par semaine, plus une sortie longue facile.', "Seuil (T) : répétitions de 5 à 15 min, environ 1 min de récupération pour 5 à 6 min d'effort ; au plus 10 % du volume hebdomadaire par séance.",
+        "Intervalles (I) : 3 à 5 min, récupération égale ou un peu plus courte que l'effort ; au plus 8 % du volume hebdomadaire (10 km au plus). Deux séances I par semaine pour les distances longues, une seule pour les courtes (qui gardent une séance R).", "Répétitions (R) : 2 min au plus par répétition, récupération de 2 à 3 fois la durée (et non la distance) ; au plus 5 % du volume hebdomadaire (8 km au plus).",
+        'Allure marathon (M) : au plus 20 % du volume hebdomadaire (30 % sous 64 km par semaine) ; sortie longue : 25 % du volume (30 % sous 64 km par semaine), 2 h 30 au plus.',
         'Plafonds appliqués ici au temps (et non au kilométrage) : une séance trop longue pour votre volume est raccourcie.'],
       maxQ: 2, plafonds: { SEUIL: 0.1, VMA_LONG: 0.08, VITESSE: 0.05 }, score: { '5k': 2, '10k': 2.5, semi: 2.5, marathon: 2 },
       difficulte: [3, 'allures précises à respecter, phase de transition exigeante'],
-      phases: [{ nom: 'Fondation', f: 0.2, q: ['EF_LD', 'EF_LD'], sl: 'SL' }, { nom: 'Qualité initiale', f: 0.45, q: ['VITESSE', 'SEUIL'], sl: 'SL' },
-        { nom: 'Transition', f: 0.75, q: ['VMA_LONG', 'SEUIL'], sl: 'SL' }, { nom: 'Qualité finale', f: 1, q: ['SEUIL', 'SPE'], sl: 'SL_SPE' }] },
+      phases: [{ nom: 'Fondation', f: 0.2, q: ['EF_LD', 'EF_LD'], sl: 'SL' }, { nom: 'Qualité initiale (R)', f: 0.45, q: ['VITESSE', 'VITESSE'], sl: 'SL' },
+        { nom: 'Transition (I)', f: 0.75, q: c => (c.dist >= 10000 ? ['VMA_LONG', 'VMA_LONG'] : ['VMA_LONG', 'VITESSE']), sl: 'SL' }, { nom: 'Qualité finale (T)', f: 1, q: ['SEUIL', 'SPE'], sl: 'SL_SPE' }] },
     { id: 'lydiard', nom: 'Lydiard', titre: "Arthur Lydiard : la pyramide, du foncier à l'affûtage",
-      source: 'Lydiard A., Gilmour G., Running with Lydiard, Hodder & Stoughton (1983 ; 2e éd. 2000) ; résumés : CoachTheRun (« What is the Lydiard Method »), Wikipedia, forum boards.ie.',
-      resume: "Périodisation en pyramide : une longue base aérobie (beaucoup de volume, en partie à allure soutenue), puis une phase de côtes (circuits avec bondissements), une courte phase anaérobie (fractionné, contre-la-montre) et enfin coordination et affûtage.",
-      principes: ["Base : 8 à 12 semaines au moins (idéalement 3 à 6 mois) de course aérobie : sortie longue « agréablement fatigante », footings faciles, fartlek relâché, lignes droites ; pas de vrai fractionné.",
-        'Côtes : 3 à 6 semaines, circuits trois fois par semaine (montée en bondissant, descente rapide et relâchée, accélérations à plat).',
-        "Anaérobie : 4 semaines au plus, fractionné et contre-la-montre sur des distances plus courtes que la course.",
-        'Coordination et affûtage : vitesse courte et allure de course, volume en baisse ; la sortie longue continue le week-end, plus facile.'],
+      source: 'Lydiard A., Gilmour G., Running to the Top (3e éd. 2013 : chap. 7 et 8, construire un programme).',
+      resume: "Périodisation en pyramide : une longue base aérobie (au moins trois mois, en partie à allure soutenue sans devenir anaérobie), puis environ 4 semaines de côtes (bondissements), environ 4 semaines d'anaérobie (répétitions longues, 3 jours par semaine), et 6 semaines de coordination avec courses de mise en jambes.",
+      principes: ["Base : au moins 3 mois, 4 à 5 de préférence, de course aérobie « rapide si possible, juste sous le point où l'effort devient anaérobie » : le plus de volume possible, sortie longue, footings, fartlek relâché, lignes droites ; un peu de côtes et de bonds en complément.",
+        'Côtes : environ 4 semaines de transition, circuits (bondir, ressorts, course en côte, descente rapide), avec quelques lignes droites en bas.',
+        "Anaérobie : environ 4 semaines, trois jours par semaine de gros effort. Lydiard n'utilise pas le fractionné chiffré : répétitions d'au moins 600 m, ou 3, 5 ou 10 km à fond, sans compter, jusqu'à ce que le corps dise stop (ici, séries cadrées par la règle des 2/3 du temps limite) ; travail de vitesse de jambes en parallèle.",
+        "Coordination : environ 6 semaines, répétitions courtes à l'allure de course, fartlek facile, une course de mise en jambes par semaine (plus courte ou plus longue que l'objectif) ; une sortie longue facile de 1 h à 1 h 30 ; une journée de récupération après chaque jour dur. Les 14 dernières semaines suivent ce découpage (réduit si le plan est plus court).",
+        'Après un semi ou un marathon : environ 2 semaines sans rien de rapide.'],
       maxQ: 3, score: { '5k': 1.5, '10k': 2, semi: 2.5, marathon: 2.5 },
       difficulte: [2, "longue base aérobie, intensité tardive et progressive ; demande surtout du temps"],
-      phases: [{ nom: 'Base aérobie', f: 0.45, q: ['SOUTENU', 'FARTLEK', 'EF_LD'], sl: 'SL' }, { nom: 'Côtes', f: 0.65, q: ['LYD_CIRCUIT', 'LYD_CIRCUIT', 'LYD_CIRCUIT'], sl: 'SL' },
-        { nom: 'Anaérobie', f: 0.88, q: ['VMA_LONG', 'LYD_TT', 'VITESSE'], sl: 'SL' }, { nom: 'Coordination', f: 1, q: ['SPE', 'VITESSE', 'LYD_TT'], sl: 'SL' }] },
+      // les 14 dernières semaines suivent le livre (côtes 4, anaérobie 4, coordination 6), réduites proportionnellement si le plan dure moins de 23 semaines (base : 40 % au moins)
+      phases: [{ nom: 'Base aérobie', f: () => finLydiard(14), q: ['SOUTENU', 'FARTLEK', 'EF_LD'], sl: 'SL' }, { nom: 'Côtes', f: () => finLydiard(10), q: ['LYD_CIRCUIT', 'LYD_CIRCUIT', 'LYD_CIRCUIT'], sl: 'SL' },
+        { nom: 'Anaérobie', f: () => finLydiard(6), q: ['VMA_LONG', 'LYD_TT', 'VITESSE'], sl: 'SL' }, { nom: 'Coordination', f: 1, q: ['SPE', 'VITESSE', 'LYD_TT'], sl: 'SL' }] },
     { id: 'seiler', nom: 'Seiler', titre: 'Stephen Seiler : entraînement polarisé (80/20)',
-      source: "Seiler S., What is best practice for training intensity and duration distribution in endurance athletes?, Int J Sports Physiol Perform 2010 ; Seiler S. et al., Scand J Med Sci Sports 2013 (intervalles 4 × 4, 4 × 8 et 4 × 16 min, 36 cyclistes de loisir) ; résumés : TRUE Fitness, forum TrainerRoad ; Aubry A., « S'entraîner lentement (parfois)… pour être plus performant », lepape-info (synthèse d'études d'élites, lue).",
+      source: "Seiler S., Tønnessen E., Intervals, Thresholds, and Long Slow Distance: the Role of Intensity and Duration in Endurance Training, Sportscience 13, 32 – 53 (2009, lu) ; Seiler S., What is best practice for training intensity and duration distribution in endurance athletes?, Int J Sports Physiol Perform 2010 ; Seiler S. et al., Scand J Med Sci Sports 2013 (intervalles 4 × 4, 4 × 8 et 4 × 16 min, 36 cyclistes de loisir) ; Aubry A., « S'entraîner lentement (parfois)… pour être plus performant », lepape-info (synthèse d'études d'élites, lue). Seiler ne publie pas de plan : le plan applique ses principes.",
       resume: "Environ 80 % des séances en faible intensité, le reste en haute intensité, très peu en zone intermédiaire. Les intervalles longs (4 à 8 min, 2 min de récupération) sont la séance type.",
-      principes: ['Facile vraiment facile (Z1-Z2), dur vraiment dur : éviter la « zone grise ».', 'Deux séances intenses par semaine suffisent, même à gros volume.',
+      principes: ['Facile vraiment facile (Z1-Z2), dur vraiment dur : éviter la « zone grise ».', 'Deux séances intenses par semaine suffisent, même à gros volume (chez les élites, 1 à 3 séances par semaine à ou au-dessus du seuil, parmi 10 à 12 séances).',
+        "Observé chez des élites : 75 à 80 % du temps en zone 1, environ 5 % en zone 2, 15 à 20 % en zone 3 (modèle à trois zones, bornées par les seuils ventilatoires). Un essai chez des coureurs de loisir visait 77 / 3 / 20 % mais a donné en pratique 65 / 21 / 14 % : sans contrôle, le facile devient trop soutenu (« trou noir de l'intensité »).",
+        "Intervalles : 1 à 8 min à 90 – 100 % de VO2max, 1 à 5 min de récupération ; la meilleure réponse physiologique avec 4 min d'effort pour 2 min de récupération ; 4 × 4 min à 95 % de VO2max est une alternative proposée.",
         "Séance type : 4 × 8 min à effort élevé et régulier, 2 min de récupération (meilleure progression que 4 × 4 ou 4 × 16 min dans son étude sur des cyclistes de loisir entraînés).",
         "La répartition 80/20 se compte en séances plutôt qu'en temps.",
         "Répartitions observées chez des experts (synthèse d'Aubry, INSEP) : 71 à 85 % du temps en zone 1, au plus 15 à 25 % en zones 2 et 3 ; à volume égal, 81 / 11 / 8 % progresse mieux que 67 / 25 / 8 % (Lucia, coureurs nationaux). Ce sont des élites : ces pourcentages ne se transposent pas tels quels à d'autres niveaux."],
@@ -408,62 +495,87 @@
       difficulte: [1, 'deux séances dures au plus, tout le reste vraiment facile : simple à suivre'],
       phases: [{ nom: 'Développement', f: 0.7, q: ['INTERVALLES_LONGS', 'VMA_LONG'], sl: 'SL' }, { nom: 'Spécifique', f: 1, q: ['INTERVALLES_LONGS', 'SPE'], sl: 'SL' }] },
     { id: 'pfitzinger', nom: 'Pfitzinger', titre: 'Pete Pfitzinger : mésocycles et seuil lactique',
-      source: 'Pfitzinger P., Douglas S., Advanced Marathoning, Human Kinetics (2e éd. 2009, 4e éd. 2025) ; Faster Road Racing (2015) ; résumés : Running with Rock (« Pfitz Marathon Training Plans Explained »), RoadTrailRun, Goodreads.',
-      resume: "Mésocycles successifs : endurance, seuil lactique et endurance, préparation à la course, affûtage. Le tempo au seuil lactique et les sorties longues (avec allure marathon) sont le cœur ; le VO2max arrive en fin de préparation.",
-      principes: ['Semaine type : quatre jours de récupération, une séance au seuil lactique, une sortie longue et une sortie moyenne-longue.',
-        'Tempo continu de 20 à 40 min à allure 15 km – semi-marathon, allongé au fil des mésocycles.',
+      source: 'Pfitzinger P., Douglas S., Advanced Marathoning, Human Kinetics (4e éd. 2025 : chap. 1 à 3 et plans de 18 semaines jusqu\'à 55 miles par semaine) ; Faster Road Racing (2015, non lu).',
+      resume: "Quatre blocs successifs : endurance (le plus long), seuil lactique et endurance, préparation à la course (avec courses de mise en jambes), affûtage. Le tempo au seuil lactique et les sorties longues (avec allure marathon) sont le cœur ; le VO2max arrive en fin de préparation et remplace le seuil dans le dernier bloc.",
+      principes: ['Semaine type : quatre jours de récupération, une séance au seuil lactique, une sortie longue et une sortie moyenne-longue ; au plus trois séances difficiles par semaine, une semaine de récupération à 80 % du volume toutes les 3 à 5 semaines.',
+        "Tempo continu de 20 à 40 min (35 à 45 min dans quelques séances) à l'allure que l'on tient environ 1 h (≈ 15 km pour un marathonien en 3 h, 10 à 15 s/mile plus lent que le 10 km) ; pour le marathon, le tempo continu est préféré aux fractions ; pas de double seuil.",
+        'Sorties longues à 10 – 20 % sous l\'allure marathon, sans dépasser 21 – 22 miles (une de 24 pour les expérimentés) ; une sortie longue tous les trois semaines au moins sur jambes fraîches.',
         "VO2max : fractions de 2 à 5 min à allure 5 km (données en distance par Pfitzinger, 800 à 1600 m, 600 m les semaines de course : ici en durée, pour que l'effort soit le même à tous les niveaux), récupération de 50 à 90 % du temps d'effort.",
         'Sorties longues avec une partie à allure marathon en préparation spécifique.', 'Affûtage de 3 semaines pour le marathon.'],
       maxQ: 2, moyenneLongue: true, affutage3: true, score: { '5k': 1, '10k': 1.5, semi: 3, marathon: 3 },
       difficulte: [4, 'tempos longs et sorties longues avec allure marathon, pensé pour de gros volumes'],
       phases: [{ nom: 'Endurance', f: 0.3, q: ['TEMPO', 'EF_LD'], sl: 'SL' }, { nom: 'Seuil et endurance', f: 0.65, q: ['TEMPO', 'SEUIL'], sl: 'SL_SPE' },
-        { nom: 'Préparation à la course', f: 1, q: ['VMA_PFITZ', 'TEMPO'], sl: 'SL_SPE' }] },
+        { nom: 'Préparation à la course', f: 1, q: c => ['VMA_PFITZ', c.dist > 30000 ? 'EF_LD' : 'TEMPO'], sl: 'SL_SPE' }] },
     { id: 'hanson', nom: 'Hanson', titre: 'Méthode Hanson : fatigue cumulée',
-      source: 'Humphrey L., Hanson K., Hanson K., Hansons Marathon Method, VeloPress (2012 ; 2e éd. 2016) ; résumé : Marathon Handbook ; forum LetsRun (« Hanson\'s Strength Workouts for the Marathon », « Thoughts on Hanson\'s Marathon Method? »).',
+      source: 'Humphrey L., Hanson K., Hanson K., Hansons Marathon Method, VeloPress (2e éd. 2016 : chap. 3 sur les sorties longues, la vitesse, la force et le tempo ; chap. 4 sur les programmes).',
       resume: "Trois séances clés par semaine (vitesse puis force, tempo à allure objectif, sortie longue) et des footings presque tous les jours : on aborde les séances avec une fatigue accumulée, qui simule la fin de course. La sortie longue est plafonnée (environ 26 km).",
       principes: ['Vitesse (première moitié) : répétitions à allure 5 – 10 km.', "Force (seconde moitié) : répétitions longues un peu plus vite que l'allure objectif, récupération courte.",
         'Tempo : longue portion continue à allure objectif, allongée au fil des semaines.', 'Six jours de course par semaine, peu ou pas d\'entraînement croisé ; sortie longue de 16 miles (≈ 26 km) au plus.',
-        "Force : allure marathon − 10 s par mile (table 3.4 du livre, citée sur LetsRun), par exemple 6 × 1 mile à 2 × 3 miles avec 400 à 800 m de trot ; vitesse : environ 3 miles au total à allure 5 – 10 km. Ne pas courir la force plus vite que prévu."],
+        "Force : allure marathon − 10 s par mile, par exemple 6 × 1 mile à 2 × 3 miles avec 400 à 800 m de trot (moins de la moitié de l'effort) ; vitesse : environ 3 miles au total à allure 5 – 10 km, juste sous la VO2max (répétitions de 2 à 8 min, de 400 m à 1 600 m selon la semaine). Ne pas courir plus vite que prévu.",
+        "Tempo = allure marathon, pas plus vite : de 4 à 5 miles au début jusqu'à 10 miles (≈ 90 min) en fin de préparation ; sortie longue de 16 miles au plus, au plus 25 à 30 % du volume de la semaine et pas de jour de repos avant elle (fatigue cumulée volontaire)."],
       maxQ: 2, slKm: 26, score: { '5k': 1, '10k': 1.5, semi: 2.5, marathon: 3 },
       difficulte: [4, 'six jours de course par semaine et séances clés enchaînées sur une fatigue accumulée'],
       phases: [{ nom: 'Vitesse', f: 0.45, q: ['VMA_HANSON', 'TEMPO_OBJ'], sl: 'SL' }, { nom: 'Force', f: 1, q: ['FORCE', 'TEMPO_OBJ'], sl: 'SL' }] },
     { id: 'canova', nom: 'Canova', titre: "Renato Canova : l'entonnoir de la spécificité",
-      source: "Canova R., messages sur le forum LetsRun (« Does it matter how fast you do your long runs? », résumé « Summary of Renato Canova principles ») ; Arcelli E., Canova R. (1999, non lu) ; progressifs selon Canova : Fast Running.",
+      source: "Canova R., Gigliotti L., Lenzi G., La via italiana alla maratona, Atleticastudi 4-5-6/1998 (FIDAL, scan lu : tableaux 2 à 6) ; Canova R., Moderne strategie per l'allenamento della maratona, Atleticastudi 2/1996 (FIDAL, lu) ; Canova R., messages sur le forum LetsRun (fils 2959804, 4213844, 3958030, 1363335, lus) et leur synthèse par J. Davis, « Something New in Training: The Methods of Renato Canova » (2011) ; Arcelli E., Canova R., Marathon Training: A Scientific Approach (1999, non lu : recension de J. Davis, runningwritings.com, 2023) ; progressifs selon Canova : Fast Running.",
       resume: "Du général au spécifique : un travail varié au début (côtes, fartlek, seuil), puis un resserrement progressif (« entonnoir ») vers des séances longues proches de l'allure de course (95 à 105 %).",
       principes: ['Période générale : côtes, fartlek, allures variées ; progressifs moyens (60 à 90 min de 85 à 100 % de la vitesse marathon, jamais plus vite).',
         'Période fondamentale : seuil, allure de course sur portions courtes ; progressifs moyen-rapides (45 à 60 min de 95 à 105 % de la vitesse marathon).',
         "Période spécifique : beaucoup de volume à 95 – 105 % de l'allure de course, sorties longues rapides à 90 – 95 % ; progressifs rapides (20 à 40 min de 102 à 108 % de la vitesse marathon).",
         'Progressifs réservés ici au semi et au marathon (leurs % sont ceux de la vitesse marathon). Méthode exigeante, pensée pour des coureurs expérimentés.',
         "5 et 10 km, d'après un message de Canova (exemple d'un coureur de 15:00 au 5000 m) : 110 % de la vitesse de course, fractions courtes, ≈ 3 km au total, 1 min 30 de récupération ; 105 %, ≈ la distance de course au total ; 100 %, fractions jusqu'au 2000 m, 8 à 10 km, 3 min ; 95 %, fractions longues (3 × 3000 m) ou continu ; 90 %, continu de 10 à 20 km. Il compte 105 % comme l'allure moins 5 %.",
-        "Spécialement pour le marathon, ses « blocs spéciaux » (deux séances longues le même jour) sont réservés aux coureurs de très haut niveau et ne sont pas repris ici.",
-        'Ses volumes sont ceux de coureurs à très gros kilométrage : ici, la qualité de la semaine est plafonnée à 30 % du temps.'],
+        "Spécialement pour le marathon, ses « blocs spéciaux » (deux séances longues le même jour, toutes les 3 à 4 semaines en période spécifique : le matin 85 – 90 % de la vitesse marathon puis 10 à 15 km à ≈ 98 %, 100 % ou 105 – 110 % selon la variante ; un coureur à 80 miles par semaine fait environ 60 % de son travail à l'allure marathon, un coureur à 150 miles environ 40 %) sont réservés aux coureurs de très haut niveau et ne sont pas repris ici (source secondaire : Fast Running).",
+        'Ses volumes sont ceux de coureurs à très gros kilométrage : ici, la qualité de la semaine est plafonnée à 30 % du temps.',
+        "Marathon, d'après la recension du livre : périodes d'introduction (6 à 8 semaines), fondamentale (8 à 10, volume maximal), spéciale (6 à 8, absente du livre) et spécifique (6 à 8) ; sorties longues spécifiques de 30 à 35 km à 96 – 98 % de l'allure marathon, 18 à 25 km continus à 100 – 103 % en période générale ; fractions extensives de 2 à 7 km à 100 – 102 % (1 km de récupération à 85 – 95 %), intensives de 500 à 1 000 m à 103 % (récupération à 97 %). Élites : 230 à 250 km par semaine.",
+        "École italienne (Canova, Gigliotti, Lenzi, 1998) : le marathon est une spécialité d'extension (le volume d'abord, à une intensité compatible avec sa puissance aérobie). Le travail spécial se fait entre 97 et 103 % de l'allure de course, sur une durée de la moitié aux deux tiers de la course ; en dessous de 97 %, au-dessus de 103 % ou sur moins de la moitié de la durée, c'est du travail général ou fondamental de soutien ; les très longues sorties (au-delà de la distance de course) soutiennent le travail spécial.",
+      "Table des allures de la méthode (en % de l'allure marathon) : > 110 % intervalles courts (10 × 500 m, 1 min 30) ; 110 – 108 % résistance spéciale intensive de 10 à 12 km (1 000 à 3 000 m) ; 108 – 105 % intensive-extensive de 12 à 16 km (2 000 à 5 000 m) ou course rapide progressive de 20 à 40 min ; 105 – 103 % extensive de 15 à 21 km (3 000 à 7 000 m) ou course rapide de 20 à 40 min ; allure marathon : 18 à 25 km ; 100 – 97 % course moyenne-rapide progressive (45 min à 1 h 20) et long spécial intensif de 28 à 30 km ; 97 – 95 % long spécial extensif de 32 à 36 km ; 95 – 92 % long de durée de 36 à 45 km ; 92 – 90 % très long de 40 à 52 km ; 90 – 85 % long du marathonien (2 à 3 h) ; 85 – 80 % fond lent de soutien ; moins de 80 % régénération.",
+      "Résistance spéciale (période spéciale, environ 6 semaines) : extensive, de 19 à 30 km au total, répétitions de 2 à 7 km à 100 – 102 % avec 1 km de récupération à 85 – 95 % (4 × 5 000 m, 3 × 7 000 m) ; intensive, de 15 à 23 km, répétitions de 0,5 à 1 km à 103 % et plus, récupération de 0,5 à 1 km à 97 % ; long spécial de 30 à 35 km à 98 – 100 % ; bloc spécial de deux séances le même jour (10 km à 85 % puis 10 à 15 km à l'allure marathon, le matin et l'après-midi) ; une longue sortie à 92 – 94 % au-delà de la distance de course au moins une fois dans le mois précédent. Puissance aérobie : fond rapide de 20 à 40 min à 104 – 107 %, variations longues (5 000 / 7 000 m) à 103 – 107 %, moyennes (3 000 / 5 000 m) à 105 – 108 %, brèves (1 000 / 3 000 m) à 106 – 110 %, course en côte de 6 à 10 km à 3 – 6 %.",
+      "Périodes (1998) : générale 6 à 8 semaines (efficacité musculaire, course continue lente, moyenne et progressive de 30 min à 1 h 30), fondamentale 8 à 10 semaines (puissance aérobie au seuil, volume maximal), spéciale 6 à 8 semaines (résistance spécifique à l'allure marathon, volume en baisse). Fondamental pour le marathon : 1 h 45 à 2 h 30 à 1,1 – 1,2 fois plus lent que l'allure de course. Le plan des 3 derniers mois contient peu de longues sorties lentes, mais des 25 à 40 km rapides (à 3 min 30 par km pour un 2 h 05 : « le meilleur moyen de perdre son temps »).",
+      "Modulation : pas de semaine symétrique ; chaque allure est un type d'entraînement distinct ; plus on approche de la course, plus la récupération entre séances doit croître (deux à trois jours de régénération entre séances spécifiques) ; on n'abandonne pas les séances précédentes, on en ajoute (« s'entraîner, c'est ajouter »). Coureur « résistant » (≈ 88 % de fibres lentes, seuil aérobie proche du seuil anaérobie, lactate ≈ 2 mmol/L) : travailler la puissance (VO2max) ; coureur « rapide » (≈ 65 % de fibres lentes, lactate ≈ 3 mmol/L) : éviter les gros travaux lactiques, réduire la consommation.",
+      "Adaptation pour amateurs (conseils du recenseur, pas de Canova) : 60 à 80 % du volume de séance prévu, commencer par les séances à 90 % et 110 % de l'allure marathon puis ajouter 95 %, 100 – 103 % et 105 % quand le kilométrage le permet, plusieurs jours faciles après les grosses séances, de courts blocs de jours chargés plutôt qu'un gros kilométrage."],
       maxQ: 3, partQualite: 0.3, score: { '5k': 1.5, '10k': 2, semi: 2.5, marathon: 2.5 },
       difficulte: [5, "gros volume proche de l'allure de course, conçu pour des coureurs de haut niveau"],
       phases: [{ nom: 'Générale', f: 0.3, q: c => (c.dist > 20000 ? ['CAN_PROG@1', 'COTES', 'FARTLEK'] : ['FARTLEK', 'COTES', 'CAN@90']), sl: 'SL' },
         { nom: 'Fondamentale', f: 0.6, q: c => (c.dist > 20000 ? ['SEUIL', 'CAN_PROG@2', 'SPE'] : ['CAN@95', 'CAN@110', 'CAN@90']), sl: 'SL' },
         { nom: 'Spécifique', f: 1, q: c => (c.dist > 20000 ? ['SPE', 'SPE_EXT', 'CAN_PROG@3'] : ['CAN@100', 'CAN@105', 'CAN@95']), sl: 'SL_SPE' }] },
     { id: 'billat', nom: 'Billat', titre: 'Véronique Billat : intervalles à VMA',
-      source: 'Billat L. V., Interval training for performance: a scientific and empirical practice, Sports Med 2001 (parties 1 et 2) ; études 30-30 et ½ Tlim (HAL Montpellier, Serval UNIL, Eur J Appl Physiol).',
+      source: 'Billat V., La physiologie de l\'entraînement et de la performance sportive, De Boeck Supérieur (2021 : chap. 6, table de prescription par % de la vitesse aérobie maximale) ; Billat L. V., Interval training for performance: a scientific and empirical practice, parties I et II, Sports Med 2001 (lu) ; Billat V. et al., Eur J Appl Physiol 2000 (30-30 et ½ Tlim) et Int J Sports Med 2001 (15-15 autour de la vitesse critique) ; Billat V. et al., Int J Sports Med 2001 (entraînement de huit semaines de marathoniens d\'élite) ; publications.billatraining.com (165 articles en libre accès, dont ces textes).',
       resume: "Le temps passé à VMA est le levier principal du 5 et du 10 km. Deux formats : le 30-30 (30 s à VMA, 30 s à 50 % de VMA), qui accumule beaucoup de temps à VMA, et des fractions à VMA de la moitié du temps limite (≈ 3 min), récupération de même durée.",
       principes: ['30-30 : 30 s à VMA, 30 s de récupération active à 50 % de VMA ; permet de rester une dizaine de minutes à VO2max.',
         'Fractions longues à VMA : la moitié du temps limite (≈ 3 min ici, la VMA étant tenue environ 6 min dans le modèle), récupération de même durée ; dans les études de son équipe, elles gardent plus longtemps au-dessus de 90 % de VO2max que le 30-30.',
-        'Seuil en complément, une fois par semaine.', 'Allure de course en fin de préparation.',
+        "Table de prescription du livre (intensité en % de VMA, répétition en part du temps limite à cette intensité) : 105 – 110 % : 25 à 50 % du temps limite (45 s à 1 min 30), récupération double de l'effort ; 95 – 100 % : 33 à 50 % (2 à 3 min), récupération égale ; 85 – 90 % : 50 à 75 % du temps limite (7 à 12 min), récupération moitié ; seuil (≈ 1 h) : 25 à 75 % (15 à 45 min), récupération de 5 min. Ici la règle des 2/3 du temps limite plafonne chaque répétition.",
+        'Seuil en grandes fractions en complément, une fois par semaine.', 'Allure de course en fin de préparation.',
+        "Non repris : l'entraînement en accélération (pyramides de vitesse montantes et descendantes, 2 séances de 20 à 30 min par semaine, sans freiner brutalement en récupération), décrit sans prescription chiffrée.",
+        "Semaine type de Billat (Med Sci Sports Exerc 1999, 6 séances, ≈ 85 km) : lundi 1 h facile à 60 % de VMA ; mardi 5 × 50 % du temps limite à VMA (1 000 m en 3 min) avec 3 min de récupération à 50 % de VMA ; mercredi 45 min à 70 % ; jeudi 1 h à 70 % ; vendredi 2 × 20 min au seuil de lactate (85 % de VMA) avec 5 min à 60 % ; samedi repos ; dimanche 1 h à 70 %. Une séance à VMA par semaine suffit : trois séances par semaine pendant quatre semaines n'ont rien apporté de plus et ont élevé la noradrénaline (marqueur de surentraînement) ; une seule fait monter la VMA de 20,5 à 21,1 km/h.",
+        "Séance au seuil de lactate stable (Billat et al., Pflügers Arch 2004, vétérans, six semaines) : deux séances par semaine à la place des deux plus courts footings, la première 3 × 10 min avec 5 min à 70 %, la seconde 2 × 15 min ; on ajoute 2 min par répétition (soit 6 min de travail au total) chaque semaine, jusqu'à 3 × 20 min et 2 × 30 min ; la durée tenue au seuil passe de 44 à 63 min. Pour le marathon, ne pas partir plus vite que 95 % de cette vitesse sur la première moitié (revue de 2005).",
+        "Kényans d'élite (Med Sci Sports Exerc 2003) : deux écoles. Basse vitesse : 15 % du volume en tempo au seuil (45 à 70 min) et 6 × 1 mile entre allure 3 000 m et 10 000 m. Haute vitesse (≈ 160 km par semaine pour les hommes, 130 pour les femmes) : deux séances par semaine, 10 à 20 × 400 – 600 m à VMA (ou 7 × 200 m à 120 %) et 10 × 1 000 m ou 5 × 2 000 m à allure 10 km. Marathoniens d'élite (revue de 2005) : deux séances de vitesse par semaine toute l'année (15 × 400 m à allure 3 000 m, 6 × 2 000 m à allure 10 000 m), musculation deux fois par semaine.",
+        "Protocole de quatre semaines (Heubert et al., Can J Appl Physiol 2003, deux séances par semaine) : intensités de 90 à 115 % de VMA, répétitions de 25 % du temps limite au début à 75 % à la fin (au moins 60 % pour progresser sur 3 000 m, d'après Smith 1999), temps total de course égal à 1,5 fois le temps limite, récupération égale à la moitié de la répétition (90 – 100 %) ou à sa durée (115 %), à 50 % de VMA. Huit semaines à deux séances par semaine à 93 % de VMA (≈ allure 10 km, répétitions de 25 à 50 % du temps limite à cette allure) et trois footings de récupération à 60 – 70 % de VMA : le temps tenu à cette vitesse augmente (Demarle et al., J Appl Physiol 2001).",
+        "Temps limite mesurés chez 14 coureurs de fond d'élite (Billat et al., 1995) : 17 min à 90 % de VMA, 5 min 20 à 100 %, 2 min 56 à 105 % ; vitesse critique ≈ 86 % de VMA (chez des étudiants : 14 min à 90 %, 6 min à 100 %, 2 min à 120 %, 1 min à 140 %). Le modèle de l'appli réglé sur un indice d'endurance de −9,6 donne 17 min à 90 % et 3,6 min à 105 %.",
+        "15-15 autour de la vitesse critique (≈ 86 % de VMA ; coureurs de 52 ans habitués aux sorties lentes) : 15 s à 100 % de VMA, 15 s à 70 % (amplitude de 35 %) ou 90 % / 80 % gardent 14 min à VO2max, le double d'une alternance 110 % / 60 % ; lactate plus bas (9 contre 11 mmol/L). Formats de la revue de 2001 : une séance par semaine de 5 répétitions à 50 % du temps limite à VMA avec récupération égale à 50 % de VMA, plus 2 × 20 min au seuil de lactate stable avec 5 min à 60 % de VMA ; ou 60 à 75 % du temps limite, deux fois par semaine : la VMA, la vitesse sur 3 000 m et le temps limite progressent en 4 semaines.",
+        "Marathon d'élite (huit semaines avant les sélections, 180 km par semaine pour les hommes, 155 pour les femmes, soit 90 % du volume de la phase précédente) : 11 % (hommes) et 7 % (femmes) de la distance au-dessus de l'allure 10 km, une séance courte par semaine à allure 3 000 m (20 × 400 m avec 100 m de récupération en 45 s, ou 4 – 5 × 1 000 m avec 400 m en 2 min), une à allure 10 000 m (3 – 4 × 2 000 m, 400 m en 2 min), une sortie longue de plus de 1 h 45 tous les 10 jours dont 10 km à allure marathon ; VO2max + 5,4 %.",
+        "Preuve récente (étude de 2025 sur 12 coureurs de demi-fond, citée par runningwritings.com) : 24 × 30 s à 100 % de la vitesse à VO2max donnent moins de temps au-dessus de 90 % de VO2max (≈ 201 s) que 4 × 3 min à 95 % (≈ 328 s) : les fractions longues sont plus efficaces que le 30-30 pour ce critère.",
         "Preuves : petits échantillons (8 à 11 coureurs) ; l'avantage des fractions de la moitié du temps limite sur le 30-30 n'est qu'une tendance."],
-      maxQ: 2, score: { '5k': 3, '10k': 3, semi: 1.5, marathon: 1 },
+      maxQ: 2, rotation: true, score: { '5k': 3, '10k': 3, semi: 1.5, marathon: 1.5 },
       difficulte: [4, 'les fractions longues à VMA (≈ 3 min, phase « VMA longue ») sont très éprouvantes ; le 30-30 et le seuil, eux, restent accessibles'],
-      phases: [{ nom: 'VMA courte', f: 0.4, q: ['TRENTE', 'SEUIL'], sl: 'SL' }, { nom: 'VMA longue', f: 0.8, q: ['VMA_TLIM', 'SEUIL'], sl: 'SL' },
-        { nom: 'Spécifique', f: 1, q: ['SPE', 'TRENTE'], sl: 'SL' }] }
+      phases: [{ nom: 'VMA courte', f: 0.4, q: ['TRENTE', 'BIL_SEUIL', 'BIL_1515', 'BIL_SEUIL', 'BIL_105', 'BIL_SEUIL'], sl: 'SL' }, // rotation : chaque semaine une séance à VMA (3 types qui alternent) et une au seuil { nom: 'VMA longue', f: 0.8, q: ['VMA_TLIM', 'BIL_SEUIL'], sl: 'SL' },
+        { nom: 'Spécifique', f: 1, q: ['SPE', 'BIL_88'], sl: 'SL' }] }
   ];
   const SEUIL_NO = { SEUIL_NO_LONG: 'SEUIL_NO_COURT', SEUIL_NO_COURT: 'SEUIL_NO_LONG' }; // séance du soir d'un double seuil
   const SEUIL_PART = 0.2; // méthode norvégienne : travail au seuil de la semaine ≤ 20 % du volume (hypothèse)
   // Note de difficulté des méthodes (1 adaptée aux débutants … 5 coureurs avancés) : appréciation, pas une donnée publiée
-  const NIVEAUX_METHODE = ['Débutant', 'Accessible', 'Intermédiaire', 'Confirmé', 'Avancé'];
+  // Difficulté athlétique affichée sur 3 niveaux (débutant, intermédiaire, avancé), d'après la note de 1 à 5 de chaque méthode : 1 – 2, 3, 4 – 5
+  const NIVEAUX_METHODE = ['Débutant', 'Intermédiaire', 'Avancé'];
+  const niveau3 = (n) => (n <= 2 ? 1 : n === 3 ? 2 : 3);
+  // trois ronds de même taille, remplis jusqu'au niveau, colorés selon le niveau (vert, ambre, orangé)
+  const ronds = (n) => { const k = niveau3(n); return `<span class="ronds n${k}" role="img" aria-label="Difficulté : ${NIVEAUX_METHODE[k - 1]}">${'<i class="on"></i>'.repeat(k)}${'<i></i>'.repeat(3 - k)}</span>`; };
   DOCTRINES.push({ id: 'norvegien', nom: 'norvégienne', titre: 'Méthode norvégienne : double seuil',
-    source: "Bakken M., « The Norwegian model » (site personnel) et entretien LetsRun (2026) ; « The Norwegian model of lactate threshold training » (Athletics Coach) ; variante « singles » de sirpoc, résumé LetsRun archivé (sub-threshold) ; Tjelta L. I., Int J Sports Sci Coach 2019 ; Casado A. et al., Int J Environ Res Public Health 2023.",
+    source: "Casado A., Foster C., Bakken M., Tjelta L. I., Does Lactate-Guided Threshold Interval Training within a High-Volume Low-Intensity Approach Represent the « Next Step » in the Evolution of Distance Running Training?, Int J Environ Res Public Health 2023 (lu : description par Bakken, séance type, semaine type) ; « The Norwegian model of lactate threshold training » (Athletics Coach) ; variante « singles » de sirpoc, résumé LetsRun archivé (sub-threshold) ; Tjelta L. I., Int J Sports Sci Coach 2019 (non lu).",
     resume: "Beaucoup de volume facile et deux journées « double seuil » par semaine : fractions longues le matin, fractions courtes le soir, à une intensité contrôlée juste sous le seuil (idéalement au lactatomètre), plus une séance de côtes courtes et une sortie longue. Sans doublé : variante « singles » (trois séances sous le seuil par semaine).",
     principes: ['Deux jours par semaine à deux séances au seuil : matin, fractions longues (ex. 3 × 2 km, 4 × 10 min) ; soir, fractions courtes (ex. 8 × 1 min un peu au-dessus du seuil, 10 × 400 m juste en dessous) ; récupérations brèves.',
       "Intensité contrôlée, sous le seuil : lactate ≈ 2 à 3 mmol/L (élites) ; sans lactatomètre, effort perçu 6 – 7 sur 10, finir en pouvant en faire plus. Un peu trop vite et le travail au seuil possible tombe de moitié.",
       'Une séance courte et rapide (côtes courtes de 30 à 45 s) en fin de semaine, le reste en footing vraiment facile.',
+      "Entretien de Bakken (traduit, runningwritings.com, 2024) : au plus deux jours doubles par semaine ; le matin des fractions longues de 6 à 10 min, plus lentes, à lactate et fréquence cardiaque plus bas ; l'après-midi des fractions courtes (1 min, 45 s / 15 s, 200 m) à lactate plus haut, environ quatre heures plus tard ; 15 à 20 km de travail au seuil les jours doubles (40 km, trop usant), 70 à 80 km de seuil par semaine au pic ; sorties longues d'environ 45 min à 1 h au plus ; musculation légère et explosive toute l'année ; avant une course, séance au seuil 6 – 7 jours avant, 1 000 m à allure un peu plus rapide que le 5 km 4 jours avant, seuil 2 jours avant. Conseil aux amateurs : viser le seuil où les jambes ne fléchissent pas ; c'est le volume, pas l'intensité, qui fatigue.",
+      "Modèle décrit par Bakken (observé chez des coureurs de 1 500 à 5 000 m, jamais testé en essai contrôlé, applicabilité au marathon incertaine) : 3 à 4 séances au seuil (lactate de 2 à 4,5 mmol/L, Bakken visait 2,3 – 3,0) et une séance à VO2max par semaine ; 150 à 180 km par semaine, sortie longue de 21 km au plus. Séances : 2 000 à 3 000 m à allure proche du semi, ou 400 à 1 000 m entre allure 5 km et 10 km, 8 à 12 km de travail au total, récupération de 20 s à 1 min 30 ; deux séances au seuil le même jour. En période de compétition : deux séances au seuil de moins, la séance de côtes remplacée par des répétitions à l'allure de course.",
       "Sans doublé, trois séances sous le seuil par semaine (fractions longues, courtes, longues) : voir aussi la méthode Norwegian Singles (sirpoc), qui en détaille le format, les niveaux et l'absence de décharge."],
     maxQ: 3, doubleSeuil: true,
     score: { '5k': 2.5, '10k': 3, semi: 2.5, marathon: 2 },
@@ -472,12 +584,16 @@
       { nom: 'Spécifique', f: 1, q: ['SEUIL_NO_LONG', 'SEUIL_NO_COURT', 'SPE'], sl: 'SL' }] });
   // Autres méthodes. q d'une phase peut dépendre du contexte (fonction de c)
   DOCTRINES.push({ id: 'cottereau', nom: 'Cottereau', titre: 'Serge Cottereau : courir lentement pour progresser',
-    source: "Cottereau S., « Principes de base de l'entraînement » (texte reproduit sur le forum courseapied.net) ; « Courir lentement pour progresser, la méthode Serge Cottereau », Esprit Trail.",
+    source: "Cottereau S., « Principes de base de l'entraînement » (texte reproduit sur le forum courseapied.net) ; Cottereau S., Jogging International : « Montez en puissance ! », « Marcher en courant… » et « 100 km, vous pouvez le faire » (2016 : séances intenses par distance, marche, plans, affûtage), propos sur la course lente dans « 6 façons d'augmenter son endurance » ; « Courir lentement pour progresser, la méthode Serge Cottereau », Esprit Trail.",
     resume: "S'entraîner régulièrement, souvent, longtemps et surtout très peu intensément : au moins les trois quarts du temps en endurance, au plus un cinquième en résistance douce (≈ allure marathon) et une seule séance de résistance dure (≈ allure 10 km) par semaine. Intensités réglées au cardiofréquencemètre, jamais jusqu'à l'épuisement.",
     principes: ['Endurance (60 – 80 % FCM, surtout 65 – 75 %) : au moins les trois quarts du temps de la semaine.',
       'Résistance douce (80 – 90 % FCM) : au plus un cinquième du temps, jamais deux jours de suite ; pour le marathon, 2 à 3 × 15 min, récupération de 5 à 7 min très lente.',
       "Résistance dure (jusqu'à ≈ 95 % FCM) : une séance par semaine, répétitions de 3 à 4 min, récupération de même durée ; pas de VMA courte pour les coureurs de fond.",
       'Séances de 45 à 75 min ; pour le marathon, une séance par semaine prolongée vers 2 h.',
+      "Séance intense (Jogging International, 2016) : la fréquence cardiaque dépasse 80 % de la FCM pendant une partie de la séance. Marathon : 80 – 90 % de la FCM, 2 à 4 × 15 min, 5 à 7 min de récupération à 60 – 75 % ; séance de 1 h 45 à 2 h 15, la plus dure de la semaine. Semi : 80 – 95 %. 10 km : 80 – 97 %, efforts de 3 à 5 min répétés 2, 3 fois ou plus, 2 à 5 min de récupération. 1 500 m : près de 100 %, 3 à 4 × 1 min à 1 min 15, 3 à 4 min de récupération. Une séance intense par semaine pour la plupart des coureurs, plus souvent (tous les 6, 5 ou 4 jours) selon le niveau et la période ; 2 à 3 jours de footing très facile ensuite.",
+      "Course lente : la plupart des sorties à environ 80 % de la vitesse que l'on tiendrait sur la même distance (15 km faisables à 5 min/km : 6 min 15 /km). Environ 90 % de l'entraînement à 60 – 75 % de la FCM, au plus 10 % en résistance douce par blocs de 10 à 20 min.",
+      "Marche : commencer chaque séance en marchant (200 à 300 m), puis courir ; en sortie longue, environ 2 min de marche toutes les 15 à 20 min ; sur terrain vallonné, marcher les montées. Marathon : arrêt complet d'environ 45 s à chaque ravitaillement (7 – 8 arrêts, environ 5 min au total pour un coureur en 3 h ; 1 min à 1 min 30 pour 3 h 30 ou plus), qui fait gagner du temps ; sans intérêt sous environ 2 h 30.",
+      "Affûtage : la dernière longue séance 6 ou 7 jours avant la course, puis 2 ou 3 séances de 25 à 35 min à 55 – 70 % de la FCM.",
       "Progression par paliers de durée puis d'intensité ; à la fin d'une séance, pouvoir en refaire autant. Allures du plan : équivalents approximatifs des zones de fréquence cardiaque."],
     maxQ: 2, footingMax: 75, slSi: c => c.goal === 'marathon',
     slNote: avec => (avec ? 'Sortie longue : une séance par semaine prolongée vers 2 h, comme le conseille Cottereau pour le marathon.'
@@ -486,22 +602,24 @@
     difficulte: [1, "surtout de l'endurance très facile, une seule séance dure par semaine, jamais jusqu'à l'épuisement"],
     phases: [{ nom: 'Progression par paliers', f: 1, q: c => (c.dist > 20000 ? ['COT_DOUCE', 'COT_DURE'] : ['COT_DURE', 'COT_DOUCE']), sl: 'SL' }] },
   { id: 'heubi', nom: 'Heubi', titre: 'Bruno Heubi : puissance, endurance, efficience',
-    source: 'Heubi B., brunoheubi.com : « La préparation générale », « La préparation spécifique », « La séance de VMA dans mes règles de l\'art », « Performance = puissance + endurance + efficience ».',
+    source: 'Heubi B., Courir longtemps : les clés pour réussir (chap. « Les bases de l\'entraînement » : VMA, EMA, durées selon l\'indice d\'endurance ; « Les clés de la réussite pour préparer son défi » : préparations générale et spécifique) ; brunoheubi.com : « La préparation générale », « La préparation spécifique », « La séance de VMA dans mes règles de l\'art ».',
     resume: "La performance repose sur la puissance (VMA), l'endurance et l'efficience. Une préparation générale (VMA courte et moyenne, endurance active à 80 – 85 % de VMA) précède une préparation spécifique de 8 à 10 semaines : VMA entretenue, endurance active chaque semaine et fractions à l'allure de l'objectif, dans la sortie longue pour le marathon.",
     principes: ['Toutes les allures en % de VMA ; footings à 60 – 65 % de VMA.',
       "Endurance active (EMA) à 80 – 85 % de VMA, selon l'indice d'endurance (ici 85 % pour une bonne endurance, 80 % pour une endurance à développer).",
       'VMA courte : fractions de 30 s à 1 min 15 ; volume effort + récupération de 20 à 26 min ; récupération active à ≈ 50 % de VMA ; partir un peu sous l\'allure cible.',
-      'Préparation générale : au moins 2 cycles de 3 semaines, séparés par une semaine de relâchement ; sortie longue facultative.',
-      'Préparation spécifique : VMA (95 – 105 % pour 10 km et semi, 90 – 100 % pour le marathon) une fois par semaine ou tous les 15 jours, EMA chaque semaine, fractions à l\'allure de l\'objectif ; marathon : fractions à allure marathon dans la sortie longue.'],
+      "Endurance active (EMA) : le livre la situe de 80 à 90 % de VMA, avec une durée de séance donnée par l'indice d'endurance (table tirée de Péronnet : plus l'indice est bas, plus la séance est courte, ex. IE −8 : 45 min à 80 % ou 3 × 9 min à 85 %) ; une ou deux séances par semaine ; VMA : fractions de 30 s à 1 min 15 à 100 – 105 % (récupération égale), 1 min 15 à 4 min à 90 – 95 % (récupération moitié), 15 à 25 min d'effort au total, échauffement de 20 min.",
+      'Préparation générale : au moins 12 semaines, en cycles de 3 semaines séparés par une semaine de relâchement, accent sur la VMA (une séance tous les 4 à 6 jours pour progresser, tous les 10 à 14 jours pour entretenir) ; sortie longue facultative (1 h à 1 h 15 pour le 10 km, ≈ 1 h 30 pour le semi, 1 h 30 à 1 h 45 pour le marathon).',
+      'Préparation spécifique (au moins 2 cycles séparés par une semaine allégée, soit 9 à 11 semaines) : VMA (95 – 105 % pour 10 km et semi, 90 – 100 % pour le marathon) une fois par semaine ou tous les 15 jours, EMA chaque semaine, fractions à l\'allure de l\'objectif ; marathon : fractions à allure marathon dans la sortie longue.'],
     maxQ: 3, score: { '5k': 2, '10k': 3, semi: 3, marathon: 3 },
     difficulte: [3, "séances de VMA et d'endurance active soutenues, mais dosées en volume et adaptées à l'indice d'endurance"],
     phases: [{ nom: 'Préparation générale', f: 0.4, q: ['HEU_VMA_COURTE', 'HEU_EMA', 'HEU_VMA_MOY'], sl: 'SL' },
       { nom: 'Préparation spécifique', f: 1, q: c => (c.goal === 'marathon' ? ['HEU_EMA', 'HEU_VMA_LONGUE', 'SPE'] : ['SPE', 'HEU_EMA', 'HEU_VMA_COURTE']), sl: 'SL_SPE' }] },
   { id: 'mcmillan', nom: 'McMillan', titre: 'Greg McMillan : quatre zones et type de coureur',
-    source: 'McMillan G., mcmillanrunning.com : « McMillan\'s Six Step Training System », « Zones & Workouts », « The 3 Runner Types ».',
+    source: 'McMillan G., YOU (Only Faster), 2e éd. (plans de 12 semaines, chap. 15 à 21 sur les zones et séances, chap. 24 et 38 sur les adaptations et les modules) ; mcmillanrunning.com : « The 3 Runner Types ».',
     resume: "Quatre zones (Endurance, Stamina, Speed, Sprint) et un plan adapté au type de coureur : Speedster (à l'aise sur le court et rapide), Endurance Monster (à l'aise sur le long) ou Combo. Base, puis stamina, speed et travail spécifique, avec 3 semaines en hausse pour 1 en baisse et 2 à 3 semaines d'affûtage.",
     principes: ['Endurance : 60 à 80 % du volume hebdomadaire, footings de 30 à 90 min, sortie longue de 1 h 15 au moins, une de 1 h 30 à 2 h 30 tous les 7 à 14 jours.',
-      'Stamina : steady state 25 à 75 min, tempo 15 à 30 min, tempo en fractions de 8 à 15 min (2 à 5 min de trot), cruise intervals de 3 à 8 min (30 s à 2 min de trot).',
+      'Stamina : steady state 25 à 90 min (on ajoute 10 min à chaque séance jusqu\'à environ 1 h), tempo 15 à 40 min (15 à 25 min pour un Speedster, 30 à 40 pour un Endurance Monster), tempo en fractions de 6 à 15 min (2 à 5 min de trot), cruise intervals de 3 à 8 min (30 s à 2 min de trot).',
+      'Plans de 12 semaines, ajouts de modules de 4 semaines avant (volume, séances de base, côtes, puis stamina avant le 5 et le 10 km, vitesse avant le semi et le marathon), 24 semaines au plus ; la semaine 4 de chaque module est une semaine de récupération.',
       "Speed : fractions de 1 à 5 min à allure 1500 m – 5 km, récupération égale ou plus courte ; Sprint : lignes droites de 15 à 20 s.",
       'Type de coureur (ici déduit de votre indice d\'endurance) : un Speedster a besoin de peu de séances de vitesse (6 à 8 sur 3 à 4 semaines), un Endurance Monster de plus de stamina.',
       '3 semaines en hausse pour 1 en baisse ; aucune phase hors endurance au-delà de 8 semaines.'],
@@ -509,13 +627,16 @@
     noteProfil: c => (c.profil ? `Votre type de coureur selon McMillan, d'après votre indice d'endurance (${c.profil.IE.toFixed(1).replace('.', ',')}) : <strong>${typeMcMillan(c)}</strong>.` : ''),
     difficulte: [2, 'plans pour tous les niveaux, adaptés au type de coureur ; intensités modérées en zone Stamina'],
     phases: [{ nom: 'Base', f: 0.2, q: ['MC_STEADY', 'EF_LD'], sl: 'SL' },
-      { nom: 'Stamina', f: 0.55, q: selonType(['MC_TEMPO', 'MC_CRUISE', 'MC_SPEED']), sl: 'SL' },
-      { nom: 'Speed', f: 0.8, q: selonType(['MC_SPEED', 'MC_TEMPO_INT', 'MC_STEADY']), sl: 'SL' },
+      // préparation avant la phase spécifique (livre, chap. 38) : stamina avant les courses de vitesse (5 et 10 km), vitesse avant le semi et le marathon
+      { nom: c => (c.dist > 20000 ? 'Speed' : 'Stamina'), f: 0.55, q: c => selonType(c.dist > 20000 ? ['MC_SPEED', 'MC_TEMPO_INT', 'MC_STEADY'] : ['MC_TEMPO', 'MC_CRUISE', 'MC_SPEED'])(c), sl: 'SL' },
+      { nom: c => (c.dist > 20000 ? 'Stamina' : 'Speed'), f: 0.8, q: c => selonType(c.dist > 20000 ? ['MC_TEMPO', 'MC_CRUISE', 'MC_SPEED'] : ['MC_SPEED', 'MC_TEMPO_INT', 'MC_STEADY'])(c), sl: 'SL' },
       { nom: 'Spécifique', f: 1, q: selonType(['SPE', 'MC_CRUISE', 'MC_SPEED']), sl: 'SL_SPE' }] },
   { id: 'tinman', nom: 'Tinman', titre: 'Tom « Tinman » Schwartz : vitesse critique',
-    source: 'Schwartz T., séances de vitesse critique (Fast Running, « Critical Velocity Training ») ; présentation du système Tinman (Ward Nicholson, « Running renewal at age 59 », partie 2).',
+    source: 'Schwartz T., « Critical Velocity Training », présentation de Tinman Endurance Coaching (2016, lue : définition, séances types, progressions) ; Fast Running, « Critical Velocity Training » ; Ward Nicholson, « Running renewal at age 59 », partie 2 (organisation de la semaine, source secondaire).',
     resume: "Beaucoup de course facile toute l'année et des séances « modérément dures » plutôt qu'héroïques : la vitesse critique (CV, allure tenue environ 30 min) développe l'endurance des fibres rapides. Tempo, côtes et lignes droites complètent ; la VO2max est travaillée avec parcimonie.",
-    principes: ["Vitesse critique : allure « assez dure » tenue 30 à 40 min (souvent proche de l'allure 10 km) ; deux jours durs par semaine, quatre faciles ; séance type : 5 à 7 × 3 min (ou 1 km) avec 1 min de trot, puis 5 × 30 à 45 s à allure 1 mile ; ici en durée, pour que l'effort soit le même à tous les niveaux.",
+    principes: ["Vitesse critique : allure « assez dure » tenue 30 à 35 min (proche de l'allure 10 km, un peu plus lente que le 5 km) ; deux jours durs par semaine, quatre faciles (organisation d'un coureur master, source secondaire) ; séance type de Schwartz : 6 × 1 km à la vitesse critique avec 200 m de trot, puis 6 × 200 m à allure 1 600 m (maximum 8 × 1 km) ; ici en durée, pour que l'effort soit le même à tous les niveaux.",
+      "Vitesse critique (CS) selon Davis (runningwritings.com, 2024) : CS− ≈ 95 % de la vitesse de 5 km (CS+ ≈ 100 %), entre l'allure 5 km et 10 km chez un coureur entraîné ; temps de tenue à CS de 17 à 45 min selon les études : s'entraîner autour de CS plutôt que pile dessus ; formats 8 × 1 km à CS− (1 min 30 de trot), 10 × 3 min (1 min 30), 4 × 2 km (3 min) ; à ajouter au seuil et à la VO2max, pas à les remplacer.",
+      "Progression d'une semaine à l'autre, au choix : réduire la récupération (90 s, 75 s, 60 s de trot), allonger les répétitions (12 × 400 m, 6 × 800 m, 5 × 1 000 m, soit le même volume) ou accélérer un peu les répétitions. Utilisable toute l'année, à placer dans un footing d'environ une heure ; s'arrêter plus tôt si la fatigue est excessive.",
       'Courir les séances à l\'allure prévue, sans en faire une course ; éviter les séances « de super-héros ».',
       'Volume facile à modéré important toute l\'année ; progression graduelle, sans changement brutal d\'une saison à l\'autre.',
       'VO2max avec parcimonie (moins de volume par séance que la plupart des entraîneurs), d\'autant moins que l\'on court souvent.'],
@@ -523,10 +644,11 @@
     difficulte: [2, 'séances modérément dures, jamais jusqu\'à l\'épuisement ; peu de VO2max'],
     phases: [{ nom: 'Développement', f: 0.75, q: ['TIN_CV', 'TEMPO'], sl: 'SL' }, { nom: 'Affinage', f: 1, q: ['TIN_CV', 'SPE'], sl: 'SL' }] },
   { id: 'magness', nom: 'Magness', titre: 'Steve Magness : l\'entonnoir, construire et entretenir',
-    source: 'Magness S., The Science of Running (2014) ; « My Training History Manifesto » (stevemagness.org) ; « Funnel periodization » (All Things Running).',
+    source: 'Magness S., The Science of Running (2014 : périodisation en entonnoir, d\'après Hudson 2008) ; « My Training History Manifesto » (stevemagness.org).',
     resume: "Du général au spécifique en entonnoir : on travaille d'abord des allures éloignées de l'objectif, des deux côtés (plus lentes et plus rapides), puis elles se rapprochent de l'allure de course, en entretenant ce qui a été construit. Sprints en côte pour la puissance, au plus trois jours durs par semaine.",
     principes: ['Phase générale : footings, sprints en côte (puissance neuromusculaire) et endurance générale.',
       "Entonnoir : à chaque bloc, une allure plus lente et une plus rapide que l'objectif se rapprochent de l'allure de course (ex. 8 km : marathon et 1500 m, puis semi et 3000 m, puis 10 – 12 km et 5 km, puis allure 8 km).",
+      "Volume : il augmente au début, plafonne ensuite et reste à peu près constant jusqu'à l'affûtage, où il ne baisse que légèrement (livre). Côté aérobie, l'entonnoir va du footing à allure marathon vers le seuil, puis les intervalles à allure 10 km et 5 km ; côté vitesse, des sprints de 60 m vers 200 m à allure 800 m, 400 m à allure 1 500 m, 800 m à allure 3 000 m.",
       'Construire puis entretenir : un rappel des allures déjà travaillées toutes les 2 à 3 semaines.',
       'Au plus trois jours durs par semaine, alternance dur / facile ; marathon : travail spécifique sur les 6 à 8 dernières semaines.'],
     maxQ: 3, score: { '5k': 3, '10k': 3, semi: 2.5, marathon: 2 }, lignes: { n: 6, texte: 'accélérations de 15 s à allure de course' },
@@ -536,33 +658,41 @@
       { nom: 'Entonnoir 2', f: 0.6, q: c => [...entonnoir(c, 2), 'MAG_SPRINTS'], sl: 'SL' },
       { nom: 'Entonnoir 3', f: 0.8, q: c => [...entonnoir(c, 3), entonnoir(c, 1)[0]], sl: 'SL' },
       { nom: 'Spécifique', f: 1, q: c => ['SPE', entonnoir(c, 3)[1], entonnoir(c, 3)[0]], sl: 'SL_SPE' }] },
-  { id: 'galloway', nom: 'Galloway', titre: 'Jeff Galloway : course-marche (« Run-Walk-Run »)',
-    source: "Galloway J., jeffgalloway.com : « Train for a Marathon Finish » (ratios course / marche, allure de sortie longue, sorties longues jusqu'à 26 miles) et « Magic Mile » ; principes de vitesse rapportés par Active.com (« 4 Steps to Your Perfect Pace »).",
-    resume: "Des pauses de marche régulières dès le début de chaque sortie, selon un ratio course / marche qui dépend de l'allure : on finit sans être essoufflé, avec moins de fatigue et de risque de blessure. Trois jours de course par semaine, une sortie longue lente qui s'allonge progressivement, un « mile magique » toutes les deux semaines pour recaler les allures.",
-    principes: ['Course-marche à toutes les sorties : par exemple 4 min / 30 s à 5:00 /km, 1 min 30 / 30 s à 6:15 /km, 30 s / 30 s à 8:05 /km (table de Galloway par mile).',
-      'Trois jours de course par semaine (deux sorties courtes et une longue le week-end) ; renforcement ou vélo en option les autres jours, repos la veille de la sortie longue.',
-      'Sortie longue lente : allure du mile magique × 1,3 + 2 min par mile, jamais essoufflé ; pour le marathon, jusqu\'à 26 miles (42 km).',
-      'Mile magique toutes les deux semaines (1 mile un peu plus vite que d\'habitude, sans aller à fond) : allure marathon ≈ temps × 1,3.',
-      "Pour un objectif chronométré, une séance par semaine à l'allure de l'objectif (fractions de quelques minutes, récupération en marchant) ; exercices de cadence et accélérations-glissées.",
+  { id: 'galloway', nom: 'Galloway', titre: 'Jeff Galloway : course-marche et pyramide',
+    source: "Galloway J., Marathon: You Can Do It! (2001 : programmes de 26 semaines, règle des deux minutes, marches selon la longueur de la sortie), Half-Marathon: You Can Do It! (2013 : mile magique, prédiction, objectifs réalistes) et Galloway's Book on Running (éd. révisée, 1984 : la pyramide, vitesse, côtes) ; jeffgalloway.com : « Train for a Marathon Finish » (table des ratios course / marche).",
+    resume: "Deux apports de Galloway réunis : la course-marche (pauses de marche régulières dès le début de chaque sortie, selon un ratio qui dépend de l'allure) et sa pyramide d'entraînement (large base facile, quelques semaines de côtes, puis une période de vitesse courte). Trois jours de course par semaine, une sortie longue lente qui s'allonge progressivement jusqu'à dépasser la distance de course, un « mile magique » pour recaler les allures.",
+    principes: ['Course-marche à toutes les sorties : par exemple 4 min / 30 s à 5:00 /km, 1 min 30 / 30 s à 6:15 /km, 30 s / 30 s à 8:05 /km (table de Galloway par mile). Les coureurs avancés peuvent s\'en passer (livre de 1984), mais le livre de 2013 recommande de la garder.',
+      'Pyramide (1984) : base de la moitié de la préparation, 4 à 6 semaines de côtes, puis la vitesse, 8 semaines au plus (12 à 14 pour le marathon), d\'où les trois phases du plan. Avant la vitesse : un an de course et 2 à 3 mois d\'aérobie.',
+      'Trois jours de course par semaine (deux sorties courtes et une longue le week-end) ; renforcement ou vélo en option les autres jours, repos la veille de la sortie longue ; jamais plus de 10 % de temps de plus d\'une semaine à l\'autre.',
+      "Sorties longues : on part de la plus longue des dernières semaines et on ajoute 1 mile par semaine jusqu'à 10, puis une sortie une semaine sur deux (toutes les trois semaines après 18 miles) jusqu'à dépasser la course d'au moins 20 % (marathon : 28 miles au mieux ; 26 miles au minimum). Ici : une semaine sur deux, jusqu'à 24 km (10 km), 29 km (semi) ou 45 km (marathon).",
+      'Allure de la sortie longue : au moins 2 min/mile plus lente que le marathon possible ce jour-là (3 min après une sortie manquée, 3 min sous l\'allure du semi : même résultat avec le mile magique × 1,3 + 2 min). Marche d\'une minute toutes les 3 à 5 min, toutes les 4 min vers 18 – 20 miles, toutes les 3 min dès 23 miles.',
+      "Mile magique (4 tours de piste, à bloc pour vous, après échauffement et 4 accélérations-glissées) : allure marathon ≈ temps × 1,3, semi ≈ × 1,2. Une fois par semaine le premier mois, puis toutes les quelques semaines ; on garde les 4 derniers résultats, on écarte le plus lent et on moyenne les trois autres. Objectif réaliste : 3 % de mieux (5 % au mieux), atteint un peu plus d'une fois sur deux. Les courses de 5 km servent aussi de prédiction.",
+      "Côtes : 4 à 12 côtes de 150 à 200 yards (10 – 15 % de pente) à l'effort d'un 5 km, descente en marchant. Vitesse : une séance par semaine, deux jours faciles ensuite ; répétitions un peu plus vites que l'allure de course (5 à 7 s par 440 yards) : 440 yards pour le 10 km et moins (jusqu'à 20), un mile pour le semi et le marathon (3 à 13, marche d'au moins 4 min entre elles), au total environ la moitié de la distance de course pour le marathon.",
+      "Semaine : mardi au moins 1 min/mile plus lent que l'allure marathon ; en semaine, 1 à 3 miles à l'allure marathon prédite par les courses de 5 km ; exercices de cadence et accélérations-glissées.",
       "Ralentir de 30 s par mile (≈ 20 s /km) tous les 3 °C au-dessus de 15 °C."],
-    maxQ: 1, joursMax: 3, footingMax: 45, courseMarche: true, test: { id: 'GAL_MM', tous: 2 },
-    slKm: c => (c.goal === 'marathon' ? 42 : null), lignes: { n: 6, texte: 'accélérations-glissées de 15 à 20 s (accélérer puis se laisser glisser, foulée souple)' },
+    maxQ: 1, joursMax: 3, footingMax: 45, courseMarche: true, test: { id: 'GAL_MM', tous: 2 }, slUneSur2: true, partQualite: 0.2,
+    slKm: c => ({ '5k': 16, '10k': 24, semi: 29, marathon: 45 })[c.goal] ?? null, lignes: { n: 6, texte: 'accélérations-glissées de 15 à 20 s (accélérer puis se laisser glisser, foulée souple)' },
     noteProfil: c => (c.profil ? `Allure de sortie longue ≈ ${fA(allureGalloway(c))}, ratio course / marche conseillé : ${ratioGalloway(allureGalloway(c)).map(fD).join(' / ')}.` : ''),
-    score: { '5k': 2, '10k': 2, semi: 2.5, marathon: 3 },
-    difficulte: [1, 'pauses de marche, allures lentes et trois jours de course par semaine : pensée pour finir sans se blesser'],
-    phases: [{ nom: 'Progression', f: 1, q: ['GAL_RYTHME'], sl: 'SL' }] },
+    score: { '5k': 2, '10k': 2.5, semi: 2.5, marathon: 3 },
+    difficulte: [2, "pauses de marche et allures lentes, mais une base longue, puis des côtes et des répétitions à l'allure de course"],
+    // base, 4 semaines de côtes, puis vitesse (8 semaines pour le 10 km et moins, 12 pour le semi et le marathon), réduit proportionnellement si le plan est court
+    phases: [{ nom: 'Base aérobie', f: c => finPhase(c.dist > 20000 ? 16 : 12, c.dist > 20000 ? 16 : 12), q: ['EF_LD'], sl: 'SL' },
+      { nom: 'Jeu de côtes', f: c => finPhase(c.dist > 20000 ? 12 : 8, c.dist > 20000 ? 16 : 12), q: ['COTES'], sl: 'SL' },
+      { nom: "Vitesse à l'allure de l'objectif", f: 1, q: c => (c.dist > 20000 ? ['GAL_MILE'] : ['GAL84_440']), sl: 'SL' }] },
   { id: 'fitzgerald', nom: 'Fitzgerald', titre: 'Matt Fitzgerald : 80/20 Running',
-    source: "Fitzgerald M., 80/20 Running: Run Stronger and Race Faster by Training Slower (Penguin, 2014) ; résumés de lecture (run.wxm.be, « 80/20 Running ») et de la méthode (RunCulture, « The 80/20 running method by Fitzgerald »).",
+    source: "Fitzgerald M., 80/20 Running: Run Stronger and Race Faster by Training Slower (Penguin, 2014 : chap. 6 zones, chap. 7 séances, chap. 8 à 11 plans de 9, 12, 15 et 18 semaines, annexe sur le contrôle de l'intensité).",
     resume: "Environ 80 % du temps d'entraînement en faible intensité (zones 1 – 2) et 20 % en intensité modérée à élevée (zones 3 – 5), compté en temps. Trois jours durs par semaine (deux séances et la sortie longue), séparés par des jours faciles ; une semaine de récupération toutes les trois semaines ; une phase de base puis une phase de développement spécifique.",
     principes: ['Zones en % de la fréquence cardiaque au seuil : 1 faible aérobie (75 – 80 %), 2 aérobie modérée (81 – 89 %), 3 seuil (96 – 100 %), 4 VO2max (102 – 105 %), 5 vitesse (≥ 106 %) ; les écarts entre zones (90 – 95 %, 101 %) sont volontairement évités.',
       'Faible intensité : footings de récupération (zone 1), footings de base (zone 2), sortie longue ; échauffements, retours au calme et récupérations comptent comme du facile.',
       'Séances : tempo (20 à 30 min en zone 3), cruise intervals (par exemple 4 × 6 min, 2 min de trot), intervalles longs (3 à 5 min en zone 4), intervalles courts (60 à 90 s en zone 5), speed play, côtes, sortie longue avec fin rapide.',
       "5 km : plus d'intensité élevée ; marathon : plus d'intensité modérée (zone 3). Une semaine de récupération toutes les trois semaines.",
+      "Plans du livre : 9 semaines pour le 5 km (3 de base, 5 de pointe, 1 d'affûtage), 12 pour le 10 km (6, 4, 2), 15 pour le semi (6, 7 ou 8, 1 ou 2), 18 pour le marathon (9, 7, 2). La base est plus proche de 90/10 (on monte le volume), la pointe respecte le 80/20.",
       'Ici, la qualité de la semaine (récupérations comprises) est plafonnée à 25 % du temps ; zone 3 = allure 1 h, zone 4 = allure 3000 – 5000 m, zone 5 = allure 1500 m.'],
     maxQ: 2, partQualite: 0.25, lignes: { n: 6, texte: 'lignes droites de 20 s (trop courtes pour compter dans les 20 %)' },
     score: { '5k': 2.5, '10k': 3, semi: 3, marathon: 3 },
     difficulte: [2, "surtout du facile, deux séances dures par semaine dosées à 20 % du temps"],
-    phases: [{ nom: 'Base', f: 0.5, q: ['FITZ_FARTLEK', 'COTES', 'FITZ_TEMPO'], sl: 'SL_FIN' },
+    // base : 3 semaines sur 9 (5 km), 6 sur 12 (10 km), 6 sur 15 (semi), 9 sur 18 (marathon), proche de 90/10 ; développement ensuite à 80/20
+    phases: [{ nom: 'Base', f: c => ({ '5k': 0.33, '10k': 0.5, semi: 0.4, marathon: 0.5 })[c.goal] ?? 0.5, partQualite: 0.15, q: ['FITZ_FARTLEK', 'COTES', 'FITZ_TEMPO'], sl: 'SL_FIN' },
       { nom: 'Développement', f: 1, q: c => ({ '5k': ['FITZ_LONG_INT', 'FITZ_SHORT_INT'], '10k': ['FITZ_CRUISE', 'FITZ_LONG_INT'], semi: ['FITZ_TEMPO', 'FITZ_CRUISE'], marathon: ['FITZ_CRUISE', 'FITZ_TEMPO'] })[c.goal], sl: c => (c.dist > 20000 ? 'SL_SPE' : 'SL_FIN') }] },
   { id: 'kellogg', nom: 'Kellogg', titre: 'John Kellogg : volume aérobie et « high steady state »',
     source: "Kellogg J., « The Training Wisdom of John Kellogg » (son texte, forum LetsRun), « 4 Principles to Correct Training » (LetsRun, 2000) ; fils LetsRun sur ses séances au seuil ; synthèse « Distance Running Training – John Kellogg ».",
@@ -582,14 +712,16 @@
   // Rousset : la vitesse (résistance vitesse, qualitative) est pour ceux qui en manquent (indice d'endurance proche de 0), pas pour une endurance à développer
   const rouVitesse = (c) => (biais(c) >= 1 / 3 ? ['ROU_RVITESSE', 'ROU_RQUALI'] : biais(c) > -1 / 3 ? ['ROU_RQUALI'] : ['ROU_DIAG']);
   DOCTRINES.push({ id: 'singles', nom: 'Norwegian Singles', titre: 'Norwegian Singles (sirpoc) : trois séances sous le seuil',
-    source: "Copeland J. (« sirpoc »), Norwegian Singles Method: Subthreshold Running Kept Simple (2025), d'après les travaux de Bakken M. et l'entraînement de K. Ingebrigtsen ; fil « Norwegian singles » du forum courseapied.net (septembre 2025 – 2026 : résumé de la méthode, table de niveaux 1 à 8, avis de Bakken) ; résumé LetsRun archivé (sub-threshold).",
+    source: "Copeland J. (« sirpoc »), Norwegian Singles Method: Subthreshold Running Kept Simple (2025, lu : chap. 2 à 4, détermination des allures, semaines types de 4 h à 9 h, affûtage, marathon) d'après les travaux de Bakken M. et l'entraînement de K. Ingebrigtsen ; fil « Norwegian singles » du forum courseapied.net (septembre 2025 – 2026 : table de niveaux 1 à 8, avis de Bakken).",
     resume: "Variante « single » du modèle norvégien pour des amateurs de 5 à 9 h par semaine : trois séances sous le seuil lactique chaque semaine (courte, moyenne, longue), le reste en endurance très facile, une sortie longue. On maximise la charge répétable sans fatigue excessive et on la maintient : pas de semaine de décharge, pas d'affûtage, pas de VO2max ni d'allure spécifique.",
-    principes: ["Trois séances sous le seuil (juste sous le second seuil lactique, haut de la zone 3 / bas de la zone 4) : court 8 – 12 × 3 – 4 min à allure 15 km, moyen 4 – 6 × 6 – 8 min à allure semi, long 3 × 10 – 12 min à allure 30 km, récupération de 1 min ; une séance de chaque type par semaine (rotation si moins de trois séances).",
-      "Intensité contrôlée : finir la dernière répétition juste sous la fréquence cardiaque au seuil lactique (effort 6 – 7 sur 10) ; en cas de doute, ralentir. Footings à moins de 70 % de la fréquence cardiaque maximale.",
+    principes: ["Trois séances sous le seuil (juste sous le second seuil lactique, haut de la zone 3 / bas de la zone 4) : court 7 – 10 × 3 min à allure 12 – 15 km (récupération 1 min), moyen 4 – 6 × 5 – 6 min à allure 20 km (1 min à 1 min 30), long 2 – 4 × 10 – 12 min à allure 25 – 30 km (1 min 30 à 2 min) ; une séance de chaque type par semaine (rotation si moins de trois séances). Semaine type du livre : long le mardi, moyen le jeudi, court le samedi, sortie longue facile le dimanche, footings faciles les autres jours.",
+      "Intensité contrôlée : finir la dernière répétition juste sous la fréquence cardiaque au seuil lactique (effort 6 – 7 sur 10), 10 à 15 battements sous elle à la première répétition ; en cas de doute, ralentir. Footings à moins de 70 % de la fréquence cardiaque maximale. Commencer au bas de la fourchette d'allure ; première répétition 1 à 2 % plus lente ; après une mauvaise nuit, une maladie ou du stress, passer à la fourchette d'allure de la durée de répétition inférieure. Échauffement de 10 min en footing, sans lignes droites, retour au calme de 7 à 10 min ; récupération à l'arrêt, en marchant ou en trottant, au choix. À partir de votre dernier 5 km (table du livre : 5 km en 18:00 → 3:50 /km pour 3 min, 3:56 pour 6 min, 4:03 pour 10 min), plus prudent que les allures de course.",
       "Progression par niveaux (table du forum) : temps sous le seuil par séance de 18 min (niveau 1) à 40 min (niveau 8), semaine de 4 h 40 à 8 h, avec 20 min d'échauffement et 5 min de retour au calme par séance ; la difficulté choisie règle le niveau de départ.",
       "Part sous le seuil : 19 % du temps au niveau 1, 23 % au niveau 2, 25 % au-delà (ici, qualité plafonnée à 25 % du temps de la semaine) ; monter le volume facile en même temps que la qualité, sans augmenter vite.",
-      "Pas de semaine de décharge ni d'affûtage (même charge répétable sur des mois), peu ou pas d'allure spécifique ; test sur une course ou un 5 km en solo toutes les 4 à 8 semaines pour recaler les allures.",
-      "Pas adaptée si vous avez plus de 10 h par semaine, visez une course précise avec un pic de forme ou avez besoin de variété. Au moins 4 h 30 par semaine ; 6 sorties recommandées (3 sous le seuil, 2 à 3 footings, une sortie longue). Marathon : adaptations nécessaires."],
+      "Pas de semaine de décharge (même charge répétable sur des mois), peu ou pas d'allure spécifique ; test sur une course ou un 5 km en solo toutes les 4 à 8 semaines pour recaler les allures. Progression : une minute de travail sous le seuil en plus pour quatre minutes de footing en plus (≈ 75 / 25 %, 78 / 22 % vers 7 h), au moins un mois à chaque niveau puis 2 – 3 semaines intermédiaires (une répétition de plus, 12 min de footing de plus), jamais en accélérant. Au-delà de 8 h par semaine, passer à des footings en deux séances.",
+      "Origine : Kristoffer Ingebrigtsen (≈ 90 à 100 km par semaine, 2021) : mardi 8 × 1 000 m avec 500 m de trot, jeudi 4 – 5 × 2 000 m au seuil avec 1 min de repos, samedi 3 × 3 000 m ou 3 × 10 min, footings de 12 km les autres jours, sortie longue de 12 à 18 km. Son conseil aux amateurs : trotter jusqu'à tenir 8 – 10 km avant d'ajouter des fractions, puis plus de répétitions plutôt que plus vite (source : runningwritings.com, 2025).",
+      "Courses : un 5 km compte comme une séance de la semaine, sans affûtage ; pour un 10 km ou un semi, un affûtage court (séance normale le mardi, 6 – 8 × 3 min près de l'allure semi ou marathon le jeudi, footings plus courts de 30 à 40 % la veille et l'avant-veille) et un retour progressif après la course (les affûtages longs coûtent de la forme à ceux qui s'entraînent peu).",
+      "Pas adaptée si vous avez plus de 10 h par semaine, visez une course précise avec un pic de forme ou avez besoin de variété. De 4 h à 8 h par semaine (4 – 4,5 h : porte d'entrée, un jour de repos, 2 × 10 min à 95 % de l'allure marathon) ; 6 sorties recommandées (3 sous le seuil, 2 à 3 footings, une sortie longue). Marathon : l'auteur déconseille d'en faire un plan à part entière (au moins deux ans de pratique, trois mini-blocs puis affûtage) : adaptations nécessaires."],
     maxQ: 3, partQualite: 0.25, footingMax: 60, sansAffutage: true, constant: true, rotation: true,
     lignes: { n: 6, texte: 'lignes droites de 20 s (facultatives, en complément, sans gêner la récupération)' },
     score: { '5k': 3, '10k': 3, semi: 2.5, marathon: 1.5 },
@@ -615,7 +747,6 @@
   const AFFUTAGE_PHASE = { nom: 'Affûtage', q: ['SPE', 'SEUIL'], sl: 'SL' };
 
   const biais = (c) => (c.profil ? borne((c.profil.IE + 7) / 3, -1, 1) : 0); // même convention que Balance
-  const nomCycle = () => (state.cycle === 'cycle' ? `cycle ${state.charge} + ${state.decharge}` : 'charge constante');
 
   // Fiche de chaque méthode (hypothèses de conception) : public visé, durée habituelle du plan, mise en œuvre (simple, moyenne,
   // complexe) et prérequis dont l'absence déclenche une alerte, sans effet sur le plan : volume (h / semaine) et jours de course ;
@@ -623,24 +754,25 @@
   // de vitesse : la capacité du moment ne dit rien de l'expérience, et les séances se règlent sur la VMA de chacun.
   // limitee : sources limitées (ni livre ni texte de l'auteur sur les phases et les séances : résumés, forums), marquée d'un astérisque.
   const FICHES = {
-    galloway: { public: 'Débutants et reprise : finir un 10 km, un semi ou un marathon', plan: '16 à 30 semaines', mise: 'simple', h: 2, j: 3, ancienne: true },
-    cottereau: { public: "Coureurs d'endurance, du loisir à l'ultra", plan: '12 à 16 semaines', mise: 'simple', h: 2, j: 3, ancienne: true },
-    seiler: { public: 'Coureurs réguliers qui séparent nettement le facile et le dur (80/20)', plan: '8 à 12 semaines', mise: 'simple', h: 3, j: 4, limitee: true },
-    fitzgerald: { public: 'Amateurs réguliers visant un chrono, du 5 km au marathon', plan: '12 à 18 semaines', mise: 'simple', h: 3, j: 4, limitee: true },
+    zones: { public: 'Optimiser une allure spécifique selon des critères paramétrables, après des cycles de préparation générale', plan: '4 à 24 semaines', mise: 'moyenne', h: 0, j: 0 },
+    galloway: { public: 'Débutants et reprise, ou coureurs patients : finir un 10 km, un semi ou un marathon, ou progresser doucement', plan: '16 à 32 semaines', mise: 'simple', h: 2, j: 3 },
+    cottereau: { public: "Coureurs d'endurance, du loisir à l'ultra", plan: '12 à 16 semaines', mise: 'simple', h: 2, j: 3 },
+    seiler: { public: 'Coureurs réguliers qui séparent nettement le facile et le dur (80/20)', plan: '8 à 12 semaines', mise: 'simple', h: 3, j: 4 },
+    fitzgerald: { public: 'Amateurs réguliers visant un chrono, du 5 km au marathon', plan: '9 à 18 semaines', mise: 'simple', h: 3, j: 4 },
     tinman: { public: 'Coureurs de 5 à 10 km qui veulent peu de jours durs', plan: '8 à 12 semaines', mise: 'simple', h: 4, j: 5, limitee: true },
-    lydiard: { public: 'Coureurs qui bâtissent une base aérobie sur la durée (semi, marathon)', plan: '16 à 30 semaines', mise: 'simple', h: 5, j: 5, limitee: true, ancienne: true },
-    heubi: { public: "Coureurs sur route, du 10 km à l'ultra, qui connaissent leur VMA", plan: '12 à 16 semaines', mise: 'moyenne', h: 3, j: 3, ancienne: true },
-    rousset: { public: 'Coureurs réguliers (4 à 7 sorties par semaine), du 5 km au marathon, qui réglent leur effort à la sensation', plan: '16 à 18 semaines', mise: 'moyenne', h: 4, j: 4, ancienne: true },
-    singles: { public: 'Amateurs de 5 à 9 h par semaine, du 5 km au semi, sans objectif de pic de forme', plan: '12 semaines ou plus, en continu', mise: 'moyenne', h: 4.5, j: 5, limitee: true },
+    lydiard: { public: 'Coureurs qui bâtissent une base aérobie sur la durée (semi, marathon)', plan: '16 à 30 semaines', mise: 'simple', h: 5, j: 5 },
+    heubi: { public: "Coureurs sur route, du 10 km à l'ultra, qui connaissent leur VMA", plan: '12 à 16 semaines', mise: 'moyenne', h: 3, j: 3 },
+    rousset: { public: 'Coureurs réguliers (4 à 7 sorties par semaine), du 5 km au marathon, qui réglent leur effort à la sensation', plan: '16 à 18 semaines', mise: 'moyenne', h: 4, j: 4 },
+    singles: { public: 'Amateurs de 4 à 8 h par semaine, du 5 km au semi, sans objectif de pic de forme', plan: '12 semaines ou plus, en continu', mise: 'moyenne', h: 4, j: 5 },
     billat: { public: 'Coureurs de 5 et 10 km qui développent la VO2max', plan: '6 à 10 semaines', mise: 'moyenne', h: 3, j: 3, ie: true, limitee: true },
     mcmillan: { public: 'Coureurs de tous niveaux, du 5 km au marathon', plan: '10 à 16 semaines', mise: 'moyenne', h: 3, j: 4 },
-    daniels: { public: 'Coureurs de tous niveaux, du 5 km au marathon', plan: '12 à 24 semaines', mise: 'moyenne', h: 4, j: 4, limitee: true },
-    hanson: { public: 'Marathoniens réguliers, six jours de course par semaine', plan: '18 semaines', mise: 'moyenne', h: 6, j: 6, limitee: true },
+    daniels: { public: 'Coureurs de tous niveaux, du 5 km au marathon', plan: '12 à 24 semaines', mise: 'moyenne', h: 4, j: 4 },
+    hanson: { public: 'Marathoniens réguliers, six jours de course par semaine', plan: '18 semaines', mise: 'moyenne', h: 6, j: 6 },
     kellogg: { public: 'Coureurs expérimentés à fort volume, bâti sur des années', plan: '16 à 24 semaines', mise: 'moyenne', h: 6, j: 6 },
-    pfitzinger: { public: 'Marathoniens expérimentés à gros volume', plan: '12 à 18 semaines', mise: 'complexe', h: 6, j: 5, limitee: true },
-    norvegien: { public: "Coureurs entraînés, du 5 km au semi, à l'aise avec le travail au seuil", plan: '12 semaines ou plus', mise: 'complexe', h: 5, j: 5, ie: true, limitee: true },
+    pfitzinger: { public: 'Marathoniens expérimentés à gros volume', plan: '12 à 18 semaines', mise: 'complexe', h: 6, j: 5 },
+    norvegien: { public: "Coureurs entraînés, du 5 km au semi, à l'aise avec le travail au seuil", plan: '12 semaines ou plus', mise: 'complexe', h: 5, j: 5, ie: true },
     magness: { public: 'Coureurs expérimentés qui planifient en phases', plan: '16 à 24 semaines', mise: 'complexe', h: 5, j: 5 },
-    canova: { public: 'Coureurs de haut niveau, semi et marathon', plan: '16 à 24 semaines', mise: 'complexe', h: 7, j: 6, limitee: true }
+    canova: { public: 'Coureurs de haut niveau, semi et marathon', plan: '20 à 26 semaines', mise: 'complexe', h: 7, j: 6 }
   };
   const MISE = { simple: 'Simple', moyenne: 'Moyenne', complexe: 'Complexe' };
   const OBJECTIFS = [['5k', 5000, '5 km'], ['10k', 10000, '10 km'], ['semi', 21097, 'semi'], ['marathon', 42195, 'marathon']];
@@ -667,24 +799,13 @@
     return `${noms} (≈ ${t1 === t2 ? t1 : `${t1} à ${t2}`})`;
   }
 
-  // Tri de la liste des méthodes : clé numérique ou texte (ordre croissant), départage par la difficulté puis l'ordre de la liste
-  const TRIS = {
-    difficulte: ['Difficulté athlétique', d => d.difficulte[0]],
-    mise: ['Mise en œuvre', d => ({ simple: 0, moyenne: 1, complexe: 2 })[FICHES[d.id].mise]],
-    duree: ['Durée du plan', d => FICHES[d.id].plan.match(/\d+/g).map(Number).reduce((a, x, i) => a + x / (i + 1) ** 3, 0)], // 1re valeur, puis 2e
-    epreuves: ['Épreuves visées', d => { const L = objectifs(d); return L[0][1] + L[L.length - 1][1] / 1e6; }], // plus courtes d'abord
-    public: ['Public', d => FICHES[d.id].public]
-  };
-  if (!TRIS[state.tri]) state.tri = 'difficulte';
-  const trier = (liste) => {
-    const cle = TRIS[state.tri][1], sens = state.triDesc ? -1 : 1;
-    return liste.map((d, i) => ({ d, i, k: cle(d) })).sort((a, b) => sens * (typeof a.k === 'string' ? a.k.localeCompare(b.k, 'fr') : a.k - b.k) || a.d.difficulte[0] - b.d.difficulte[0] || a.i - b.i).map(x => x.d);
-  };
+  // Liste déroulante des méthodes : difficulté athlétique croissante (départage par l'ordre de la liste)
+  const parDifficulte = (liste) => liste.map((d, i) => ({ d, i })).sort((a, b) => a.d.difficulte[0] - b.d.difficulte[0] || a.i - b.i).map(x => x.d);
 
   // Rapport volume / fréquence / objectif (hypothèses) : volume minimal (h par semaine) et durée moyenne maximale d'une séance (min)
   // pour chaque objectif ; en dessous de MOY_MIN min par jour de course, les séances sont trop courtes pour être utiles
   const RAPPORT = { '5k': { h: 1.5, moy: 75 }, '10k': { h: 2, moy: 90 }, semi: { h: 3, moy: 105 }, marathon: { h: 4, moy: 120 } };
-  const MOY_MIN = 30;
+  const MOY_MIN = LIMITE_MIN;
   /** Alertes sur le rapport entre volume, nombre de séances et objectif (ex. 3 séances en 2 h pour un marathon) */
   function rapportSemaine(c) {
     const R = RAPPORT[c.goal], n = state.seances + nbDoubles(), jour = c.heures * 60 / state.seances, moy = c.heures * 60 / n, a = [];
@@ -754,8 +875,9 @@
       Z6 en petite quantité devient des lignes droites ; pour une allure cible de semi ou de marathon (Z3, Z4), une partie de sa
       zone passe dans la sortie longue. Chaque zone forme des blocs (coupés au-delà du maximum, scindés s'il reste des séances) ;
       les plus gros ouvrent les séances, les autres s'y ajoutent (zone voisine d'abord), trois blocs au plus par séance. */
-  function semaineZones(c, vol, l, nbQ) {
-    const I = Object.fromEntries(ZI.map((z, i) => [z, vol * c.parts[i + 2]])), zc = c.zoneObj;
+  function semaineZones(c, vol, l, nbQ, k = 1, maxS = nbQ) { // maxS : nombre maximal de séances de qualité (l'effort retiré par la limite de longueur peut en créer)
+    // k : part du temps d'intensité gardée (semaine de décharge : la moitié du travail d'une semaine de charge)
+    const I = Object.fromEntries(ZI.map((z, i) => [z, vol * c.parts[i + 2] * k])), zc = c.zoneObj;
     let lignes = null, sl = 'SL', exces = 0;
     if (I.Z6 > 0 && I.Z6 < FORMATS.Z6.min) {
       const n = Math.round(I.Z6 * 3); // 20 s par ligne droite
@@ -763,7 +885,9 @@
       I.Z6 = 0;
     }
     if (c.dist > 20000 && (zc === 'Z3' || zc === 'Z4') && I[zc] > 0) { // estimation de la partie à l'allure cible de la sortie longue
-      I[zc] = Math.max(0, I[zc] - lerp(0.15, 0.35, l) * Math.min(SL_MAX, SL_PART * vol));
+      // sortie longue estimée : part égale du volume facile (hors intensité) entre les séances faciles, au plus son plafond
+      const facile = vol - Object.values(I).reduce((a, x) => a + x, 0), sortie = facile / (Math.max(0, state.seances - nbQ - 1) + 1);
+      I[zc] = Math.max(0, I[zc] - lerp(0.15, 0.35, l) * Math.min(c.limite ? Math.min(SL_MAX, c.limite.min) : SL_MAX, sortie));
       sl = 'SL_SPE';
     }
     let ch = [];
@@ -784,18 +908,76 @@
       const libres = seances.filter(s => s.length < BLOCS_MAX).sort((a, b) => voisin(b) - voisin(a) || a.length - b.length);
       if (libres.length) libres[0].push(x); else exces += x.min;
     }
-    return { q: seances.map(b => seanceZones(c, b, l)), lignes, sl, exces };
+    // longueur maximale d'une séance : une séance trop longue est raccourcie (blocs réduits ensemble) et l'effort retiré est reporté sur les
+    // autres séances de qualité qui ont de la place, puis sur de nouvelles séances de qualité (jusqu'à maxS) ; coupe : effort qu'on n'a pas pu placer (min)
+    const copie = (b, k) => b.map(x => ({ ...x, min: x.min * k })), sz = (b) => seanceZones(c, copie(b, 1), l);
+    const plusGrand = (ok, max) => { // plus grande valeur dans [0, max] pour laquelle ok(v) est vrai (dichotomie, ok décroissant)
+      if (ok(max)) return max;
+      let lo = 0, hi = max;
+      for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; }
+      return lo;
+    };
+    let coupe = 0, trop = 0; // trop : durée de la plus longue séance qui reste au-dessus de la limite
+    const S = seances.map(b => b.map(x => ({ ...x }))), reportes = [];
+    if (c.limite) {
+      S.forEach(b => {
+        if (!depasse(c, sz(b))) return;
+        const k = Math.max(0.05, plusGrand(k => !depasse(c, seanceZones(c, copie(b, k), l)), 1));
+        b.forEach(x => { reportes.push({ ...x, min: x.min * (1 - k) }); x.min *= k; });
+      });
+      reportes.sort((a, b) => b.min - a.min);
+      for (const x of reportes) {
+        let m = x.min;
+        for (let essai = 0; essai < 12 && m >= minBloc(c, x.z, x.spe); essai++) {
+          // séance existante avec de la place (le bloc de même zone grossit, sinon un bloc s'ajoute) : la plus grande part qui tient
+          let meilleur = null;
+          S.forEach((b, i) => {
+            const meme = b.find(y => y.z === x.z && !!y.spe === !!x.spe);
+            if (!meme && b.length >= BLOCS_MAX) return;
+            const avec = (v) => (meme ? b.map(y => (y === meme ? { ...y, min: y.min + v } : { ...y })) : [...b.map(y => ({ ...y })), { ...x, min: v }]);
+            const v = plusGrand(t => !depasse(c, seanceZones(c, avec(t), l)), m);
+            if (v >= minBloc(c, x.z, x.spe) && (!meilleur || v > meilleur.v)) meilleur = { i, v, meme };
+          });
+          if (meilleur) {
+            const b = S[meilleur.i];
+            if (meilleur.meme) meilleur.meme.min += meilleur.v; else b.push({ ...x, min: meilleur.v });
+            m -= meilleur.v;
+          } else if (S.length < maxS) { // nouvelle séance de qualité
+            const v = Math.max(minBloc(c, x.z, x.spe), plusGrand(t => !depasse(c, seanceZones(c, [{ ...x, min: t }], l)), m));
+            S.push([{ ...x, min: Math.min(v, m) }]);
+            m -= Math.min(v, m);
+          } else break;
+        }
+        if (m >= minBloc(c, x.z, x.spe)) coupe += m; // effort qu'on n'a pas pu replacer
+      }
+    }
+    const q = S.map(b => {
+      const x = sz(b);
+      if (c.limite && depasse(c, x)) trop = Math.max(trop, x.duree);
+      return x;
+    });
+    return { q, lignes, sl, exces, coupe, trop };
   }
 
-  const ZONES_DOC = { id: 'zones', nom: 'selon votre répartition', titre: 'Plan selon votre répartition', bloc: true, recupZ1: true, maxQ: 3,
+  // Spécifique LPN : choisit une allure à optimiser (l'allure cible) et construit le plan sur la répartition du volume par zone (ajustable)
+  const ZONES_DOC = { id: 'zones', nom: 'Spécifique LPN', titre: 'Spécifique LPN', bloc: true, recupZ1: true, maxQ: 3,
+    avertissement: "Cette méthode optimise une allure précise : elle doit être précédée d'autres cycles de préparation générale (endurance de base, côtes, vitesse), qu'elle ne remplace pas.",
+    score: { '5k': 3, '10k': 3, semi: 3, marathon: 3 }, difficulte: [3, "optimise une allure précise : suppose déjà une préparation générale et des séances de qualité maîtrisées ; répartition et difficulté réglables"],
     semaine: semaineZones, phases: [{ nom: 'Travail des zones', f: 1, q: [], sl: 'SL' }],
-    resume: "Chaque semaine reprend la répartition par zone ci-dessus (corrigée du temps en zone des compétitions intermédiaires) : le temps d'intensité de chaque zone (Z3 à Z6) est découpé en blocs, regroupés en séances de qualité (un à trois blocs, zones voisines ensemble) ; la zone de l'allure cible est courue à cette allure. Le reste du volume va aux footings (Z1 pour la récupération, Z2) et à la sortie longue. La difficulté règle la longueur des répétitions et des récupérations, pas le temps d'intensité.",
-    principes: ["Temps d'effort d'une zone = volume de la semaine × part de la zone ; Z6 sous 4 min devient des lignes droites de 20 s.",
-      "Z5 va de l'allure 1 h à la VMA (répétitions à 95 – 100 % de VMA), Z6 est au-delà de la VMA.",
-      "Un bloc (l'effort d'une zone dans une séance) est découpé en répétitions, sans durée maximale ; il est ignoré s'il est plus court qu'un seuil qui dépend de l'allure : 20 s à la VMA, 1 min à l'allure 1 h, 3 min à la limite Z2/Z3 (80 % de l'allure 1 h).",
-      "Une répétition ne dépasse jamais les 2/3 du temps limite à son allure (T = 6 × exp((v / VMA − 1) / k)) ; la difficulté règle sa longueur et les récupérations.",
-      "Allure cible de semi ou de marathon : une partie de la sortie longue se court à cette allure. Pas d'affûtage ni de course, sauf si le plan va jusqu'à une date d'objectif (affûtage, course finale et compétitions intermédiaires).",
-      'Formats et seuils : choix de conception (hypothèses), pas une méthode publiée.'] };
+    resume: "Chaque semaine reprend la répartition par zone ci-dessus : le temps d'intensité de chaque zone (Z3 à Z6) forme des séances de qualité, la zone de l'allure cible étant courue à cette allure. Le reste du volume va aux séances faciles : un footing court le lendemain d'une séance de qualité, une sortie longue adaptée à l'objectif, des footings de durées variées. La difficulté règle la longueur des répétitions et des récupérations, pas le temps d'intensité.",
+    principes: [
+      "Intensité : temps d'effort d'une zone = volume de la semaine × part de la zone, découpé en blocs regroupés en séances de qualité (1 à 3 blocs, zones voisines ensemble) ; Z6 sous 4 min devient des lignes droites de 20 s. Z5 se court à 95 – 100 % de VMA.",
+      "Répétitions : jamais plus des 2/3 du temps limite à leur allure (T = 6 × exp((v / VMA − 1) / k)) ; un bloc trop court pour son allure (20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h) est ignoré.",
+      "Échauffement selon la zone principale : 20 min en Z5 (15 min si une longueur maximale de séance est fixée), 5 min de plus en Z6, 5 de moins en Z4, 10 de moins en Z3 ; retour au calme 10 min.",
+      "Lendemain d'une séance de qualité : footing court (20 min), en Z1 tant que la part de Z1 visée le permet.",
+      "Sortie longue : c'est la séance la plus longue de la semaine, quelle qu'elle soit (une séance de qualité peut en tenir lieu). Semi : au moins 1 h 30, marathon : au moins 2 h, atteints progressivement si le volume le permet, avec une partie à l'allure cible. Plusieurs séances à égalité en tête : pas de sortie longue.",
+      "Autres séances faciles : le reste du volume, en durées qui varient de 5 min d'une séance à l'autre (20 min au moins). Volume saisi en km : la somme des km des séances vaut ce volume.",
+      "Longueur maximale de séance : une séance de qualité trop longue est raccourcie, et l'effort retiré est reporté sur une autre séance de qualité ou sur une nouvelle.",
+      "Doublés : la 2e séance est un footing pris sur le volume facile, jamais le dernier jour de la semaine ; utiles à partir de 5 séances par semaine, ils libèrent des jours de repos.",
+      "Décharge : les séances de qualité restent, avec la moitié du travail d'une semaine de charge. Semaine de l'objectif : charge ramenée à 50 %, même nombre de séances. Affûtage et course finale seulement si le plan va jusqu'à la date de l'objectif.",
+      "Séances du club : intégrées une semaine seulement si elles tiennent dans la répartition (leur Z2 dans le Z1 + Z2 prévu, leur Z5 dans le Z5 prévu) ; sinon, séance du plan à la place et note sous la semaine.",
+      "Compétitions : leur temps en zone est déduit de la répartition de leur semaine ; s'il dépasse, les autres semaines compensent (jusqu'à la moitié de leur temps dans la zone), sinon une alerte le signale.",
+      "À placer après des cycles de préparation générale (endurance de base, côtes, vitesse). Formats et seuils : choix de conception (hypothèses), pas une méthode publiée."] };
 
   /* ---------- Dates et compétitions intermédiaires ---------- */
 
@@ -850,7 +1032,7 @@
   }
   /** Course intermédiaire sous la forme du contexte attendu par course() : chrono, allure et zone selon l'engagement */
   function contexteCourse(c, d, effort) {
-    const p = predCourse(c, d, effort), x = { ...c, dist: d, label: nomCompet({ d, effort }), tObj: d / (10000 / 60) / engagement({ effort }).k };
+    const p = predCourse(c, d, effort), x = { ...c, dist: d, label: nomCompet({ d, effort }), nomObj: nomCourse(d).toLowerCase(), tObj: d / (10000 / 60) / engagement({ effort }).k };
     if (!p) return { ...x, profil: null };
     return { ...x, tObj: p.temps, allureObj: p.allure, zoneObj: (Object.values(c.zones).find(z => p.pct < (z.pMax ?? Infinity)) || c.zones.Z6).id };
   }  /** Applique les compétitions intermédiaires aux semaines : volume, séances de qualité maximales, notes et courses (plusieurs par semaine
@@ -889,14 +1071,20 @@
       dates le permettent) ; les séances de qualité s'écartent des courses. dates : dates des courses de la semaine, dans l'ordre des jours
       de course. Dernière semaine : elle s'arrête à la date de l'objectif, les jours en trop sont retirés (footings d'abord).
       Renvoie { jours, dates, retires } triés par date. */
-  function placerJours(jours, w, dates, souples = []) { // souples[k] : course k courue en footing, sans contrainte sur la qualité ni la veille
+  function placerJours(jours, w, dates, souples = [], clubs = [], voisines = []) { // souples[k] : course k courue en footing, sans contrainte sur la qualité ni la veille
+    // clubs : séances fixes du club { t (date), jour } : elles gardent leur jour ; celle de qualité écarte les séances de qualité des jours voisins
     const oMax = Math.round((w.fin - w.debut) / JOUR), R = dates.map(t => Math.round((t - w.debut) / JOUR)), Rd = R.filter((_, k) => !souples[k]);
     if (oMax < 0 || R.some(r => r < 0 || r > oMax)) return { jours, dates: null, retires: 0 }; // dates incohérentes (plan trop court) : jours non datés
+    const C = clubs.map(x => ({ o: Math.round((x.t - w.debut) / JOUR), jour: x.jour })).filter(x => x.o >= 0 && x.o <= oMax && !R.includes(x.o)), Co = C.map(x => x.o);
+    const Cq = C.filter(x => x.jour[0].qualite).map(x => x.o);
+    // voisines : courses des semaines voisines (hors footing), qui écartent aussi la qualité et la veille (ex. course le dimanche, lundi suivant)
+    const Rq = [...Rd, ...voisines.map(t => Math.round((t - w.debut) / JOUR)).filter(o => (o < 0 && o >= -3) || (o > oMax && o <= oMax + 3))];
     const course = (j) => j.some(x => x.nom === 'Course');
-    const libres = Array.from({ length: oMax + 1 }, (_, o) => o).filter(o => !R.includes(o));
+    const libres = Array.from({ length: oMax + 1 }, (_, o) => o).filter(o => !R.includes(o) && !Co.includes(o));
     let autres = jours.filter(j => !course(j)), retires = 0;
-    if (Rd.length) { // pas de séance de qualité à moins de 3 jours d'une course : on ne garde que celles qui ont un créneau assez éloigné
-      const loin = libres.filter(o => Math.min(...Rd.map(r => Math.abs(o - r))) >= 3).length;
+    if (Rq.length) { // pas de séance de qualité à moins de 3 jours d'une course : on ne garde que celles qui ont un créneau assez éloigné
+      // créneaux possibles : à 3 jours au moins des courses, et jamais deux jours de qualité de suite (comptage glouton, optimal sur une ligne)
+      const loin = libres.filter(o => Math.min(...Rq.map(r => Math.abs(o - r))) >= 3).reduce((a, o) => (a.length && o - a[a.length - 1] < 2 ? a : [...a, o]), []).length;
       const trop = autres.filter(j => j[0].qualite).slice(loin);
       retires += trop.length;
       autres = autres.filter(j => !trop.includes(j));
@@ -908,11 +1096,11 @@
     }
     // jours d'entraînement choisis : combinaison de libres qui rend les écarts réguliers (cycliques sur une semaine entière)
     const coût = (S) => {
-      const tous = [...S, ...R].sort((a, b) => a - b), n = tous.length;
+      const tous = [...S, ...R, ...Co].sort((a, b) => a - b), n = tous.length;
       if (n < 2) return 0;
       const cycle = oMax === 6, ecarts = tous.slice(1).map((o, k) => o - tous[k]).concat(cycle ? [7 - tous[n - 1] + tous[0]] : []);
       const ideal = cycle ? 7 / n : oMax / (n - 1);
-      return ecarts.reduce((a, e) => a + (e - ideal) ** 2, 0) + 4 * S.filter(o => Rd.includes(o + 1)).length + (R.length ? 0 : 2 * (oMax - tous[n - 1]));
+      return ecarts.reduce((a, e) => a + (e - ideal) ** 2, 0) + 4 * S.filter(o => Rq.includes(o + 1)).length + (R.length ? 0 : 2 * (oMax - tous[n - 1]));
     };
     let meilleur = null;
     const choisir = (debut, S) => {
@@ -920,66 +1108,167 @@
       for (let i = debut; i < libres.length; i++) choisir(i + 1, [...S, libres[i]]);
     };
     choisir(0, []);
-    const creneaux = meilleur ? meilleur.S : [], distCourse = (o) => (Rd.length ? Math.min(...Rd.map(r => Math.abs(o - r))) : 9);
+    const creneaux = meilleur ? meilleur.S : [], distCourse = (o) => Math.min(9, ...Rd.map(r => Math.abs(o - r)), ...Rq.slice(Rd.length).map(r => Math.min(3, Math.abs(o - r)))); // courses voisines : au-delà de 3 jours, sans préférence (pas de qualité repoussée en fin de semaine)
     const attribue = new Map(); // décalage → jour
     const qualite = autres.filter(j => j[0].qualite), faciles = autres.filter(j => !j[0].qualite);
-    if (Rd.length && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite
+    if ((Rq.length || Cq.length) && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite (ni à côté du club de qualité)
       const tries = creneaux.slice().sort((a, b) => distCourse(b) - distCourse(a) || a - b), pris = [];
-      for (const o of tries) if (pris.length < qualite.length && !pris.some(p => Math.abs(p - o) === 1)) pris.push(o);
-      for (const o of tries) if (pris.length < qualite.length && !pris.includes(o)) pris.push(o); // à défaut, le plus éloigné restant
+      for (const o of tries) if (pris.length < qualite.length && distCourse(o) >= 3 && !pris.some(p => Math.abs(p - o) === 1) && !Cq.some(q => Math.abs(q - o) === 1)) pris.push(o);
+      for (const o of tries) if (pris.length < qualite.length && !pris.includes(o) && distCourse(o) >= 3) pris.push(o); // à défaut, deux jours de qualité de suite plutôt qu'à moins de 3 jours d'une course
+      for (const o of tries) if (pris.length < qualite.length && !pris.includes(o)) pris.push(o); // en dernier recours, le plus éloigné restant
       pris.sort((a, b) => a - b).forEach((o, k) => attribue.set(o, qualite[k]));
       creneaux.filter(o => !attribue.has(o)).forEach((o, k) => attribue.set(o, faciles[k]));
     } else creneaux.forEach((o, k) => attribue.set(o, autres[k]));
     let courseK = 0;
     R.forEach(o => attribue.set(o, jours.filter(course)[courseK++]));
+    C.forEach(x => attribue.set(x.o, x.jour));
     const ordre = [...attribue.keys()].sort((a, b) => a - b);
     return { jours: ordre.map(o => attribue.get(o)), dates: ordre.map(o => w.debut + o * JOUR), retires };
   }
 
   /* ---------- Calendrier et semaines ---------- */
 
+  /** Cycle automatique (hypothèses) : charge constante sous 6 semaines d'entraînement ; sinon 3 semaines de charge pour 1 de décharge (2 + 1 sous
+      8 semaines), ajusté aux compétitions intermédiaires : on retient la longueur de charge (2 à 5 semaines) dont les semaines de décharge
+      tombent le mieux sur la semaine d'une compétition notable (poids : charge légère 1, modérée 2, forte 3) ou sur la suivante (récupération,
+      poids × 0,8) ; à égalité, la plus proche de la valeur par défaut. N : semaines avant l'affûtage. */
+  function cycleAuto(c, N, h) {
+    if (N < 6) return { type: 'constante', charge: 0, decharge: 0, raison: `plan de ${N} semaine${N > 1 ? 's' : ''} : trop court pour alterner charge et décharge` };
+    const poids = {}; // semaine → poids des compétitions (courses en footing exclues : elles ne comptent que pour leur TSS)
+    if (state.horizon === 'date' && h.d0) {
+      const parSemaine = {};
+      state.courses.forEach(({ date, d, effort }) => {
+        const t = parseDate(date);
+        if (!(d > 0) || Number.isNaN(t) || t < h.d0 || t >= h.d1 || effort === 'footing') return;
+        (parSemaine[Math.floor((t - h.d0) / (7 * JOUR))] ||= []).push(tssCourse(c, d, effort));
+      });
+      Object.entries(parSemaine).forEach(([i, l]) => { poids[i] = NIVEAUX_COURSE.indexOf(niveauTss(l.reduce((a, x) => a + x, 0))) + 1; });
+    }
+    const defaut = N < 8 ? 2 : 3, avecCourses = Object.keys(poids).length > 0;
+    let meilleur = null;
+    for (let charge = 2; charge <= 5; charge++) {
+      const B = charge + 1;
+      if (B > N) break;
+      const decharge = (i) => i >= 0 && i % B >= charge;
+      const s = Object.entries(poids).reduce((a, [i, w]) => a + w * ((decharge(+i) ? 1 : 0) + (decharge(+i + 1) ? 0.8 : 0)), 0) - 0.01 * Math.abs(charge - defaut);
+      if (!meilleur || s > meilleur.s + 1e-9) meilleur = { s, charge };
+    }
+    return { type: 'cycle', charge: meilleur.charge, decharge: 1, raison: avecCourses
+      ? `vos semaines de décharge tombent sur ou juste après vos compétitions intermédiaires, sur ${N} semaines`
+      : `cycle classique pour ${N} semaines${N < 8 ? ' (plan court)' : ''}` };
+  }
+  const nomCycle = (cy) => (cy.type === 'cycle' ? `cycle ${cy.charge} + ${cy.decharge}${cy.auto ? ' (automatique)' : ''}` : 'charge constante');
+
   /** Semaines : type, facteur de volume, niveau (1 à 10) et avancement (0 à 1) avant l'affûtage */
   // affutage3 (Pfitzinger) : 3 semaines d'affûtage pour le marathon si la préparation fait au moins 12 semaines
   function calendrier(c, doc) {
     const h = horizon(), W = h.W, nAff = W < 6 || doc.sansAffutage || (doc.bloc && state.horizon !== 'date') ? 0 : doc.affutage3 && c.dist > 30000 && W >= 12 ? 3 : W >= 10 && c.dist > 20000 ? 2 : 1;
-    const N = W - nAff, B = state.charge + state.decharge;
+    const N = W - nAff;
+    // cycle effectif : choix de l'utilisateur, ou calcul automatique ; une méthode à charge constante l'impose
+    const cy = doc.constant ? { type: 'constante', charge: 0, decharge: 0, imposee: true }
+      : state.cycle === 'auto' ? { ...cycleAuto(c, N, h), auto: true }
+        : state.cycle === 'constante' ? { type: 'constante', charge: 0, decharge: 0 } : { type: 'cycle', charge: state.charge, decharge: state.decharge };
+    const B = cy.charge + cy.decharge;
     const d = state.difficulte, sem = [];
     for (let i = 0; i < N; i++) {
       const avance = PROGRESSION * i / Math.max(1, N - 1);
-      if (state.cycle === 'constante' || doc.constant) { sem.push({ type: 'Charge', facteur: 1, niveau: d + avance, frac: i / N }); continue; }
+      if (cy.type === 'constante') { sem.push({ type: 'Charge', facteur: 1, niveau: d + avance, frac: i / N }); continue; }
       const p = i % B, base = d + PROGRESSION * (i - p) / Math.max(1, N - 1); // niveau au début du bloc
-      sem.push(p < state.charge
-        ? { type: 'Charge', facteur: 1 + CHARGE_PAS * (p - (state.charge - 1) / 2), niveau: base + 0.5 * p, frac: i / N }
+      sem.push(p < cy.charge
+        ? { type: 'Charge', facteur: 1 + CHARGE_PAS * (p - (cy.charge - 1) / 2), niveau: base + 0.5 * p, frac: i / N }
         : { type: 'Décharge', facteur: DECHARGE, niveau: base - 1, frac: i / N });
     }
     ({ 3: [0.8, 0.65, 0.5], 2: [0.75, 0.55], 1: [0.6], 0: [] })[nAff].forEach(f => sem.push({ type: 'Affûtage', facteur: f, niveau: d + PROGRESSION - 2, frac: 1 }));
+    // Volume saisi : cible (moyenne des semaines de charge, tel quel), maxi (la semaine la plus chargée vaut le volume) ou mini (la semaine de
+    // charge la plus légère vaut le volume) ; tout le cycle est décalé d'autant, décharge et affûtage compris (ils restent allégés)
+    const charges = sem.filter(w => w.type === 'Charge').map(w => w.facteur);
+    // marge de 5 min (pas d'arrondi des séances) pour que le volume réel respecte bien le maxi ou le mini
+    const marge = c.heures > 0 ? 5 / (c.heures * 60) : 0;
+    const kVol = state.volType === 'max' && sem.length ? (1 - marge) / Math.max(...sem.map(w => w.facteur)) : state.volType === 'min' && charges.length ? (1 + marge) / Math.min(...charges) : 1;
+    sem.forEach(w => { w.facteur *= kVol; });
     const cal = sem.map((w, i) => ({ ...w, niveau: borne(w.niveau, 1, 10), ...(h.d0 ? { debut: h.d0 + i * 7 * JOUR, fin: h.d1 >= h.d0 + i * 7 * JOUR && h.d1 < h.d0 + (i * 7 + 6) * JOUR ? h.d1 : h.d0 + (i * 7 + 6) * JOUR } : {}) }));
-    return { cal, alertes: h.d0 ? appliquerCompetitions(cal, c, h) : [] };
+    return { cal, cycle: cy, alertes: h.d0 ? appliquerCompetitions(cal, c, h) : [] };
   }
 
+  const volRef = () => ({ max: 'le volume maxi', min: 'le volume mini' }[state.volType] || 'le volume de référence');
   const nbDoubles = () => Math.min(state.doubles, state.seances, 6); // chaque jour de course peut être doublé, 6 au plus
   // Accélérations après un footing, une fois par semaine (lignes : { n, texte } de la méthode), +1 min par répétition
-  const avecLignes = (f, L) => ({ ...f, nom: `${f.nom} et accélérations`, duree: arr5(f.duree + L.n), parts: ajoute(f.parts, { Z2: L.n * 2 / 3, Z6: L.n / 3 }),
+  const avecLignes = (f, L) => ({ ...f, nom: `${f.nom} et accélérations`, duree: arr5(f.duree + L.n), km: f.km && f.km * (f.duree + L.n) / f.duree, parts: ajoute(f.parts, { Z2: L.n * 2 / 3, Z6: L.n / 3 }),
     etapes: [...f.etapes, { t: 'effort', duree: L.n, nom: 'Accélérations' }], texte: `${f.texte.replace(/\.$/, '')}, puis ${L.n} ${L.texte}.` });
 
+  /** Répartit tot minutes entre n séances faciles (pas de 5 min, entre min et max) : les durées alternent haut / bas (écart de 5 min), le surplus
+      va aux séances hautes ; perdu : minutes qui ne peuvent pas être placées (plafond), court : moins de min minutes par séance */
+  function partage(tot, n, min, max) {
+    if (n <= 0) return { d: [], court: false, perdu: Math.max(0, tot) };
+    const bas = Math.max(min, Math.min(max - 5, Math.floor((tot - 5 * Math.ceil(n / 2)) / n / 5) * 5));
+    const d = Array.from({ length: n }, (_, k) => bas + (k % 2 === 0 ? 5 : 0)), somme = () => d.reduce((a, x) => a + x, 0);
+    const ordre = [...d.keys()].filter(k => k % 2 === 0).concat([...d.keys()].filter(k => k % 2));
+    for (let pas = Math.floor((tot - somme()) / 5), k = 0; pas > 0 && k < 1000; k++) {
+      const j = ordre[k % n];
+      if (d[j] + 5 <= max) { d[j] += 5; pas--; } else if (d.every(x => x + 5 > max)) break;
+    }
+    return { d, court: tot / n < min, perdu: Math.max(0, tot - somme()) };
+  }
+
   function construire(doc, ctx) {
-    const c = doc.courseMarche ? { ...ctx, courseMarche: true } : ctx; // footings et sorties longues en course-marche (Galloway)
-    const { cal, alertes: aCourses } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3);
+    const lpn = doc === ZONES_DOC; // Spécifique LPN : nos règles ; méthodes d'entraîneurs : leurs règles propres, inchangées
+    const c = { ...ctx, lpn, ...(doc.courseMarche ? { courseMarche: true } : {}) }; // footings et sorties longues en course-marche (Galloway)
+    const { cal, alertes: aCourses, cycle } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3);
     // Plafond de la sortie longue : slKm (km, nombre ou fonction du contexte) converti à l'allure de la sortie longue, sinon SL_MAX
     const slKm = typeof doc.slKm === 'function' ? doc.slKm(c) : doc.slKm;
-    const slMax = slKm && c.profil ? slKm * (c.courseMarche ? allureGalloway(c) : (c.zones.Z2.allureRapide + c.zones.Z2.allureLente) / 2) : SL_MAX;
+    const slMax0 = slKm && c.profil ? slKm * (c.courseMarche ? allureGalloway(c) : (c.zones.Z2.allureRapide + c.zones.Z2.allureLente) / 2) : lpn ? SL_MAX : SL_MAX_M;
+    // Longueur maximale d'une séance (étape 2) : plafonne aussi la sortie longue et les footings (par pas de 5 min)
+    const lim = c.limite, lim5 = lim ? Math.max(5, Math.floor(lim.min / 5) * 5) : Infinity, slMax = Math.min(slMax0, lim5), efMin = Math.min(lpn ? EF_MIN : EF_MIN_M, lim5);
+    const limiter = (x, l) => { // séance de qualité ramenée sous la limite (coupe : effort retiré) ; sans effet sur une séance sans échelle (club, test)
+      if (!lim || !x.qualite || !x.echelle || !depasse(c, x)) return x;
+      const y = reduire(c, x, k => qualite(x.id, l, x.echelle * k, c));
+      coupe += x.effort - y.effort;
+      if (depasse(c, y)) trop = Math.max(trop, y.duree);
+      return y;
+    };
     const avecSL = !doc.slSi || doc.slSi(c);
+    // Séances du club : durée totale, temps par zone, nombre de jours occupés et de séances de qualité prises sur le plan
+    const clubs = clubsActifs(), nClub = clubs.length, clubT = clubs.reduce((a, k) => a + k.duree, 0), clubQ = clubs.filter(k => k.travail).length;
+    const clubZ = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6'].map(z => clubs.reduce((a, k) => a + (k.parts[z] || 0), 0));
+    const jourLibres = state.seances - nClub; // jours de course laissés au plan (sortie longue comprise)
+    // Parts par zone du reste de la semaine : le temps du club en Z2 et en Z5 est déduit de la répartition, le reliquat va en Z2
+    const horsClub = (parts, vol) => {
+      if (!nClub || vol - clubT <= 0) return parts;
+      const p = parts.map((x, k) => Math.max(0, vol * x - clubZ[k]) / (vol - clubT));
+      p[1] += 1 - p.reduce((a, x) => a + x, 0);
+      return p;
+    };
+    const aClubSem = { sansQualite: 0, ecartees: {} };
+    // Spécifique LPN : une séance du club n'est intégrée une semaine que si son temps en Z2 tient dans le temps prévu en Z1 + Z2 et son temps en Z5
+    // dans le temps prévu en Z5 (avec les autres séances du club de la semaine) ; sinon elle est écartée (remplacée par une séance du plan,
+    // avec une note). Les méthodes d'entraîneurs gardent leurs séances du club chaque semaine.
+    const clubsSemaine = (i) => {
+      if (!lpn) return { clubs, ecartees: [] };
+      const { vol } = volumes[i], ok = [], ecartees = [];
+      for (const k of clubs) {
+        const tz = (z) => [...ok, k].reduce((a, x) => a + (x.parts[z] || 0), 0), dispo12 = vol * (partsSem[i][0] + partsSem[i][1]), dispo5 = vol * partsSem[i][4];
+        const motif = tz('Z2') > dispo12 + 0.01 ? `son temps en Z2 (${fD(tz('Z2'))} avec le club) dépasse le temps prévu en Z1 + Z2 (${fD(dispo12)})`
+          : tz('Z5') > dispo5 + 0.01 ? `son temps en Z5 (${fD(tz('Z5'))}) dépasse le temps prévu en Z5 (${fD(dispo5)})` : null;
+        if (motif) ecartees.push({ k, motif }); else ok.push(k);
+      }
+      return { clubs: ok, ecartees };
+    };
     // TSS hebdomadaire de référence (volume de référence réparti selon les parts par zone, TSS d'une zone = durée (h) × IF² × 100)
     const tssRef = c.heures * c.parts.reduce((a, p, k) => a + p * window.Balance.zones()[k].iff ** 2 * 100, 0);
     // Volume de la semaine : TSS fixé par le cycle (facteur de la semaine × TSS de référence) moins le TSS des compétitions et la récupération
     // à prévoir (dette, en partie absorbée par une décharge ou un affûtage), converti en temps au TSS horaire de référence ; plancher
     // de PLANCHER_TSS de la cible ; le temps des compétitions s'y ajoute (il est retiré plus bas du volume facile)
-    const volumes = cal.map(w => {
-      const inter = (w.courses || []).map(x => contexteCourse(c, x.d, x.effort)), cible = w.facteur, dette = Math.max(0, (w.dette || 0) - tssRef * Math.max(0, 1 - cible));
-      const fEff = tssRef > 0 && (w.tssCourses || dette) ? Math.max(PLANCHER_TSS * cible, cible - ((w.tssCourses || 0) + dette) / tssRef) : cible;
-      return { inter, fEff, vol: c.heures * 60 * fEff + inter.reduce((a, x) => a + x.tObj, 0) };
+    const volumes = cal.map((w, i) => {
+      // semaine de l'objectif (voir `derniere`) : charge ramenée à 50 % de la référence, la fréquence est gardée
+      const finale = i === cal.length - 1 && c.course && (w.type === 'Affûtage' || state.horizon === 'date');
+      const inter = (w.courses || []).map(x => ({ ...contexteCourse(c, x.d, x.effort), t: x.t, effort: x.effort })), cible = lpn && finale ? Math.min(w.facteur, OBJECTIF_CHARGE) : w.facteur, dette = Math.max(0, (w.dette || 0) - tssRef * Math.max(0, 1 - cible));
+      const tCourses = inter.reduce((a, x) => a + x.tObj + echCourse(x), 0);
+      let fEff = tssRef > 0 && (w.tssCourses || dette) ? Math.max(PLANCHER_TSS * cible, cible - ((w.tssCourses || 0) + dette) / tssRef) : cible;
+      // Volume maxi : les compétitions comprises, la semaine ne dépasse pas le volume saisi
+      if (state.volType === 'max' && c.heures > 0) fEff = Math.min(fEff, Math.max(0, 1 - (tCourses + 5) / (c.heures * 60)));
+      return { inter, fEff, vol: c.heures * 60 * fEff + tCourses };
     });
-    // Équilibre du plan (plan personnalisé) : le temps en zone d'une compétition intermédiaire se déduit du temps prévu par la répartition pour
+    // Équilibre du plan (Spécifique LPN) : le temps en zone d'une compétition intermédiaire se déduit du temps prévu par la répartition pour
     // cette zone cette semaine-là. S'il le dépasse, alerte ; les autres semaines cèdent l'excédent si elles le peuvent (au plus ABSORBE_ZONE de
     // leur temps dans la zone), sinon on retire ce qui peut l'être et l'équilibre du plan ne peut pas être respecté. Le temps libéré revient
     // à l'endurance (Z2).
@@ -1004,79 +1293,177 @@
       }
       partsSem.forEach(p => { p[1] += 1 - p.reduce((a, x) => a + x, 0); });
     }
+    // Dates de toutes les compétitions (hors footing) et de l'objectif : chaque semaine écarte sa qualité des courses des semaines voisines
+    const datesCourses = [...cal.flatMap(w => (w.courses || []).filter(x => x.effort !== 'footing').map(x => x.t)), ...(c.course && cal.length && cal[cal.length - 1].fin ? [cal[cal.length - 1].fin] : [])];
     let court = false, plafond = false, exces = 0; // volume insuffisant pour le nombre de séances ; footings plafonnés ; intensité non placée (min)
+    let slCourte = 0; // LPN : sortie longue minimale de l'objectif (min) que le volume ne permet pas d'atteindre certaines semaines
+    let coupe = 0, parLimite = false, trop = 0; // effort de qualité retiré par la limite de longueur (min) ; sortie longue ou footings plafonnés par cette limite
     const semaines = cal.map((w, i) => {
       // derniere : semaine de l'objectif (seulement pour une allure de référence : 5 km, 10 km, semi, marathon) : dernière semaine d'affûtage,
       // ou, si le plan va jusqu'à la date de l'objectif, dernière semaine même sans affûtage (plan court)
       const aff = w.type === 'Affûtage', l = (w.niveau - 1) / 9, derniere = i === cal.length - 1 && c.course && (aff || state.horizon === 'date');
       // courses de la semaine : compétitions intermédiaires (par date) puis objectif (dernière semaine) ; la dernière remplace la sortie longue,
       // les autres un footing chacune
-      const { inter, fEff, vol } = volumes[i], cp = { ...c, parts: partsSem[i] }; // cp : parts par zone de la semaine (équilibre avec les compétitions)
-      const cl = [...inter, ...(derniere ? [c] : [])], cs = cl[cl.length - 1] || null, extra = cl.slice(0, -1);
-      const s = borne(Math.sqrt(c.heures * fEff / 5), 0.7, 1.4) * (aff ? 0.7 : 1);
-      const phase = aff ? AFFUTAGE_PHASE : doc.phases.find(p => w.frac < p.f) || doc.phases[doc.phases.length - 1];
-      const nbQ = Math.min(w.qMax ?? Infinity, w.type === 'Charge' ? nbQ0 : Math.max(1, nbQ0 - 1)); // qMax : limité autour d'une compétition
+      // séances du club de cette semaine (celles qui sont compatibles avec le plan) : remplacent les variables globales pour la semaine
+      const { clubs, ecartees } = clubsSemaine(i), nClub = clubs.length, clubT = clubs.reduce((a, k) => a + k.duree, 0), clubQ = clubs.filter(k => k.travail).length;
+      const clubZ = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6'].map(z => clubs.reduce((a, k) => a + (k.parts[z] || 0), 0)), jourLibres = state.seances - nClub;
+      const horsClub = (parts, vol) => {
+        if (!nClub || vol - clubT <= 0) return parts;
+        const p = parts.map((x, k) => Math.max(0, vol * x - clubZ[k]) / (vol - clubT));
+        p[1] += 1 - p.reduce((a, x) => a + x, 0);
+        return p;
+      };
+      ecartees.forEach(({ k, motif }) => {
+        aClubSem.ecartees[k.jour] = (aClubSem.ecartees[k.jour] || 0) + 1;
+        (w.notes = w.notes || []).push(`La séance du club du ${k.jour} ne peut pas être effectuée cette semaine : ${motif}. Elle est remplacée par une séance du plan.`);
+      });
+      const { inter, fEff, vol } = volumes[i], volP = vol - clubT, cp = { ...c, parts: horsClub(partsSem[i], vol) }; // cp : parts par zone du reste de la semaine (équilibre avec les compétitions, hors club)
+      // Plusieurs courses le même jour partagent ce jour : jourCourse regroupe les courses par date (la dernière date est celle de cs)
+      const cl = [...inter, ...(derniere ? [{ ...c, t: w.fin }] : [])], cs = cl[cl.length - 1] || null;
+      const jourCourse = [...cl.reduce((m, x) => m.set(x.t ?? x, [...(m.get(x.t ?? x) || []), x]), new Map()).values()];
+      const extra = jourCourse.slice(0, -1); // jours de course avant celui de cs (chacun une liste de courses)
+      const decharge = lpn && w.type === 'Décharge'; // (méthodes : une séance de qualité en moins, comme avant)
+      const s = borne(Math.sqrt(c.heures * fEff / 5), 0.7, 1.4) * (aff ? 0.7 : 1) * (decharge ? DECHARGE_Q / Math.sqrt(DECHARGE) : 1); // le volume de la décharge est déjà à 70 %
+      const phase = aff ? AFFUTAGE_PHASE : doc.phases.find(p => w.frac < (typeof p.f === 'function' ? p.f(c) : p.f)) || doc.phases[doc.phases.length - 1];
+      const nomP = typeof phase.nom === 'function' ? phase.nom(c) : phase.nom;
+      // LPN, décharge : même nombre de séances de qualité, allégées de moitié (plutôt que d'en retirer une)
+      const nbQs = w.type === 'Charge' || decharge ? nbQ0 : Math.max(1, nbQ0 - 1), nbQ1 = Math.min(w.qMax ?? Infinity, nbQs); // qMax : limité autour d'une compétition
+      // LPN : moins de séances de qualité autour d'une compétition = moins de temps d'intensité (au prorata), pas des séances plus grosses
+      const kComp = nbQs > 0 ? nbQ1 / nbQs : 1;
+      const nbQ = Math.max(0, nbQ1 - clubQ); // la séance de qualité du club prend la place d'une séance du plan
+      if (clubQ && nbQ1 > 0 && nbQ === 0) aClubSem.sansQualite++;
+      const club = clubs.map(k => seanceClub(k, c));
       // semaine (plan selon la répartition) : séances de qualité, lignes droites et type de sortie longue tirés des minutes par zone
-      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, vol, l, nbQ) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
+      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, volP, l, nbQ, (decharge ? DECHARGE_Q / DECHARGE : 1) * kComp, Math.max(nbQ, Math.min(doc.maxQ, w.qMax ?? Infinity, jourLibres - 2) - clubQ)) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
+      if (sem) { coupe += sem.coupe || 0; trop = Math.max(trop, sem.trop || 0); }
       if (sem && !(w.qMax < Infinity)) exces = Math.max(exces, sem.exces); // autour d'une compétition, la qualité est volontairement limitée
       const ids = sem ? [] : typeof phase.q === 'function' ? phase.q(c) : phase.q, L = sem ? sem.lignes : doc.lignes;
       let q = sem ? sem.q : Array.from({ length: nbQ }, (_, j) => qualite(ids[(j + (doc.rotation ? i : 0)) % ids.length], l, s, c)); // rotation : une autre séance en tête chaque semaine
       // plafonds (Daniels) : temps d'effort d'une séance limité à une part du volume de la semaine (T 10 %, I 8 %, R 5 %)
       q = q.map(x => { const p = doc.plafonds && doc.plafonds[x.id]; return p && x.effort > p * vol ? qualite(x.id, l, s * p * vol / x.effort, c) : x; });
       // partQualite (Fitzgerald, 80/20) : travail de qualité de la semaine, récupérations comprises, plafonné à cette part du volume
-      const totQ = q.reduce((a, x) => a + x.travail, 0), kQ = doc.partQualite && totQ ? Math.min(1, doc.partQualite * vol / totQ) : 1;
+      const pQ = phase.partQualite ?? doc.partQualite, totQ = q.reduce((a, x) => a + x.travail, 0), kQ = pQ && totQ ? Math.min(1, Math.max(0, pQ * vol - clubs.reduce((a, k) => a + k.travail, 0)) / totQ) : 1;
       if (kQ < 1) q = q.map(x => (x.qualite ? qualite(x.id, l, s * kQ, c) : x));
       // Test périodique (Galloway : mile magique toutes les 2 semaines) à la place de la dernière séance de qualité
       if (doc.test && !aff && q.length && i % doc.test.tous === 1) q[q.length - 1] = qualite(doc.test.id, l, s, c);
-      // Volume facile (footings, footings des séances légères, sortie longue) : la sortie longue compte pour 1,5 footing,
-      // entre SL_PART du volume et son plafond ; un footing ne dépasse pas la sortie longue (1 h la semaine de course).
+      if (lim && !sem) q = q.map(x => limiter(x, l)); // (le plan selon la répartition est limité dans semaineZones)
+      // Volume facile (footings, footings des séances légères, sortie longue) : partagé à égalité, la sortie longue est la plus longue.
       // Sans sortie longue (slSi), le dernier jour est un footing de plus.
       const sansSL = !cs && (!avecSL || (doc.slUneSur2 && i % 2 === 1)); // slUneSur2 : sortie longue une semaine sur deux
-      const nE = Math.max(0, state.seances - q.length - 1 - extra.length), nF = nE + q.filter(x => x.leger).length + (sansSL ? 1 : 0);
+      const nE = Math.max(0, jourLibres - q.length - 1 - extra.length), nF = nE + q.filter(x => x.leger).length + (sansSL ? 1 : 0);
       // Méthode norvégienne : chaque doublé va d'abord à un jour de seuil, avec le soir le format complémentaire (double seuil)
       const nD0 = cs ? 0 : nbDoubles();
       const iSeuil = doc.doubleSeuil ? q.map((x, j) => (SEUIL_NO[x.id] ? j : -1)).filter(j => j >= 0) : [], iPm = iSeuil.slice(0, nD0);
       // Travail au seuil de la semaine (matins et soirs) plafonné à SEUIL_PART du volume
       const totSeuil = [...iSeuil.map(j => q[j].travail), ...iPm.map(j => qualite(SEUIL_NO[q[j].id], l, s, c).travail)].reduce((a, x) => a + x, 0);
       const kS = totSeuil ? Math.min(1, SEUIL_PART * vol / totSeuil) : 1;
-      if (kS < 1) iSeuil.forEach(j => { q[j] = qualite(q[j].id, l, s * kS, c); });
-      const pm = iPm.map(j => ({ matin: q[j], soir: qualite(SEUIL_NO[q[j].id], l, s * kS, c) }));
-      const pool = vol - [...q, ...pm.map(p => p.soir)].reduce((a, x) => a + (x.qualite ? x.duree : x.extra), 0) - cl.reduce((a, x) => a + x.tObj, 0);
-      // Autres doublés (pas la semaine de course) : footing court, DOUBLE_PART d'un footing, borné à DOUBLE_BORNES, pris sur le volume facile
-      const nD = nD0 - pm.length;
-      const pSL = sansSL || cs ? 0 : 1.5;
-      const dD = nD ? arr5(borne(DOUBLE_PART * pool / (nF + pSL + DOUBLE_PART * nD), ...DOUBLE_BORNES)) : 0, reste = pool - nD * dD;
-      const sl = pSL ? arr5(Math.min(slMax, Math.max(SL_PART * vol, reste / (nF + 1.5) * 1.5))) : 0;
-      const cap = derniere ? 60 : Math.min(pSL ? sl : slMax, doc.footingMax || Infinity); // footings ≤ 1 h la semaine de l'objectif
-      // moyenneLongue (Pfitzinger) : un footing devient une sortie moyenne-longue (75 % de la sortie longue), hors affûtage
-      const ml = doc.moyenneLongue && !aff && pSL && nE >= 2 ? arr5(0.75 * sl) : 0;
-      const brut = (reste - sl - ml) / Math.max(1, nF - (ml ? 1 : 0)), dF = arr5(Math.max(EF_MIN, Math.min(brut, cap)));
-      if (nF > 0 && brut < EF_MIN) court = true;
-      if (brut > dF + 5 && !cs) plafond = true;
-      q = q.map(x => (x.leger ? avecFooting(x, dF, c) : x));
-      // Accélérations (lignes) après le premier footing de la semaine, sauf si la semaine a déjà des lignes droites (séance légère)
+      if (kS < 1) iSeuil.forEach(j => { q[j] = limiter(qualite(q[j].id, l, s * kS, c), l); });
+      const pm = iPm.map(j => ({ matin: q[j], soir: limiter(qualite(SEUIL_NO[q[j].id], l, s * kS, c), l) }));
+      let pool = volP - [...q, ...pm.map(p => p.soir)].reduce((a, x) => a + (x.qualite ? x.duree : x.extra), 0) - cl.reduce((a, x) => a + x.tObj + echCourse(x), 0);
+      if (lpn && c.volKm && c.profil) {
+        // Volume saisi en km (LPN) : la somme des km des séances vaut le volume (× facteur de la semaine) ; les séances faciles couvrent le reste de
+        // distance à l'allure Z2 (au lieu de la conversion km → temps à l'allure moyenne de toutes les zones)
+        const kmSeance = (x) => (x.km ?? x.duree / aZ(c, 'Z2')), kmFixe = [...q.filter(x => x.qualite), ...pm.map(p => p.soir), ...club].reduce((a, x) => a + kmSeance(x), 0) + cl.reduce((a, x) => a + x.dist / 1000 + echCourse(x) / aZ(c, 'Z2'), 0);
+        pool = Math.max(0, c.volKm * fEff + inter.reduce((a, x) => a + x.dist / 1000 + echCourse(x) / aZ(c, 'Z2'), 0) - kmFixe) * aZ(c, 'Z2');
+      }
+      // Autres doublés (pas la semaine de course). LPN : un footing de plus, de la durée des autres, jamais le jour de la sortie longue (sur un
+      // jour de footing ou de qualité), borné par les jours disponibles. Méthodes : footing court (DOUBLE_PART_M d'un footing, borné à DOUBLE_BORNES_M),
+      // le jour de la sortie longue en dernier.
+      const nD = lpn ? Math.min(nD0 - pm.length, q.length + nE - pm.length) : nD0 - pm.length, pSL = sansSL || cs ? 0 : 1.5;
+      const dD = !lpn && nD ? arr5(borne(DOUBLE_PART_M * pool / (nF + pSL + DOUBLE_PART_M * nD), ...DOUBLE_BORNES_M)) : 0, reste = lpn ? pool : pool - nD * dD;
+      const typeSL = sem ? sem.sl : typeof phase.sl === 'function' ? phase.sl(c) : phase.sl;
+      const slPlafond = Math.min(slMax0, lim ? lim.min : Infinity);
+      let sl, dF, ml, efD, secD, nRec = 0; // sortie longue, footing, sortie moyenne-longue (Pfitzinger : un footing devient une sortie à 75 % de la sortie longue, hors affûtage), durées des footings de la semaine
+      if (lpn) {
+        // Spécifique LPN : il n'y a pas de séance « sortie longue » réservée ni de règle de calcul : c'est la séance la plus longue de la semaine
+        // (voir plus bas). Le volume facile se répartit ainsi :
+        //  1. le lendemain d'une séance de qualité : un footing court (EF_MIN, très facile ; passé en Z1 plus bas, dans la limite de la part de Z1 visée) ;
+        //  2. une sortie longue spécifique à l'objectif (semi, marathon) si le volume le permet : minimum progressif au fil du plan ;
+        //  3. ce qui reste va aux autres séances faciles, avec des durées qui varient de 5 min d'une séance à l'autre (jamais deux séances
+        //     voisines identiques, par pas de 5 min) ; sans minimum d'objectif (5 km, 10 km), le dernier jour fait partie de ce partage.
+        const nQ = q.filter(x => x.qualite).length, nOth = nE - Math.min(nQ, nE), R = reste - Math.min(nQ, nE) * efMin;
+        nRec = Math.min(nQ, nE);
+        const Tmin = !pSL ? 0 : c.dist > 30000 ? SL_MIN_MARATHON : c.dist > 20000 ? SL_MIN_SEMI : 0, Tsem = Tmin * lerp(0.7, 1, w.frac) * Math.min(1, w.facteur);
+        let slT = 0;
+        if (Tsem > 0) {
+          slT = arr5(Math.max(efMin, Math.min(Tsem, R - (nOth + nD) * efMin, slPlafond)));
+          if (slT < arr5(Tsem) - 0.01) { slCourte = Math.max(slCourte, Tmin); }
+        }
+        const n = nOth + nD + (pSL && !slT ? 1 : 0);
+        let part = partage(R - slT, n, efMin, slMax);
+        if (slT && part.perdu >= 5) { // les autres séances sont au plafond (ou absentes) : le surplus va à la sortie longue, dans la limite de son plafond
+          slT = Math.max(slT, Math.min(Math.floor(slPlafond / 5) * 5, arr5(slT + part.perdu - 2.5)));
+          part = partage(R - slT, n, efMin, slMax);
+        }
+        if (pSL && !slT && n) part.d[n - 1] = Math.max(part.d[n - 1], Math.min(slMax, Math.max(...part.d.slice(0, n - 1), 0) + 5)); // le dernier jour est la plus longue séance facile
+        efD = [...Array(nRec).fill(efMin), ...part.d.slice(0, nOth)]; secD = part.d.slice(nOth, nOth + nD);
+        sl = !pSL ? 0 : slT || part.d[n - 1]; dF = part.d[0] ?? efMin; ml = 0;
+        if (nE + nD > 0 && part.court) court = true;
+        if (!cs && part.perdu >= 5) { if (lim && slMax < slMax0) parLimite = true; else plafond = true; } // volume qui ne peut pas être placé
+      } else {
+        efD = null;
+        // Méthodes d'entraîneurs (règles inchangées) : sortie longue = 1,5 footing, au moins SL_PART_M du volume, jusqu'à son plafond ;
+        // un footing ne dépasse pas la sortie longue (1 h la semaine de course). La sortie longue est allongée jusqu'à la plus longue séance de
+        // qualité ou du club (durée et distance), dans la limite de son plafond ; au-delà, c'est cette séance qui en tient lieu (voir plus bas).
+        const autres = [...q.filter(x => x.qualite), ...club].filter(x => x.duree), kMax = Math.max(0, ...autres.map(x => x.km || 0));
+        let besoin = Math.max(0, ...autres.map(x => x.duree));
+        while (c.profil && kMax && besoin < 300 && longue(typeSL, besoin, l, c).km < kMax - 0.1) besoin++;
+        const slVoulu = Math.max(SL_PART_M * vol, reste / (nF + 1.5) * 1.5);
+        sl = !pSL ? 0 : Math.max(arr5(Math.min(slMax, slVoulu)), Math.floor(Math.min(slPlafond, Math.ceil(besoin / 5) * 5)));
+        const limBind = lim && slMax < slMax0 && (pSL ? slVoulu > slMax + 2.5 : true); // la limite de longueur est ce qui plafonne ici
+        if (limBind && pSL) parLimite = true;
+        const cap = derniere ? Math.min(60, slMax) : Math.min(pSL ? sl : slMax, doc.footingMax || Infinity);
+        ml = doc.moyenneLongue && !aff && pSL && nE >= 2 ? arr5(0.75 * sl) : 0;
+        const brut = (reste - sl - ml) / Math.max(1, nF - (ml ? 1 : 0));
+        dF = arr5(Math.max(efMin, Math.min(brut, cap)));
+        if (nF > 0 && brut < EF_MIN_M) court = true;
+        if (brut > dF + 5 && !cs) { if (limBind && cap >= slMax - 0.01) parLimite = true; else plafond = true; }
+      }
+      const sousLimite = (d, ajout) => Math.max(lpn ? EF_LEGER : 5, Math.min(d, lim ? lim5 - arr5(ajout) : Infinity, sl && !lpn ? sl - 5 - arr5(ajout) : Infinity)); // footing + lignes droites ou accélérations ≤ limite (méthodes : et < sortie longue)
+      q = q.map(x => (x.leger ? avecFooting(x, sousLimite(dF, x.extra), c) : x));
+      // Accélérations (lignes) après le premier footing de la semaine, sauf si la semaine a déjà des lignes droites (séance légère) ;
+      // LPN : le temps des accélérations est pris sur la durée du footing
       const lignes = L && !cs && !q.some(x => x.leger);
       const ef = Array.from({ length: nE }, (_, k) => (ml && k === nE - 1 ? { ...footing(ml, c), nom: 'Sortie moyenne-longue' }
-        : lignes && k === 0 ? avecLignes(footing(dF, c), L) : footing(dF, c)));
+        : lignes && k === 0 && (!lpn || nE > nRec) ? avecLignes(footing(lpn ? Math.max(EF_LEGER, efD[nE - 1] - arr5(L.n)) : sousLimite(dF, L.n), c), L) : footing(lpn ? efD[nE - 1 - k] : dF, c)));
       // Ordre conseillé : un jour de qualité, puis un jour de footing, etc. ; la sortie longue (ou la course) en dernier
       const jours = [];
       q.forEach(x => { jours.push([x]); if (ef.length) jours.push([ef.pop()]); });
       ef.forEach(x => jours.push([x]));
       pm.forEach(p => jours.find(j => j[0] === p.matin).push({ ...p.soir, nom: `${p.soir.nom} (double seuil)` }));
-      const typeSL = sem ? sem.sl : typeof phase.sl === 'function' ? phase.sl(c) : phase.sl;
-      const dernier = [cs ? course(cs) : sansSL ? footing(dF, c) : longue(typeSL, sl, l, c)];
-      // Doublés : d'abord les jours faciles, puis les jours de qualité (footing en plus), le jour de la sortie longue en dernier
+      const dernier = cs ? jourCourse[jourCourse.length - 1].map(course) : [sansSL ? footing(dF, c) : longue(typeSL, sl, l, c)];
+      // Doublés : d'abord les jours faciles, puis les jours de qualité (footing en plus) ; LPN : jamais le jour de la sortie longue,
+      // méthodes : le jour de la sortie longue en dernier (pas plus long que le footing principal)
       const libres = jours.filter(j => j.length === 1);
-      [...libres.filter(j => !j[0].qualite), ...libres.filter(j => j[0].qualite), dernier].slice(0, nD)
-        .forEach(j => j.push(footing(Math.min(dD, dF), c))); // pas plus long que le footing principal
-      extra.forEach(x => jours.push([course(x)]));
+      [...libres.filter(j => !j[0].qualite), ...libres.filter(j => j[0].qualite), ...(lpn ? [] : [dernier])].slice(0, nD)
+        .forEach((j, m) => j.push(footing(lpn ? secD[m] : Math.min(dD, dF), c)));
+      extra.forEach(g => jours.push(g.map(course)));
       jours.push(dernier);
+      // Plafond atteint et une autre séance reste plus longue : celle-ci tient lieu de sortie longue, la dernière devient une sortie facile
+      const sortieL = dernier[0];
+      if (lpn && sortieL.nom === 'Sortie longue') {
+        // LPN : la sortie longue est la séance la plus longue de la semaine (en km, en durée sans profil), strictement : une séance de qualité si c'est
+        // elle (elle tient lieu de sortie longue), sinon un footing (il prend le nom). Si plusieurs séances sont à égalité en tête (par exemple toutes au
+        // plafond de longueur), il n'y a pas de sortie longue. La dernière séance, si ce n'est pas elle, redevient un footing.
+        const toutes = [...jours.flat(), ...club].filter(x => x.duree && x.nom !== 'Course'), mesure = (x) => (c.profil && x.km ? x.km : x.duree), eps = c.profil ? 0.1 : 0.01;
+        const tri = toutes.sort((a, b) => mesure(b) - mesure(a)), sl1 = tri[0], unique = !tri[1] || mesure(sl1) - mesure(tri[1]) > eps;
+        if (!(unique && sl1 === sortieL)) dernier[0] = { ...sortieL, nom: sortieL.travail ? 'Footing avec fin rapide' : 'Footing' };
+        if (unique && sl1 !== sortieL && !sl1.club) jours.forEach(j => { const m = j.indexOf(sl1); if (m >= 0) j[m] = { ...sl1, nom: sl1.qualite ? `${sl1.nom} (tient lieu de sortie longue)` : sl1.nom.replace(/^Footing/, 'Sortie longue') }; });
+      }
+      const plusLongue = lpn ? null : [...jours.flat(), ...club].filter(x => x !== sortieL && x.duree && (x.km != null && sortieL.km != null ? x.km > sortieL.km + 0.1 : x.duree > sortieL.duree + 0.01)) // en km avec un profil, sinon en durée
+        .reduce((m, x) => (!m || (x.km || x.duree) > (m.km || m.duree) ? x : m), null);
+      if (!lpn && sortieL.nom === 'Sortie longue' && plusLongue) {
+        // Méthodes : si une autre séance reste plus longue, elle tient lieu de sortie longue et la dernière devient une sortie facile
+        dernier[0] = { ...sortieL, nom: sortieL.travail ? 'Sortie avec fin rapide' : 'Sortie facile' };
+        if (!plusLongue.club) jours.forEach(j => { const m = j.indexOf(plusLongue); if (m >= 0) j[m] = { ...plusLongue, nom: `${plusLongue.nom} (tient lieu de sortie longue)` }; });
+      }
       // recupZ1 (plan selon la répartition) : footings passés en Z1 (récupération) jusqu'au temps de Z1 visé, d'abord les
       // secondes séances des doublés, puis les footings du lendemain d'une séance de qualité, puis les autres
       if (doc.recupZ1) {
-        let manque = vol * cp.parts[0] - jours.flat().reduce((a, x) => a + (x.parts.Z1 || 0), 0);
-        const cand = [...jours.flatMap((j, k) => j.slice(1).map(x => [k, j.indexOf(x)])),
-          ...jours.map((j, k) => [k, 0]).filter(([k]) => k > 0 && jours[k - 1][0].qualite), ...jours.map((j, k) => [k, 0])];
+        let manque = volP * cp.parts[0] - jours.flat().reduce((a, x) => a + (x.parts.Z1 || 0), 0);
+        const secondes = jours.flatMap((j, k) => j.slice(1).map(x => [k, j.indexOf(x)])), lendemains = jours.map((j, k) => [k, 0]).filter(([k]) => k > 0 && jours[k - 1][0].qualite);
+        const cand = lpn ? [...lendemains, ...secondes, ...jours.map((j, k) => [k, 0])] // LPN : d'abord le lendemain d'une séance de qualité
+          : [...secondes, ...lendemains, ...jours.map((j, k) => [k, 0])];
         for (const [k, m] of cand) {
           const x = jours[k][m];
           if (manque <= 0) break;
@@ -1087,13 +1474,48 @@
       }
       // Mode par date : les jours sont placés sur le calendrier (courses aux dates des compétitions, objectif à la date de fin)
       if (w.debut) {
-        const p = placerJours(jours, w, [...(w.courses || []).map(x => x.t), ...(derniere ? [w.fin] : [])], (w.courses || []).map(x => x.effort === 'footing'));
+        // séances du club : à leur jour de la semaine (lundi, jeudi) quand il tombe dans la semaine du plan
+        const fixes = clubs.map((k, m) => { for (let o = 0; o <= Math.round((w.fin - w.debut) / JOUR); o++) { const t = new Date(w.debut); t.setDate(t.getDate() + o); if (t.getDay() === k.dow) return { t: t.getTime(), jour: [club[m]] }; } return null; }).filter(Boolean);
+        // une date par jour de course (plusieurs courses le même jour : un seul jour, « souple » si elles sont toutes courues en footing)
+        const p = placerJours(jours, w, jourCourse.map(g => g[0].t), jourCourse.map(g => g.every(x => x.effort === 'footing')), fixes, datesCourses);
         if (p.retires) (w.notes = w.notes || []).push(`${p.retires} séance${p.retires > 1 ? 's' : ''} de moins cette semaine : pas de séance de qualité à moins de 3 jours d'une course, ni après la date de l'objectif.`);
-        return { ...w, phase: phase.nom, jours: p.jours, dates: p.dates, seances: p.jours.flat() };
+        return { ...w, phase: nomP, jours: p.jours, dates: p.dates, seances: p.jours.flat() };
       }
-      return { ...w, phase: phase.nom, jours, seances: jours.flat() };
+      club.forEach((x, m) => jours.splice(clubs[m].id === 'club1' ? 0 : Math.min(3, jours.length - 1), 0, [x])); // sans dates : lundi en tête, jeudi en 4e jour, avant la sortie longue
+      return { ...w, phase: nomP, jours, seances: jours.flat() };
     });
-    return { semaines, court, plafond, avecSL, exces, aCourses: [...aCourses, ...aZones] };
+    // Alertes d'incohérence liées aux séances du club
+    const aClub = [], pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+    if (nClub) {
+      if (jourLibres === 1) aClub.push(`Les séances du club (${clubs.map(k => k.jour).join(' et ')}) occupent ${nClub} de vos ${state.seances} jours de course : il ne reste qu'un jour libre, donc ni footing ni séance de qualité propres au plan. Ajoutez des jours de course.`);
+      Object.entries(aClubSem.ecartees).forEach(([jour, n]) => aClub.push(`La séance du club du ${jour} ne peut pas être effectuée ${pl(n, 'semaine')} (elle ne tient pas dans le temps prévu par la répartition par zone) : elle est remplacée par une séance du plan ces semaines-là, avec une note sous la semaine.`));
+      if (aClubSem.sansQualite) aClub.push(`La séance du jeudi tient lieu de séance de qualité (${pl(aClubSem.sansQualite, 'semaine')}) : le plan n'en ajoute pas ces semaines-là, la méthode perd une partie de son principe.`);
+      const h = horizon();
+      if (clubQ && h.d0) { // séance de qualité du club à moins de 3 jours d'une compétition (hors footing) ou de l'objectif
+        const dates = [...state.courses.filter(x => x.d > 0 && x.effort !== 'footing').map(x => parseDate(x.date)), ...(c.course ? [h.d1] : [])].filter(t => Number.isFinite(t) && t >= h.d0 && t <= h.d1);
+        const trop = [];
+        semaines.forEach(w => { if (w.dates) w.jours.forEach((j, k) => { if (j[0].club && j[0].qualite) { const r = dates.find(t => Math.abs(t - w.dates[k]) < 3 * JOUR); if (r !== undefined) trop.push(`${fDate(w.dates[k], true)} (course le ${fDate(r, true)})`); } }); });
+        if (trop.length) aClub.push(`La séance du club du jeudi tombe à moins de 3 jours d'une compétition : ${trop.slice(0, 3).join(', ')}${trop.length > 3 ? '…' : ''}. À alléger ou à sauter.`);
+      }
+    }
+    // Alertes sur la longueur maximale d'une séance : compatibilité avec l'objectif et le volume, puis effets sur le plan construit
+    const aLimite = [];
+    if (lim) {
+      const nD = nbDoubles(), capacite = (state.seances + nD) * lim.min, W = semaines.length;
+      const nom = OBJECTIFS.find(([k]) => k === c.goal)[2], pour = `${c.course ? '' : "une allure proche d'"}un ${nom}`;
+      // 5 km et 10 km : la séance la plus longue doit couvrir au moins la distance de l'objectif ; semi et marathon : seul le volume global compte
+      const limKm = lim.km ?? lim.min / allureZ2(c), objKm = c.dist / 1000;
+      if ((c.goal === '5k' || c.goal === '10k') && limKm < objKm - 0.01) aLimite.push(`Limite incompatible avec l'objectif : pour ${pour}, la séance la plus longue devrait couvrir au moins ${objKm.toLocaleString('fr-FR')} km, or la longueur maximale est de ${lim.txt}${lim.km ? '' : ` (≈ ${(Math.round(limKm * 10) / 10).toLocaleString('fr-FR')} km)`}. Relevez la limite.`);
+      const volumeKo = capacite < c.heures * 60 - 1;
+      if (volumeKo) aLimite.push(`Limite incompatible avec le volume : ${state.seances} séance${state.seances > 1 ? 's' : ''}${nD ? ` et ${nD} doublé${nD > 1 ? 's' : ''}` : ''} de ${lim.txt} au plus font ${fD(capacite)} par semaine, sous les ${fD(c.heures * 60)} visés. Relevez la limite, ajoutez des jours de course ou des doublés, ou baissez le volume.`);
+      else if (parLimite) aLimite.push(`La longueur maximale de ${lim.txt} plafonne la sortie longue et les footings : le volume réel reste sous ${volRef()} certaines semaines.`);
+      const fixe = echauffement(c, 'Z5') + RETOUR;
+      if (lim.min < fixe + 20) aLimite.push(`Avec ${lim.txt} au plus, l'échauffement et le retour au calme (${fixe} min) laissent très peu de place au travail de qualité.`);
+      else if (coupe >= 1) aLimite.push(`La longueur maximale de ${lim.txt} raccourcit les séances de qualité : l'effort retiré est reporté sur d'autres séances quand c'est possible, mais ≈ ${fD(coupe / W)} d'effort par semaine en moyenne n'a pas pu être replacé, le temps en intensité visé n'est pas atteint.`);
+      if (trop) aLimite.push(`Certaines séances de qualité ne peuvent pas être raccourcies davantage (répétitions trop longues pour la limite) : jusqu'à ${fD(trop)}, au-dessus de la longueur maximale de ${lim.txt}. Relevez la limite ou choisissez une autre méthode.`);
+      clubs.filter(k => k.duree > lim.min + 0.01).forEach(k => aLimite.push(`La séance du club du ${k.jour} (${fD(k.duree)}) dépasse la longueur maximale de ${lim.txt} : elle est gardée telle quelle.`));
+    }
+    return { semaines, court, plafond, slCourte, avecSL, exces, cycle, aClub, aLimite, aCourses: [...aCourses, ...aZones] };
   }
 
   /* ---------- Rendu ---------- */
@@ -1102,7 +1524,8 @@
       deux séances de même nature (double seuil, deux footings) restent matin / soir */
   function moments(j) {
     if (j.length < 2) return [['', j[0]]];
-    const q = j.filter(x => x.qualite), f = j.filter(x => !x.qualite);
+    if (j.every(x => x.nom === 'Course')) return j.map((x, m) => [m ? `${m + 1}e course` : '1re course', x]); // plusieurs courses le même jour
+    const q =j.filter(x => x.qualite), f = j.filter(x => !x.qualite);
     if (q.length !== 1) return j.map((x, m) => [m ? 'Soir' : 'Matin', x]);
     return { matin: [['Matin', q[0]], ['Soir', f[0]]], soir: [['Matin', f[0]], ['Soir', q[0]]],
       midi: [['Midi', q[0]], ['Matin ou soir', f[0]]], indifferent: [['', q[0]], ['', f[0]]] }[state.moment];
@@ -1117,97 +1540,122 @@
       course: b.preset, parts: b.parts, tObj: ok ? pred.temps : b.dist / (10000 / 60), // sans profil : 10 km/h
       zoneObj: (zones.find(z => b.pct * 100 < (z.pMax ?? Infinity)) || zones[5]).id };
     if (c.profil) Object.assign(c, { vRef: E.vitesseReference(p), allureObj: pred.allureMinKm, zones: Object.fromEntries(zones.map(z => [z.id, z])) });
+    c.volKm = b.volKm; // volume saisi en km (sinon null)
+    c.limite = limiteDe(c);
     return c;
   }
 
   // Règles appliquées par construire() quel que soit le plan (personnalisé ou méthode d'entraîneur), affichées sous le résumé
   const REGLES_COMMUNES = [
-    "Cycle : charge constante (même volume chaque semaine), ou semaines de charge (+ 6 % de volume par semaine) suivies d'une semaine de décharge (70 % du volume, une séance de qualité en moins, un niveau plus bas).",
-    "Affûtage avant l'objectif : 1 semaine (60 % du volume), 2 pour le semi et le marathon à partir de 10 semaines, 3 pour le marathon avec Pfitzinger à partir de 12 semaines ; aucun sous 6 semaines. La dernière semaine finit par la course. Le plan personnalisé n'a d'affûtage et de course que s'il va jusqu'à la date de l'objectif.",
+    "Cycle : automatique par défaut (charge constante sous 6 semaines, sinon 3 semaines de charge pour 1 de décharge, 2 pour 1 sous 8 semaines ; avec des compétitions, la longueur de charge qui place les décharges sur ou juste après les courses chargées), charge constante (même volume chaque semaine), ou semaines de charge (+ 6 % de volume par semaine) suivies d'une semaine de décharge (70 % du volume, un niveau plus bas, une séance de qualité en moins ; Spécifique LPN : voir ses règles).",
+    "Volume saisi : cible par défaut (moyenne des semaines de charge) ; maxi : la semaine la plus chargée, compétitions comprises, vaut ce volume ; mini : la semaine de charge la plus légère vaut ce volume. Tout le cycle est décalé d'autant (marge de 5 min pour les arrondis) ; décharge, affûtage et semaine de l'objectif restent allégés.",
+    "Affûtage avant l'objectif : 1 semaine (60 % du volume), 2 pour le semi et le marathon à partir de 10 semaines, 3 pour le marathon avec Pfitzinger à partir de 12 semaines ; aucun sous 6 semaines. La dernière semaine finit par la course.",
     "Compétitions intermédiaires (plan par date) : le TSS de la course (+ 50 % pour une course à fond, impact physiologique maximal) est retranché de la cible du cycle pour sa semaine ; la récupération (25 % de ce TSS la semaine précédente, 50 % puis 25 % les deux suivantes) est prise en partie sur les semaines de décharge ou d'affûtage, déjà allégées ; volume au moins égal à 30 % de la cible.",
     "Engagement dans une compétition : à fond (allure prédite), sans forcer (10 % moins vite), à la cool (20 % moins vite) ou en footing (milieu de la Z2) ; sa durée, son TSS et sa zone sont recalculés, et c'est ce temps en zone qui est déduit de la répartition. Une course en footing ne limite pas les séances de qualité autour d'elle.",
     "Autour d'une compétition : séances de qualité limitées selon sa charge (légère, modérée ou forte), aucune à moins de 3 jours d'une course, pas de doublé la semaine de la course ; la course remplace la sortie longue (s'il y en a plusieurs, les autres remplacent un footing).",
-    "Plan personnalisé : le temps d'une compétition dans sa zone est déduit de la répartition ; s'il dépasse le temps prévu cette semaine-là, les autres semaines compensent (jusqu'à la moitié de leur temps dans la zone), sinon une alerte signale que l'équilibre du plan ne peut pas être respecté.",
     "Calendrier (plan par date) : les jours sont datés, les courses tombent à leur date, les autres jours sont répartis régulièrement, en évitant la veille d'une course ; la dernière semaine s'arrête à la date de l'objectif."];
 
   let donnees = null; // dernier plan affiché, lu par export.js
   const brut = (h) => h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  // Alertes classées (bloquant, attention, information) et triées dans cet ordre ; au-delà de 3, les suivantes sont repliées
+  const NIVEAUX_ALERTE = [['err', /Incohérence|incompatible|non remplis|ne peuvent pas être raccourcies/], ['info', /tient lieu|servent|Moins de 6 semaines|ne peut pas être effectuée|Renseignez/]];
+  const ORDRE_ALERTE = ['err', 'warn', 'info'];
+  function listeAlertes(el, liste) {
+    const tri = liste.map(a => ({ a, n: (NIVEAUX_ALERTE.find(([, re]) => re.test(a)) || ['warn'])[0] })).sort((x, y) => ORDRE_ALERTE.indexOf(x.n) - ORDRE_ALERTE.indexOf(y.n));
+    const li = (x) => `<li class="a-${x.n}">${x.a}</li>`, reste = tri.length - 3;
+    el.innerHTML = tri.slice(0, 3).map(li).join('') + (reste > 0
+      ? `<li class="a-plus"><details><summary>${reste} autre${reste > 1 ? 's' : ''} alerte${reste > 1 ? 's' : ''}</summary><ul class="alertes">${tri.slice(3).map(li).join('')}</ul></details></li>` : '');
+    el.hidden = !liste.length;
+  }
+  // Icône d'une séance : club, course, qualité, sortie longue, récupération (Z1), footing
+  const iconeSeance = (x) => (x.club ? '👥' : x.nom === 'Course' ? '🏁' : x.qualite ? '⚡' : /^Sortie longue/.test(x.nom) ? '🛣️' : x.zone === 'Z1' ? '💤' : '🏃');
+  const zoneChip = (z) => `<span class="zchip" style="--c:var(--${z.toLowerCase()})">${z}</span>`;
 
   function render() {
-    const c = contexte(), zones = state.mode === 'zones';
-    const doc = zones ? ZONES_DOC : DOCTRINES.find(d => d.id === state.methode) || DOCTRINES[0]; // aucune méthode n'est recommandée : la première par défaut
+    const c = contexte();
+    const doc = DOCTRINES.find(d => d.id === state.methode) || ZONES_DOC; // aucune méthode n'est recommandée : Spécifique LPN par défaut
+    const zones = doc === ZONES_DOC;
 
-    document.querySelectorAll('#pl-mode [data-plan]').forEach(b => {
-      b.classList.toggle('actif', b.dataset.plan === state.mode);
-      b.setAttribute('aria-pressed', b.dataset.plan === state.mode);
-    });
-    $('pl-blocMethodes').hidden = zones;
-    $('eq-repartition').hidden = !zones; // la répartition par zone ne concerne que le plan personnalisé
+    $('eq-repartition').hidden = !zones; // la répartition par zone ne concerne que Spécifique LPN
     $('pl-contexte').innerHTML = `${c.course ? 'Objectif' : 'Allure travaillée'} <strong>${c.label}</strong>` +
       (c.profil ? ` (<strong>${fA(c.allureObj)}</strong>, ${c.course ? `chrono prédit ≈ ${E.formatTemps(c.tObj)}` : c.tObj >= 299 ? 'tenue plus de 5 h' : `tenue ≈ ${E.formatTemps(c.tObj)}`})` : '') +
-      ` · volume <strong>${fD(c.heures * 60)}</strong> par semaine.` +
+      ` · volume ${{ max: 'maxi ', min: 'mini ' }[state.volType] || ''}<strong>${fD(c.heures * 60)}</strong> par semaine.` +
       (c.profil ? '' : ` Sans profil, les allures ne sont pas calculées : <button type="button" class="lien" data-vue="profil">saisir mes chronos</button>.`);
 
-    // Fiche synthétique de chaque méthode : public, épreuves visées, difficultés, durée du plan et prérequis non remplis (alerte)
-    const point = (n) => `<span class="points" aria-hidden="true">${'●'.repeat(n)}<span>${'●'.repeat(5 - n)}</span></span>`;
-    $('pl-tri').value = state.tri;
-    $('pl-triSens').textContent = state.triDesc ? '↓ décroissant' : '↑ croissant';
-    $('pl-methodes').innerHTML = trier(DOCTRINES).map(d => {
-      const F = FICHES[d.id], manque = prerequis(d, c), n = d.difficulte[0];
-      return `<button type="button" class="methode${d === doc ? ' actif' : ''}" data-m="${d.id}" aria-pressed="${d === doc}">
-        <strong>${d.titre}${F.ancienne ? ' <span class="badge-old" title="Méthode ancienne, issue de l\'entraînement traditionnel">old school</span>' : ''}${F.limitee ? ' <abbr title="Sources limitées : construit à partir de résumés et de forums, sans le texte de l\'auteur sur les phases et les séances">*</abbr>' : ''}</strong>
-        <span class="ligne-fiche"><span class="sous">Public</span> ${F.public}</span>
-        <span class="ligne-fiche"><span class="sous">Épreuves visées</span> ${epreuves(d, c)}</span>
-        <span class="ligne-fiche" title="${d.difficulte[1][0].toUpperCase() + d.difficulte[1].slice(1)}."><span class="sous">Difficulté athlétique</span> ${point(n)} ${n}/5 · ${NIVEAUX_METHODE[n - 1]}</span>
-        <span class="ligne-fiche"><span class="sous">Mise en œuvre</span> ${MISE[F.mise]}</span>
-        <span class="ligne-fiche"><span class="sous">Durée du plan</span> ${F.plan}</span>
-        ${manque.length ? `<span class="prerequis">⚠ Prérequis : ${manque.join(' ; ')}</span>` : ''}</button>`;
-    }).join('');
+    // Choix de la méthode : liste déroulante (Spécifique LPN en tête, puis les méthodes d'entraîneurs par difficulté croissante)
+    // et fiche de la méthode choisie : public, épreuves visées, difficulté, mise en œuvre, durée du plan et prérequis non remplis
+    const libelle = (d) => `<span class="lm-nom">${d.titre}${FICHES[d.id].limitee ? ' *' : ''}</span>${ronds(d.difficulte[0])}`;
+    $('pl-methodeBtn').innerHTML = libelle(doc);
+    $('pl-methodeListe').innerHTML = [ZONES_DOC, ...parDifficulte(DOCTRINES)].map(d => `<li role="option" id="lm-${d.id}" data-m="${d.id}" aria-selected="${d === doc}">${libelle(d)}</li>`).join('');
+    const fm = FICHES[doc.id], niv = doc.difficulte[0], lacunes = prerequis(doc, c);
+    $('pl-fiche').innerHTML = `<p class="public" style="grid-column:1/-1;margin:0">${fm.public}${fm.limitee ? ' <abbr title="Sources limitées : construit à partir de résumés et de forums, sans le texte de l\'auteur sur les phases et les séances">* sources limitées</abbr>' : ''}</p>`
+      + `<span class="ligne-fiche"><span class="sous">🎯 Épreuves visées</span> ${epreuves(doc, c)}</span>`
+      + `<span class="ligne-fiche" title="${doc.difficulte[1][0].toUpperCase() + doc.difficulte[1].slice(1)}."><span class="sous">💪 Difficulté athlétique</span> ${ronds(niv)} <strong>${NIVEAUX_METHODE[niveau3(niv) - 1]}</strong></span>`
+      + `<span class="ligne-fiche"><span class="sous">🛠️ Mise en œuvre</span> ${MISE[fm.mise]}</span>`
+      + `<span class="ligne-fiche"><span class="sous">⏳ Durée du plan</span> ${fm.plan}</span>`
+      + (lacunes.length ? `<span class="prerequis" style="grid-column:1/-1">⚠ Prérequis : ${lacunes.join(' ; ')}</span>` : '');
 
-    const { semaines, court, plafond, avecSL, exces, aCourses } = construire(doc, c), hor = horizon();
+    const { semaines, court, plafond, slCourte, avecSL, exces, cycle, aClub, aLimite, aCourses } = construire(doc, c), hor = horizon();
     const nD = nbDoubles(), total = state.seances + nD;
     const pl = (n, mot) => `<strong>${n}</strong> ${mot}${n > 1 ? 's' : ''}`;
     $('pl-resumeSemaine').innerHTML = `<div class="grand">${total}<small>séance${total > 1 ? 's' : ''} / semaine</small></div><ul>`
       + `<li>${pl(state.seances, 'jour')} de course</li><li>${nD ? pl(nD, 'doublé') : 'Aucun doublé'}</li><li>${pl(7 - state.seances, 'jour')} de repos</li>`
       + `<li>≈ <strong>${fD(c.heures * 60 / total)}</strong> par séance</li></ul>`;
-    $('pl-titre').textContent = zones ? doc.titre : `Méthode ${doc.nom}`;
-    $('pl-resume').innerHTML = `<p>${doc.resume}</p>` +
-      (doc.noteProfil && doc.noteProfil(c) ? `<p class="note">${doc.noteProfil(c)}</p>` : '') +
+    $('pl-titre').innerHTML = zones ? `${doc.nom} <span class="sous">· optimiser une allure spécifique selon des critères paramétrables</span>` : `Méthode ${doc.nom}`;
+    // Notes personnalisées visibles ; explications (résumé, principes, règles communes) repliées
+    // (la difficulté détaillée de la méthode, doc.difficulte[1], est dans l'infobulle de la ligne « Difficulté athlétique »)
+    $('pl-resume').innerHTML = (doc.avertissement ? `<p class="info-box">${doc.avertissement}</p>` : '') + (doc.noteProfil && doc.noteProfil(c) ? `<p class="note">${doc.noteProfil(c)}</p>` : '') +
       (doc.slNote ? `<p class="note">${doc.slNote(avecSL)}</p>` : '') +
-      `<details><summary>${zones ? 'Règles de construction' : 'Principes et source'}</summary><ul class="note">${doc.principes.map(p => `<li>${p}</li>`).join('')}</ul>` +
+      '<div class="replis">' +
+      `<details class="mini"><summary>📖 À propos de ce plan</summary><p class="note">${doc.resume}</p></details>` +
+      `<details class="mini"><summary>${zones ? '📐 Règles de construction' : '📚 Principes et source'}</summary><ul class="note">${doc.principes.map(p => `<li>${p}</li>`).join('')}</ul>` +
       (zones ? '' : `<p class="note">Source : ${doc.source}</p>`) + '</details>' +
-      `<details><summary>Règles communes à tous les plans (cycle, affûtage, compétitions)</summary><ul class="note">${REGLES_COMMUNES.map(p => `<li>${p}</li>`).join('')}</ul></details>`;
+      `<details class="mini"><summary>🧩 Règles communes à tous les plans</summary><ul class="note">${REGLES_COMMUNES.map(p => `<li>${p}</li>`).join('')}</ul></details></div>`;
 
     const alertes = [];
     if (exces >= 1) alertes.push(`Beaucoup d'intensité pour le nombre de séances de qualité : jusqu'à ${fD(exces)} d'effort par semaine n'ont pas pu être placés (${BLOCS_MAX} blocs par séance au plus). Ajoutez des jours de course ou baissez la part d'intensité.`);
-    if (court) alertes.push(`Volume juste pour ${total} séances par semaine : les footings sont portés à ${EF_MIN} min, le volume réel dépasse donc le volume de référence certaines semaines.${nD ? ' Réduisez le nombre de doublés.' : ''}`);
-    if (plafond) alertes.push(`Volume élevé pour ${total} séances par semaine : les footings sont limités à ${doc.footingMax ? `${doc.footingMax} min (durée maximale conseillée par la méthode)` : 'la durée de la sortie longue'}, le volume réel reste sous le volume de référence certaines semaines. ${doc.joursMax ? `La méthode prévoit ${doc.joursMax} jours de course : baissez plutôt le volume hebdomadaire.` : 'Ajoutez des jours de course ou des doublés.'}`);
+    if (court) alertes.push(`${state.volType === 'max' ? 'Volume maxi incompatible avec' : 'Volume juste pour'} ${total} séances par semaine : les footings sont portés à ${zones ? EF_MIN : EF_MIN_M} min, le volume réel dépasse donc ${volRef()} certaines semaines.${nD ? ' Réduisez le nombre de doublés.' : ''}`);
+    if (plafond) alertes.push(`Volume élevé pour ${total} séances par semaine : les footings sont limités à ${doc.footingMax ? `${doc.footingMax} min (durée maximale conseillée par la méthode)` : zones ? 'la durée maximale d\'une séance' : 'la durée de la sortie longue'}, le volume réel reste sous ${volRef()} certaines semaines. ${doc.joursMax ? `La méthode prévoit ${doc.joursMax} jours de course : baissez plutôt le volume hebdomadaire.` : 'Ajoutez des jours de course ou des doublés.'}`);
+    if (zones && slCourte) alertes.push(`Volume trop juste pour une sortie longue d'au moins ${fD(slCourte)} (minimum pour un ${c.label.toLowerCase()}, atteint progressivement) : elle est réduite certaines semaines, ce qui reste est réparti sur les autres séances. Augmentez le volume ou le nombre de jours.`);
     const manque = zones ? [] : prerequis(doc, c);
     if (manque.length) alertes.push(`Prérequis de la méthode ${doc.nom} non remplis (${manque.join(' ; ')}) : avec vos données, elle perd une partie de son principe.`);
-    if (nD && c.heures < DOUBLE_VOLUME) alertes.push(`Les doublés servent surtout à absorber un gros volume : sous ≈ ${DOUBLE_VOLUME} h par semaine, des séances simples un peu plus longues apportent autant, avec plus de récupération.`);
+    if (nD && zones && total < DOUBLES_SEANCES) alertes.push(`Les doublés servent à libérer des jours de repos : ils sont utiles à partir de ${DOUBLES_SEANCES} séances par semaine (${total} ici).`);
+    if (nD && !zones && c.heures < DOUBLE_VOLUME_M) alertes.push(`Les doublés servent surtout à absorber un gros volume : sous ≈ ${DOUBLE_VOLUME_M} h par semaine, des séances simples un peu plus longues apportent autant, avec plus de récupération.`);
     if ((!zones || state.horizon === 'date') && hor.W < 6 && !doc.sansAffutage) alertes.push(state.horizon === 'date' ? "Moins de 6 semaines avant l'objectif : pas d'affûtage, la course finale arrive sans semaine allégée." : "Moins de 6 semaines : pas d'affûtage, le plan sert plutôt de bloc d'entraînement.");
     if (hor.invalide) alertes.push(`Renseignez le début du plan et la date de l'objectif (après le début) : en attendant, le plan fait ${state.semaines} semaines.`);
     if (hor.brut < 4) alertes.push("Moins de 4 semaines entre le début du plan et l'objectif : le plan est porté à 4 semaines et dépasse la date de l'objectif.");
     if (hor.brut > SEMAINES_MAX) alertes.push(`Plus de ${SEMAINES_MAX} semaines avant l'objectif : le plan est limité à ${SEMAINES_MAX} semaines, avancez la date de début.`);
+    aLimite.forEach(a => alertes.push(a));
+    aClub.forEach(a => alertes.push(a));
     aCourses.forEach(a => alertes.push(a));
-    $('pl-alertes').innerHTML = alertes.map(a => `<li>${a}</li>`).join('');
-    $('pl-alertes').hidden = !alertes.length;
-    const rapport = rapportSemaine(c);
-    $('pl-alerteSemaine').innerHTML = rapport.map(a => `<li>${a}</li>`).join('');
-    $('pl-alerteSemaine').hidden = !rapport.length;
+    listeAlertes($('pl-alertes'), alertes);
+    const rapport = [...rapportSemaine(c), ...aLimite, ...aClub];
+    if (document.activeElement !== $('pl-limite')) $('pl-limite').value = state.limite ?? ''; // pas pendant la frappe
+    document.querySelectorAll('#pl-limiteU button').forEach(b => b.classList.toggle('actif', b.dataset.u === state.limiteU));
+    $('pl-clubNote').hidden = !clubsActifs().length;
+    $('pl-volMax').checked = state.volType === 'max';
+    $('pl-volMin').checked = state.volType === 'min';
+    $('pl-club1').checked = state.club1;
+    $('pl-club2').checked = state.club2;
+    listeAlertes($('pl-alerteSemaine'), rapport);
 
     // Récapitulatif : séances, temps, distance (avec profil) et travail de qualité, par semaine et sur tout le plan
     const somme = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
     const recap = semaines.map(w => ({ n: w.seances.length, jours: w.jours.length, temps: somme(w.seances, x => x.duree),
       km: c.profil ? somme(w.seances, x => x.km) : null, qualite: somme(w.seances, x => x.travail) }));
     const tot = { n: somme(recap, r => r.n), temps: somme(recap, r => r.temps), km: c.profil ? somme(recap, r => r.km) : null, qualite: somme(recap, r => r.qualite) };
+    const fKm1 = (x) => `≈ ${(Math.round(x * 10) / 10).toLocaleString('fr-FR')} km`; // distance d'une séance, estimée
+    // Bloc de date de l'agenda : numéro et jour de la semaine (« Jour 1 » en l'absence de date)
+    const blocDate = (w, k) => (w.dates
+      ? `<div class="date"><b>${new Date(w.dates[k]).getUTCDate()}</b><span>${new Date(w.dates[k]).toLocaleDateString('fr-FR', { weekday: 'short', timeZone: 'UTC' })}</span></div>`
+      : `<div class="date"><b>${k + 1}</b><span>Jour</span></div>`);
     const W = semaines.length, fKm = (x) => `${Math.round(x)} km`, totaux = recap.map(r => r.temps), max = Math.max(...totaux);
-    const tuile = (label, valeur, sous) => `<div class="chiffre"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous}</div></div>`;
+    const tuile = (ico, label, valeur, sous) => `<div class="chiffre"><div class="label"><span aria-hidden="true">${ico}</span> ${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous}</div></div>`;
     $('pl-chiffres').innerHTML = [
-      tuile('Séances', String(tot.n), `${(tot.n / W).toFixed(1).replace('.', ',')} par semaine, sur ${state.seances} jours`),
-      tuile('Temps de course', fD(tot.temps), `${fD(tot.temps / W)} par semaine (référence ${fD(c.heures * 60)})`),
-      tuile('Distance', tot.km === null ? '—' : `≈ ${fKm(tot.km)}`, tot.km === null ? 'profil nécessaire' : `≈ ${fKm(tot.km / W)} par semaine`),
-      tuile('Travail de qualité', fD(tot.qualite), `${Math.round(100 * tot.qualite / tot.temps)} % du temps, récupérations comprises`)
+      tuile('🗓️', 'Séances', String(tot.n), `${(tot.n / W).toFixed(1).replace('.', ',')} par semaine, sur ${state.seances} jours`),
+      tuile('⏱️', 'Temps de course', fD(tot.temps), `${fD(tot.temps / W)} par semaine (${{ max: 'maxi', min: 'mini' }[state.volType] || 'réf.'} ${fD(c.heures * 60)})`),
+      tuile('📏', 'Distance', tot.km === null ? '—' : `≈ ${fKm(tot.km)}`, tot.km === null ? 'profil nécessaire' : `≈ ${fKm(tot.km / W)} par semaine`),
+      tuile('⚡', 'Qualité', fD(tot.qualite), `${Math.round(100 * tot.qualite / tot.temps)} % du temps, récupérations comprises`)
     ].join('');
     const cls = (w) => (w.courses ? 'competition' : ({ Charge: 'charge', 'Décharge': 'decharge', 'Affûtage': 'affutage' })[w.type]);
     const etiq = (w) => `${w.type}${w.phase === w.type ? '' : ` · ${w.phase}`}${w.etiquette ? ` · ${w.etiquette}` : ''}`;
@@ -1228,17 +1676,21 @@
     $('pl-liste').innerHTML = semaines.map((w, i) => {
       const r = recap[i];
       return `<details class="semaine ${cls(w)}"${(ouverts.length ? ouverts[i] : i === 0) ? ' open' : ''}>
-        <summary>Semaine ${i + 1}${w.debut ? ` (${fDate(w.debut)} – ${fDate(w.fin)})` : ''} · ${etiq(w)} <span class="sous">· ${r.n} séances · ${fD(r.temps)}${r.km === null ? '' : ` · ≈ ${fKm(r.km)}`} · niveau ${Math.round(w.niveau)}/10</span></summary>
-        <ol class="seances">${w.jours.map((j, k) => `<li style="--c:var(--${j[0].zone.toLowerCase()})"><span class="jour">${w.dates ? fDate(w.dates[k], true) : `Jour ${k + 1}`}${j.length > 1 ? ` · doublé${moments(j)[0][0] ? '' : ', ordre au choix'}` : ''}</span>` +
-          moments(j).map(([m, x]) => `<div><strong>${m ? `${m} : ` : ''}${x.nom}</strong> <span class="sous">· ${fD(x.duree)}</span><div class="sous">${x.texte}</div></div>`).join('') + '</li>').join('')}</ol>
-        <p class="note">${r.qualite ? `Travail de qualité ≈ ${fD(r.qualite)}, récupérations comprises.` : 'Pas de travail de qualité cette semaine (footings, lignes droites).'}</p>
-        ${(w.notes || []).map(n => `<p class="note course">${n}</p>`).join('')}</details>`;
+        <summary><span class="s-titre">Semaine ${i + 1}</span>${w.debut ? ` <span class="sous">${fDate(w.debut)} – ${fDate(w.fin)}</span>` : ''} <span class="badge ${cls(w)}">${etiq(w)}</span>
+          <span class="chips"><span title="Séances">🗓️ ${r.n}</span><span title="Temps de course">⏱️ ${fD(r.temps)}</span>${r.km === null ? '' : `<span title="Distance estimée">📏 ≈ ${fKm(r.km)}</span>`}<span title="Travail de qualité, récupérations comprises">⚡ ${r.qualite ? fD(r.qualite) : '—'}</span><span title="Niveau de difficulté">📶 ${Math.round(w.niveau)}/10</span>${(w.notes || []).length ? `<span title="Notes sur cette semaine">📝 ${w.notes.length}</span>` : ''}</span></summary>
+        ${(w.notes || []).map(n => `<p class="note-sem">${n}</p>`).join('')}
+        <ol class="seances">${w.jours.map((j, k) => `<li style="--c:var(--${j[0].zone.toLowerCase()})">${blocDate(w, k)}<div class="corps">` +
+          (j.length > 1 ? `<span class="jour">${j.every(x => x.nom === 'Course') ? `${j.length} courses le même jour` : `Doublé${moments(j)[0][0] ? '' : ', ordre au choix'}`}</span>` : '') +
+          moments(j).map(([m, x]) => `<div class="seance"><div><span class="s-ico" aria-hidden="true">${iconeSeance(x)}</span><strong>${m ? `${m} : ` : ''}${x.nom}</strong> ${zoneChip(x.zone)}<div class="sous">${x.texte}</div></div><div class="droite">${x.km === null ? '' : `<b>${fKm1(x.km)}</b>`}<div class="sous">${fD(x.duree)}</div></div></div>`).join('') + '</div></li>').join('')}</ol></details>`;
     }).join('');
 
     const premiere = semaines[0].seances.find(x => x.qualite);
     $('pl-diffLbl').textContent = `${state.difficulte}/10`;
     $('pl-diffNote').innerHTML = premiere ? `Première semaine, ${premiere.nom.toLowerCase()} : ${premiere.texte}` : 'Première semaine : footings et lignes droites (phase de fondation).';
     $('pl-cycleNb').hidden = state.cycle !== 'cycle';
+    $('pl-cycleAuto').hidden = state.cycle !== 'auto' && !cycle.imposee;
+    $('pl-cycleAuto').textContent = cycle.imposee ? 'Cette méthode impose une charge constante, sans semaine de décharge.'
+      : `Cycle retenu : ${cycle.type === 'cycle' ? `${cycle.charge} semaine${cycle.charge > 1 ? 's' : ''} de charge puis ${cycle.decharge} de décharge` : 'charge constante'} (${cycle.raison}).`;
 
     // Durée du plan : nombre de semaines, ou dates (début du plan, objectif) avec les compétitions intermédiaires
     const parDate = state.horizon === 'date';
@@ -1270,9 +1722,9 @@
     if ($('eq-planTot')) $('eq-planTot').textContent = tempsZ(totP);
 
     // Données des exports (export.js) : textes sans balises, étapes structurées pour les montres
-    donnees = { titre: zones ? doc.titre : `Méthode ${doc.nom}`, mode: state.mode, methode: zones ? null : doc.id,
-      contexte: { allure: c.label, allureMinKm: c.profil ? c.allureObj : null, tempsMin: c.profil ? c.tObj : null, volumeH: c.heures, jours: state.seances,
-        doubles: nD, semaines: W, cycle: nomCycle(), difficulte: state.difficulte },
+    donnees = { titre: zones ? doc.titre : `Méthode ${doc.nom}`, mode: zones ? 'zones' : 'methode', methode: zones ? null : doc.id,
+      contexte: { allure: c.label, allureMinKm: c.profil ? c.allureObj : null, tempsMin: c.profil ? c.tObj : null, volumeH: c.heures, typeVolume: state.volType, jours: state.seances,
+        doubles: nD, semaines: W, cycle: nomCycle(cycle), difficulte: state.difficulte, limite: c.limite ? c.limite.txt : null },
       repartition: ZIDS.map((z, i) => ({ zone: z, cible: Math.round(1000 * c.parts[i]) / 10, plan: Math.round(1000 * (parts[z] || 0) / totP) / 10 })),
       semaines: semaines.map((w, i) => ({ numero: i + 1, type: w.type, phase: w.phase, debut: w.debut ? new Date(w.debut).toISOString().slice(0, 10) : null, fin: w.fin ? new Date(w.fin).toISOString().slice(0, 10) : null, notes: (w.notes || []).slice(), niveau: Math.round(w.niveau), tempsMin: recap[i].temps, km: recap[i].km,
         jours: w.jours.map((j, k) => ({ jour: k + 1, date: w.dates ? new Date(w.dates[k]).toISOString().slice(0, 10) : null, seances: moments(j).map(([m, x]) => ({ moment: m, nom: x.nom, zone: x.zone, dureeMin: x.duree,
@@ -1322,15 +1774,56 @@
     const b = e.target.closest('.suppr');
     if (b) { state.courses.splice(+b.closest('[data-i]').dataset.i, 1); render(); }
   });
+  ['club1', 'club2'].forEach(k => $(`pl-${k}`).addEventListener('change', e => { state[k] = e.target.checked; render(); }));
+  // Volume maxi / mini : cases exclusives (aucune cochée : volume cible)
+  [['max', 'pl-volMax'], ['min', 'pl-volMin']].forEach(([t, id]) => $(id).addEventListener('change', e => { state.volType = e.target.checked ? t : 'cible'; render(); }));
+  // Longueur maximale d'une séance : valeur facultative (vide = aucune) entre les bornes de l'unité ; changer d'unité convertit la valeur (allure moyenne de Z2)
+  const bornerLimite = () => {
+    const [a, b] = bornesLimite(contexte());
+    if (state.limite !== null) state.limite = Math.min(b, Math.max(a, Math.round(state.limite * 10) / 10));
+    $('pl-limite').min = a; $('pl-limite').max = b; $('pl-limite').step = state.limiteU === 'km' ? 0.5 : 5;
+  };
+  bornerLimite();
+  $('pl-limite').addEventListener('input', e => {
+    const v = parseFloat(e.target.value.replace(',', '.')), [a, b] = bornesLimite(contexte());
+    if (e.target.value === '') { state.limite = null; render(); } else if (v >= a && v <= b) { state.limite = v; render(); }
+  });
+  $('pl-limite').addEventListener('change', () => { // hors bornes : ramené à la borne la plus proche à la sortie du champ
+    const v = parseFloat($('pl-limite').value.replace(',', '.'));
+    state.limite = Number.isFinite(v) ? v : null;
+    bornerLimite();
+    render();
+    $('pl-limite').value = state.limite ?? '';
+  });
+  $('pl-limiteU').addEventListener('click', e => {
+    const b = e.target.closest('[data-u]');
+    if (!b || b.dataset.u === state.limiteU) return;
+    const c = contexte(), allure = c.profil ? aZ(c, 'Z2') : 6; // min/km de conversion (Z2, ou 6 sans profil)
+    if (state.limite !== null) state.limite = b.dataset.u === 'km' ? state.limite / allure : Math.round(state.limite * allure / 5) * 5;
+    state.limiteU = b.dataset.u;
+    bornerLimite();
+    render();
+  });
   $('pl-moment').value = state.moment;
   $('pl-moment').addEventListener('change', e => { state.moment = e.target.value; render(); });
   $('pl-cycle').value = state.cycle;
   $('pl-cycle').addEventListener('change', e => { state.cycle = e.target.value; render(); });
-  $('pl-methodes').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { state.methode = b.dataset.m; render(); } });
-  $('pl-tri').innerHTML = Object.entries(TRIS).map(([k, [nom]]) => `<option value="${k}">${nom}</option>`).join('');
-  $('pl-tri').addEventListener('change', e => { state.tri = e.target.value; render(); });
-  $('pl-triSens').addEventListener('click', () => { state.triDesc = !state.triDesc; render(); });
-  $('pl-mode').addEventListener('click', e => { const b = e.target.closest('[data-plan]'); if (b) { state.mode = b.dataset.plan; render(); } });
+  // Liste déroulante des méthodes (listbox accessible : flèches, Entrée, Échap) ; les ronds de difficulté sont à droite de chaque ligne
+  const btn = $('pl-methodeBtn'), liste = $('pl-methodeListe');
+  const activer = (li) => { liste.querySelectorAll('li.actif').forEach(x => x.classList.remove('actif')); if (li) { li.classList.add('actif'); btn.setAttribute('aria-activedescendant', li.id); li.scrollIntoView({ block: 'nearest' }); } };
+  const ouvrir = (o) => { liste.hidden = !o; btn.setAttribute('aria-expanded', o); if (o) activer(liste.querySelector('[aria-selected="true"]')); };
+  const choisir = (li) => { ouvrir(false); if (li && li.dataset.m !== state.methode) { state.methode = li.dataset.m; render(); } btn.focus(); };
+  btn.addEventListener('click', () => ouvrir(liste.hidden));
+  liste.addEventListener('click', e => choisir(e.target.closest('li')));
+  liste.addEventListener('mousemove', e => { const li = e.target.closest('li'); if (li && !li.classList.contains('actif')) activer(li); });
+  btn.addEventListener('keydown', e => {
+    const items = [...liste.querySelectorAll('li')], cur = liste.querySelector('li.actif') || liste.querySelector('[aria-selected="true"]'), i = items.indexOf(cur);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (liste.hidden) ouvrir(true); else activer(items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]); }
+    else if ((e.key === 'Enter' || e.key === ' ') && !liste.hidden) { e.preventDefault(); choisir(cur); }
+    else if (e.key === 'Escape') ouvrir(false);
+  });
+  btn.addEventListener('keyup', e => { if (e.key === ' ') e.preventDefault(); });
+  document.addEventListener('click', e => { if (!e.target.closest('.lm')) ouvrir(false); });
   document.addEventListener('balance', render); // nouveau profil, allure cible, volume ou répartition dans Balance
 
   window.Plan = { donnees: () => donnees };

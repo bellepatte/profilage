@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Profilage athlétique — allures, zones et répartition</title>
+<title>Profil d'endurance — allures, zones et répartition</title>
 <style>
-  :root { --fond:#eef6ff; --carte:#fff; --texte:#18202c; --discret:#4a5568; --bleu:#1583ff; --menthe:#4fc9c0; --accent:#0e6ee0; --accent-doux:#e3f0ff; --bord:#d5dbe3; --bord-fort:#8a96a8; --entete:#f1f6fc; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; --ombre:0 4px 16px rgba(21,131,255,.1); --z1:#6b7f99; --z2:#4e8fd9; --z3:#2f9e8f; --z4:#5aa04a; --z5:#e0a100; --z6:#d9542b; }
+  :root { --fond:#eef6ff; --carte:#fff; --texte:#18202c; --discret:#4a5568; --bleu:#1583ff; --menthe:#4fc9c0; --accent:#0e6ee0; --accent-doux:#e3f0ff; --bord:#d5dbe3; --bord-fort:#8a96a8; --entete:#f1f6fc; --alerte:#8a5a00; --alerte-fond:#fff4d6; --rouge:#c62828; --rouge-fond:#fdecea; --conseil:#1e7a52; --conseil-fond:#e6f6ee; --ombre:0 4px 16px rgba(21,131,255,.1); --z1:#6b7f99; --z2:#4e8fd9; --z3:#2f9e8f; --z4:#5aa04a; --z5:#e0a100; --z6:#d9542b; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#2e3947; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; --ombre:none; }
+    :root:not([data-theme="light"]) { --fond:#0b1016; --carte:#151c25; --texte:#eef2f7; --discret:#b3bfcf; --accent:#6cb2ff; --accent-doux:#17263a; --bord:#2e3947; --bord-fort:#5d6b7e; --entete:#1b2430; --alerte:#f0c458; --alerte-fond:#2e2611; --rouge:#ff7b72; --rouge-fond:#3a1a1a; --conseil:#6fd3a3; --conseil-fond:#12291f; --ombre:none; }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -20,7 +20,6 @@
   header .onglets { background: rgba(255,255,255,.2); }
   header .onglet { color: #eaf4ff; }
   header .onglet.actif { background: #fff; color: var(--accent); }
-  body.simple .avance { display: none !important; }
   h1 { font-size: 1.45rem; margin: 0; }
   .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-bottom: 40px; }
   @media (min-width: 960px) { .page:not(.seul) { grid-template-columns: 340px minmax(0, 1fr); align-items: start; } .saisie { position: sticky; top: 16px; } }
@@ -35,6 +34,18 @@
   .sous { font-size: .82em; }
   ul.note { padding-left: 20px; }
   .doute { color: var(--rouge); font-weight: 700; }
+  .feu { display: inline-flex; gap: 3px; padding: 3px 5px; margin-right: 6px; border-radius: 10px; background: #2a3039; vertical-align: middle; }
+  .feu i { width: 10px; height: 10px; border-radius: 50%; background: #4a525e; }
+  .feu.r i:nth-child(1) { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .feu.o i:nth-child(2) { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .feu.v i:nth-child(3) { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .fiab-detail { display: grid; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--bord); font-size: .82em; }
+  .fiab-detail > div { display: flex; align-items: center; gap: 6px; }
+  .fiab-detail .nom { color: var(--discret); font-weight: 600; margin-right: auto; }
+  .fiab-detail .niv { font-weight: 700; color: var(--texte); }
+  .fiab-detail .pastille { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--bord-fort); }
+  .fiab-detail .v { background: #22c55e; } .fiab-detail .o { background: #f59e0b; } .fiab-detail .r { background: #ef4444; }
+  .fiab-detail .nb { margin-top: 2px; color: var(--discret); }
   code { font-family: ui-monospace, Consolas, monospace; }
   input, select, button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 8px; padding: 8px 10px; min-width: 0; }
   ::placeholder { color: var(--discret); opacity: .5; }
@@ -60,14 +71,25 @@
   details { margin-top: 14px; }
   summary { cursor: pointer; font-weight: 600; }
   .saisie details { border-top: 1px solid var(--bord); padding-top: 12px; }
-  .champs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .champs > * { min-width: 0; }
+  @media (max-width: 520px) { .champs { grid-template-columns: minmax(0, 1fr); } .champs3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .coche { display: flex; gap: 8px; align-items: center; margin: 10px 0 2px; font-size: .92em; }
-  .erreur, .avert, .alertes { color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte); border-radius: 8px; padding: 8px 12px; margin: 12px 0 0; }
-  .erreur, .avert { font-weight: 600; }
+  .erreur, .avert { color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte); border-radius: 8px; padding: 8px 12px; margin: 12px 0 0; font-weight: 600; }
   #erreur { margin: 0 0 12px; }
   .avert { margin: 0 0 10px; }
-  .alertes { padding-left: 28px; }
-  .alertes li + li { margin-top: 6px; }
+  /* Alertes classées : ⛔ bloquant, ⚠️ attention, ℹ️ information (classes posées par plan.js, listeAlertes) */
+  .alertes { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: .92em; }
+  .alertes > li { display: grid; grid-template-columns: 1.6em minmax(0, 1fr); gap: 4px; padding: 7px 12px 7px 8px; border-radius: 10px; border-left: 4px solid var(--c); background: var(--f); color: var(--texte); }
+  .alertes > li::before { content: var(--i); line-height: 1.45; }
+  .a-err { --c: var(--rouge); --f: var(--rouge-fond); --i: "⛔"; }
+  .a-warn { --c: var(--alerte); --f: var(--alerte-fond); --i: "⚠️"; }
+  .a-info { --c: var(--accent); --f: var(--accent-doux); --i: "ℹ️"; }
+  .alertes > li.a-plus { display: block; padding: 0; border: 0; background: none; }
+  .alertes > li.a-plus::before { content: none; }
+  .a-plus > details { margin: 0; }
+  .a-plus > details > summary { color: var(--accent); font-weight: 600; font-size: .95em; padding: 2px 4px; }
+  .a-plus .alertes { margin-top: 6px; }
   .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; }
   .chiffre { background: var(--entete); border-radius: 14px; padding: 10px 12px; border-top: 4px solid var(--menthe); }
   .chiffre:nth-child(odd) { border-top-color: var(--bleu); }
@@ -100,7 +122,7 @@
   .groupes .valeur small { font-size: .4em; color: var(--discret); }
   .groupes .indic { font-weight: 600; font-size: .9em; margin-top: 2px; }
   details.volet { padding: 0; margin-top: 0; }
-  details.volet > summary { padding: 14px 16px; list-style: none; display: flex; gap: 8px; align-items: baseline; }
+  details.volet > summary { padding: 14px 16px; list-style: none; display: flex; gap: 8px; align-items: center; }
   details.volet > summary::-webkit-details-marker { display: none; }
   details.volet > summary::before { content: "▸"; color: var(--discret); }
   details.volet[open] > summary::before { content: "▾"; }
@@ -156,7 +178,6 @@
   .segment.sep { box-shadow: inset 3px 0 0 var(--texte); }
   .echelle { position: relative; height: 20px; margin-top: 4px; font-size: .78em; color: var(--discret); }
   .echelle span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-  header .mode { margin-left: auto; }
   nav.vues { max-width: 1000px; margin: 0 auto 12px; padding: 0 16px; display: flex; gap: 4px; border-bottom: 1px solid var(--bord); }
   body:has(#vue-entrainement:not([hidden])) nav.vues { max-width: 1100px; }
   nav.vues .onglet { border-radius: 8px 8px 0 0; padding: 5px 16px; font-size: .88em; border-bottom: 3px solid transparent; margin-bottom: -1px; }
@@ -164,7 +185,7 @@
   nav.vues .onglet:hover { background: var(--accent-doux); }
   .profil-utilise { margin: 0 0 16px; }
   .profil-lien { margin: -6px 0 12px; text-align: right; font-size: .9em; color: var(--discret); }
-  .rang { display: flex; gap: 8px; }
+  .rang { display: flex; flex-wrap: wrap; gap: 8px; }
   .rang input { flex: 1; }
   .curseur-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
   .curseur-tete:first-child { margin-top: 0; }
@@ -176,25 +197,39 @@
   .repartition { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--discret); font-size: .88em; margin: 6px 0 12px; }
   .groupe { font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--discret); margin: 14px 0 0; }
   .groupe:first-of-type { margin-top: 0; }
-  .methode-choisie { border-top: 1px solid var(--bord); margin-top: 14px; padding-top: 12px; }
-  .methode-choisie h3 { margin: 0 0 6px; font-size: 1rem; }
+  .bloc-plan { border: 1px solid var(--bord); border-radius: 14px; padding: 14px 16px; margin: 16px 0; }
+  .bloc-titre { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .bloc-titre h3 { margin: 0; font-size: 1.05rem; }
+  .puce-num { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.8em; height: 1.8em; border-radius: 50%; background: var(--accent); color: var(--carte); font-weight: 700; font-size: .85rem; }
+  .bloc-plan h4.groupe { margin: 16px 0 6px; font-weight: 600; }
+  .methode-choisie { background: var(--accent-doux); border-radius: 12px; padding: 12px 16px; margin: 0 0 6px; }
+  .methode-choisie h4 { margin: 2px 0 6px; font-size: 1.1rem; color: var(--accent); }
   .methode-choisie p { margin: 6px 0 0; }
+  .methode-choisie .sous-volet { background: var(--carte); margin-top: 10px; }
   #pl-chiffres { margin-bottom: 4px; }
   .puce.actif { background: var(--accent); color: var(--carte); }
   .puce.actif .sous { color: var(--carte); }
-  .methodes { display: grid; gap: 8px; }
-  .tri { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 10px; font-size: .9em; }
-  .tri label { display: flex; align-items: center; gap: 8px; }
-  .methode { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-content: start; gap: 2px 16px; text-align: left; border: 1px solid var(--bord); border-radius: 10px; padding: 10px 14px; font-size: .92em; }
-  .methode > strong, .methode > .prerequis { grid-column: 1 / -1; }
-  .methode:hover { border-color: var(--accent); }
-  .methode.actif { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-doux); }
+  .choix-methode { margin: 0 0 10px; }
+  .lm { position: relative; margin-top: 2px; }
+  .lm-bouton { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; text-align: left; font-weight: 600; padding: 9px 12px; }
+  .lm-bouton::after { content: "▾"; flex: none; color: var(--discret); }
+  .lm-nom { flex: 1; min-width: 0; }
+  .lm-liste { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: min(60vh, 460px); overflow: auto; margin: 0; padding: 4px; list-style: none; background: var(--carte); border: 1px solid var(--bord-fort); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .2); }
+  .lm-liste li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+  .lm-liste li.actif { background: var(--accent-doux); }
+  .lm-liste li[aria-selected="true"] { font-weight: 700; }
+  .ronds { display: inline-flex; align-items: center; gap: 4px; flex: none; vertical-align: middle; }
+  .ronds i { display: block; width: .8em; height: .8em; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--c); }
+  .ronds i.on { background: var(--c); }
+  .ronds.n1 { --c: var(--z4); }
+  .ronds.n2 { --c: var(--z5); }
+  .ronds.n3 { --c: var(--z6); }
+  .methode-choisie .public { margin: 0 0 8px; color: var(--discret); font-size: .92em; line-height: 1.35; }
+  .faits { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 8px 0; padding-top: 8px; border-top: 1px solid var(--bord); font-size: .92em; }
   .ligne-fiche { display: block; font-size: .92em; }
   .ligne-fiche .sous { display: block; font-size: .72em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
   .prerequis { color: var(--rouge); font-weight: 600; font-size: .85em; }
   .difficulte { font-size: .85em; font-weight: 600; }
-    .points { color: var(--z6); letter-spacing: 1px; margin-right: 4px; }
-  .points span { color: var(--bord); }
   .volumes { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 16px 0 22px; }
   .volumes div { flex: 1; min-width: 0; position: relative; border-radius: 4px 4px 0 0; background: var(--accent); }
   .volumes .decharge { background: var(--z2); opacity: .5; }
@@ -202,8 +237,18 @@
   .volumes span { position: absolute; top: 100%; left: 0; right: 0; text-align: center; font-size: .7em; color: var(--discret); }
   .semaine { border: 1px solid var(--bord); border-radius: 10px; padding: 8px 12px; margin-top: 8px; }
   .semaine.decharge { background: var(--entete); }
-  .seances { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
-  .seances li { border-left: 4px solid var(--c); padding: 2px 0 2px 10px; display: grid; gap: 4px; }
+  .seances { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+  .seances li { display: grid; grid-template-columns: 64px minmax(0, 1fr); border: 1px solid var(--bord); border-radius: 12px; overflow: hidden; }
+  .seances .date { background: var(--c); color: #fff; text-align: center; padding: 10px 4px; display: grid; align-content: center; line-height: 1.1; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .seances .date b { font-size: 1.5rem; }
+  .seances .date span { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+  .seances .corps { padding: 8px 0; display: grid; }
+  .seances .corps > .jour { padding: 0 14px; }
+  .seances .seance { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 4px 16px 4px 14px; }
+  .seances .seance + .seance { border-top: 1px dashed var(--bord); margin-top: 4px; padding-top: 8px; }
+  .seances .droite { text-align: right; }
+  .seances .droite b { font-size: 1.2rem; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 520px) { .seances li { grid-template-columns: 52px minmax(0, 1fr); } .seances .seance { grid-template-columns: 1fr; } .seances .droite { text-align: left; display: flex; gap: 8px; align-items: baseline; } }
   .jour { font-size: .75em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--discret); }
   .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   tfoot td { font-weight: 700; border-bottom: 0; }
@@ -212,10 +257,6 @@
   body:has(#vue-entrainement:not([hidden])) #references { max-width: 1100px; }
   #references h2 { font-size: 1rem; margin: 14px 0 0; }
   #references .note { margin: 0; }
-  #references .note, #eq-note { position: relative; }
-  .aide { display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em; margin-left: 6px; border-radius: 50%; background: var(--accent-doux); color: var(--accent); font-weight: 700; font-size: .9em; cursor: help; }
-  .aide [role="tooltip"] { display: none; position: absolute; left: 0; bottom: calc(100% + 8px); width: min(460px, 100%); padding: 10px 14px; border-radius: 12px; background: var(--texte); color: var(--carte); font-size: .92rem; font-weight: 400; line-height: 1.45; text-align: left; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 10; }
-  .aide:hover [role="tooltip"], .aide:focus [role="tooltip"] { display: block; }
   #references ul { margin: 6px 0 0; }
   .zones-cible { position: relative; height: 44px; cursor: pointer; touch-action: none; user-select: none; }
   .zones-cible .segments { position: absolute; inset: 0; display: flex; border-radius: 8px; overflow: hidden; }
@@ -233,20 +274,46 @@
   .aide-cycle table { margin-top: 8px; }
   .aide-cycle th, .aide-cycle td { white-space: normal; vertical-align: top; font-size: .88rem; }
   .aide-cycle td:first-child { white-space: nowrap; }
-  .badge-old { display: inline-block; margin-left: 4px; padding: 0 8px; border-radius: 999px; background: #efe6d2; color: #6b4e16; border: 1px solid #d8c29a; font-size: .72em; font-weight: 700; letter-spacing: .03em; vertical-align: middle; }
+  fieldset.club { border: 1px solid var(--bord); border-radius: 12px; padding: 8px 14px 10px; margin: 14px 0 0; }
+  fieldset.club legend { padding: 0 6px; font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--discret); }
+  .case { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; }
+  .case input { width: auto; margin-top: 3px; padding: 0; flex: none; }
+  .info-box { margin: 10px 0; padding: 8px 12px; border-left: 4px solid var(--accent); border-radius: 8px; background: var(--accent-doux); font-size: .9em; }
+  .info-box::before { content: "ℹ "; font-weight: 700; color: var(--accent); }
   .ligne-course { display: grid; grid-template-columns: 11em minmax(0, 1fr) auto 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
   .ligne-course .conv { grid-column: 1 / -1; }
   .ligne-course.invalide .dist { border-color: var(--rouge); }
-  .note.course { color: var(--accent); font-weight: 600; }
   .volumes .competition { background: var(--z6); }
   .semaine.competition { border-left: 4px solid var(--z6); }
   #pl-horizon { margin-bottom: 10px; }
+  .aide { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em; margin-left: 6px; border-radius: 50%; background: var(--accent-doux); color: var(--accent); font-weight: 700; font-size: .9rem; font-style: normal; cursor: help; vertical-align: middle; flex: none; }
+  .aide:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .aide [role="tooltip"] { display: none; position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(calc(-50% + var(--dx, 0px))); width: min(380px, 86vw); padding: 10px 14px; border-radius: 12px; background: var(--texte); color: var(--carte); font-size: .88rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; text-transform: none; letter-spacing: 0; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 20; }
+  .aide:hover [role="tooltip"], .aide:focus [role="tooltip"] { display: block; }
+  .aide.fixe [role="tooltip"] { position: fixed; transform: none; bottom: auto; }
+  .aide code { color: inherit; }
+  .entete-aide { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 10px 0 6px; }
+  .entete-aide h3 { margin: 0; }
+  .etapes { display: flex; gap: 8px; margin: 0 0 14px; }
+  .etapes button { flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 999px; background: var(--carte); color: var(--discret); font-weight: 600; box-shadow: var(--ombre); }
+  .etapes .num { flex: none; display: grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--entete); color: var(--discret); font-size: .85em; }
+  .etapes .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .etapes button.fait .num { background: var(--menthe); color: #fff; }
+  .etapes button.actif { color: var(--accent); border-color: var(--bleu); box-shadow: 0 0 0 2px var(--accent-doux), var(--ombre); }
+  .etapes button.actif .num { background: var(--bleu); color: #fff; }
+  @media (max-width: 600px) { .etapes .nom { display: none; } .etapes button.actif .nom { display: inline; } .etapes button.actif { flex: 4 1 0; } }
+  /* Téléphone : marges réduites pour garder la largeur utile (aucun débordement horizontal, sinon le navigateur dézoome la page) */
+  @media (max-width: 520px) { .page { padding-left: 10px; padding-right: 10px; } .carte { padding: 12px; } .bloc-plan { padding: 12px; } .etape { overflow-wrap: anywhere; } }
+  .etape-tete { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+  .etape-tete h2 { margin: 0; color: var(--accent); }
+  .etape-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 20px; }
+  .etape-nav .sec { padding: 8px 18px; border-radius: 999px; }
+  details.mini { margin: 10px 0 0; font-size: .92em; }
+  details.mini > summary { color: var(--accent); font-weight: 500; font-size: .92em; }
+  .legende { font-size: .82em; color: var(--discret); margin: 6px 0 0; }
   .sous-volet { border: 1px solid var(--bord); border-radius: 12px; padding: 10px 14px 14px; margin-top: 14px; }
   .sous-volet > summary { color: var(--accent); font-size: 1rem; }
   .sous-volet > .corps { padding-top: 10px; }
-  .info { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 8px 14px; background: var(--accent-doux); border-left: 4px solid var(--bleu); border-radius: 10px; font-size: .9em; }
-  .info ul { margin: 4px 0; padding-left: 18px; }
-  .info > span:first-child { flex: none; width: 1.4em; height: 1.4em; border-radius: 50%; background: var(--bleu); color: #fff; font-weight: 700; font-size: .9em; display: grid; place-items: center; }
   .zones-cible { margin: 22px 0 22px; }
   .poignee { position: absolute; top: -6px; bottom: -6px; width: 6px; margin-left: -3px; border-radius: 3px; background: #fff; border: 2px solid #18202c; box-shadow: 0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.45); cursor: grab; }
   .poignee::before, .poignee::after { content: ""; position: absolute; left: 50%; width: 22px; height: 22px; margin-left: -11px; box-sizing: border-box; border-radius: 50%; background: var(--bleu); border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
@@ -259,11 +326,67 @@
   .champs3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .champs input.invalide { border-color: var(--rouge); }
   td.plan { color: var(--discret); }
-  #pl-mode { margin-bottom: 12px; }
+  /* Mise en forme : icônes de section, étapes, sous-parties, conseils, en-têtes de semaine et puces */
+  .ico { display: inline-grid; place-items: center; flex: none; width: 2em; height: 2em; margin-right: 8px; border-radius: 10px; background: var(--accent-doux); font-size: 1rem; line-height: 1; }
+  .carte > h2 { display: flex; align-items: center; }
+  .etape { border-top: 4px solid var(--bleu); }
+  .etape-tete { padding-bottom: 12px; border-bottom: 1px solid var(--bord); margin-bottom: 16px; }
+  .etape-tete h2 { font-size: 1.2rem; }
+  .bloc-plan { border-left: 4px solid var(--menthe); }
+  .bloc-titre h3 { color: var(--accent); }
+  .champs > .groupe { grid-column: 1 / -1; margin: 10px 0 -2px; }
+  .champs > .groupe:first-child { margin-top: 0; }
+  .champs > .cases-volume { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: -4px; }
+  .champs .cases-volume label.case { display: flex; color: var(--texte); }
+  fieldset.club legend { display: flex; align-items: center; gap: 6px; }
+  fieldset.club legend .sous { text-transform: none; letter-spacing: 0; font-size: 1em; }
+  .info-box.conseil { border-left-color: var(--conseil); background: var(--conseil-fond); }
+  .info-box.conseil::before { content: "💡 "; }
+  .contexte { margin: 0 0 14px; padding: 8px 12px; border-radius: 10px; background: var(--entete); font-size: .92em; }
+  .contexte::before { content: "🎯 "; }
+  .replis { display: flex; flex-wrap: wrap; gap: 0 20px; align-items: flex-start; }
+  .replis > details[open] { flex-basis: 100%; }
+  .zchip { display: inline-block; padding: 0 7px; border-radius: 999px; background: var(--c); color: #fff; font-size: .72em; font-weight: 700; vertical-align: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .zchip[style*="z5"] { color: #18202c; }
+  .s-ico { margin-right: 6px; }
+  .semaine > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; list-style: none; padding: 2px 0; }
+  .semaine > summary::-webkit-details-marker { display: none; }
+  .semaine > summary::before { content: "▸"; color: var(--discret); }
+  .semaine[open] > summary::before { content: "▾"; }
+  .s-titre { font-weight: 700; }
+  .badge { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: .78em; font-weight: 600; background: var(--accent-doux); color: var(--accent); }
+  .badge.decharge { background: var(--entete); color: var(--discret); }
+  .badge.affutage { background: color-mix(in srgb, var(--z4) 20%, var(--carte)); color: var(--texte); }
+  .badge.competition { background: color-mix(in srgb, var(--z6) 20%, var(--carte)); color: var(--texte); }
+  .chips { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-left: auto; font-size: .84em; font-weight: 400; color: var(--discret); font-variant-numeric: tabular-nums; }
+  .note-sem { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--accent-doux); font-size: .88em; }
+  .note-sem::before { content: "📝 "; }
+  .legende { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  .legende-ico { flex-basis: 100%; }
+  @media (max-width: 600px) { .chips { margin-left: 0; flex-basis: 100%; } }
+  /* Résultats FFA : bouton d'import et fenêtre de sélection des chronos */
+  .ffa-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 12px; }
+  #ffa-dialog { width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--bord); border-radius: 16px; background: var(--carte); color: var(--texte); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  #ffa-dialog::backdrop { background: rgba(10, 20, 35, .55); }
+  .ffa-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--bord); }
+  .ffa-tete h2 { margin: 0; display: flex; align-items: center; color: var(--accent); }
+  .ffa-corps { padding: 14px 16px; overflow-y: auto; max-height: calc(100vh - 180px); }
+  .ffa-recherche { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .ffa-recherche label { flex: 1 1 260px; display: grid; gap: 4px; font-size: .88em; color: var(--discret); }
+  .ffa-choix { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .ffa-tab { margin-top: 6px; }
+  .ffa-tab td, .ffa-tab th { white-space: normal; vertical-align: top; }
+  .ffa-tab .ffa-groupe th { background: var(--accent-doux); color: var(--accent); font-size: .92em; padding: 6px 10px; border-radius: 8px; }
+  .ffa-tab input[type=checkbox] { width: 1.2em; height: 1.2em; margin-top: 3px; padding: 0; accent-color: var(--accent); }
+  .ffa-tab label { cursor: pointer; }
+  .ffa-hors td { opacity: .55; }
+  .ffa-pied { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--bord); }
+  .ffa-pied .sous { margin-right: auto; }
+  .ffa-pied button:disabled { opacity: .5; cursor: not-allowed; }
   .impression { display: none; }
   @media print {
     :root { --fond: #fff; --carte: #fff; --texte: #000; --discret: #333; --bord: #bbb; --entete: #f2f2f2; --accent-doux: #fff; --ombre: none; }
-    header, nav.vues, #vue-profil, .pas-imprimer, .avance { display: none !important; }
+    header, nav.vues, #vue-profil, .pas-imprimer { display: none !important; }
     .impression { display: block; }
     .page, .page.seul { display: block; max-width: none; padding: 0; }
     .carte { border: 0; padding: 0 0 12px; box-shadow: none; }
@@ -275,31 +398,27 @@
 </head>
 <body>
 <header>
-  <h1><span class="logo"><img src="logo-lpn80.png" alt="Les Pieds Nicleys"></span>Profilage athlétique <button type="button" class="test-cache" id="test-aleatoire" title="Données de test aléatoires" aria-label="Remplir avec des données de test aléatoires">🎲</button></h1>
-  <div class="onglets mode" role="group" aria-label="Niveau de détail">
-    <button type="button" class="onglet" data-affichage="simple">Simplifié</button>
-    <button type="button" class="onglet" data-affichage="avance">Avancé</button>
-  </div>
+  <h1><span class="logo"><img src="logo-lpn80.png" alt="Les Pieds Nicleys"></span>Profil d'endurance <button type="button" class="test-cache" id="test-aleatoire" title="Données de test aléatoires" aria-label="Remplir avec des données de test aléatoires">🎲</button></h1>
 </header>
 <nav class="vues" role="group" aria-label="Section">
-  <button type="button" class="onglet" data-vue="profil">1. Profil</button>
-  <button type="button" class="onglet avance" data-vue="entrainement">2. Entraînement</button>
+  <button type="button" class="onglet" data-vue="profil"><span aria-hidden="true">📈</span> Profil</button>
+  <button type="button" class="onglet" data-vue="entrainement"><span aria-hidden="true">🏃</span> Entraînement</button>
 </nav>
 
 <div class="page seul" id="vue-profil">
   <section class="carte" id="accueil">
-    <h2>Vos résultats</h2>
+    <h2><span class="ico" aria-hidden="true">👋</span>Vos résultats</h2>
     <p class="note">Saisissez au moins deux performances sur des distances différentes, ou une performance et votre VMA : les groupes de travail, l'indice d'endurance, les prédictions et les zones d'entraînement s'afficheront ici.</p>
   </section>
 
   <div class="carte resume" id="synthese" aria-live="polite" hidden></div>
 
   <details class="carte volet" id="saisie" open>
-    <summary>Mes chronos <span class="sous" id="saisie-etat"></span></summary>
+    <summary><span class="ico" aria-hidden="true">⏱️</span><h2>Mes chronos</h2><span class="aide" tabindex="0" aria-label="Aide : chronos"><span aria-hidden="true">?</span><span role="tooltip">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.<br>Formats acceptés : temps <code>42:20</code>, <code>42'20</code>, <code>42min</code>, <code>1h20</code> ; distance <code>5000</code>, <code>5 km</code>, <code>semi</code>, <code>marathon</code>. Efforts de 5 min à 5 h (en dehors, une confirmation est demandée).</span></span> <span class="sous" id="saisie-etat"></span></summary>
     <div class="corps">
       <p id="erreur" class="erreur" role="alert" hidden></p>
       <form id="formulaire" novalidate>
-        <p class="note" style="margin-top:0">Privilégiez des performances récentes (idéalement de ces derniers mois) : la forme varie vite.</p>
+        <div class="ffa-ligne"><button type="button" class="sec" id="ffa-ouvrir">🏅 Importer mes résultats FFA</button><span class="sous" id="ffa-etat">chronos des 12 derniers mois, issus de la base de résultats FFA</span></div>
         <div class="entetes" aria-hidden="true"><span>Distance</span><span>Temps</span></div>
         <div id="lignes"></div>
         <div class="puces" id="puces">
@@ -312,19 +431,17 @@
           <button type="button" class="puce" data-d="">Autre</button>
           <button type="button" class="lien" id="vider">Tout effacer</button>
         </div>
-        <p class="note">Formats acceptés : temps <code>42:20</code>, <code>42'20</code>, <code>42min</code>, <code>1h20</code> ; distance <code>5000</code>, <code>5 km</code>, <code>semi</code>, <code>marathon</code>. Efforts de 5 min à 5 h (en dehors, une confirmation est demandée).</p>
-        <label class="champ">VMA connue (km/h, facultatif) : comptée comme un chrono sur 6 min
+        <label class="champ"><span>VMA connue <span class="sous">(km/h, facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : VMA"><span aria-hidden="true">?</span><span role="tooltip">Comptée comme un chrono de 6 min, au même titre que vos performances.</span></span></span>
           <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5" inputmode="decimal">
           <span class="conv" id="vma-conv"></span>
         </label>
         <details id="profil-details">
-          <summary>Profil d'entraînement <span class="sous">(requis s'il n'y a qu'une seule donnée)</span></summary>
+          <summary>👤 Profil d'entraînement <span class="sous">(requis s'il n'y a qu'une seule donnée)</span><span class="aide" tabindex="0" aria-label="Aide : profil"><span aria-hidden="true">?</span><span role="tooltip">Volume, âge et sexe permettent d'estimer l'indice d'endurance quand une seule donnée est saisie. Coefficients ajustés sur 1 848 coureurs amateurs (voir les références en bas de page).</span></span></summary>
           <div class="champs">
             <label>Volume hebdo (km)<input type="number" id="p-volume" min="0" step="1" placeholder="ex. 40"></label>
             <label>Âge<input type="number" id="p-age" min="10" max="100" step="1" placeholder="ex. 40"></label>
             <label>Sexe<select id="p-sexe"><option value="">—</option><option value="F">Femme</option><option value="H">Homme</option></select></label>
           </div>
-          <p class="note">Coefficients ajustés sur 1 848 coureurs amateurs (voir les références en bas de page).</p>
           <button type="button" class="lien" id="vider-profil">Vider le profil</button>
         </details>
       </form>
@@ -332,13 +449,13 @@
   </details>
 
   <div id="resultats" class="resultats" hidden>
-    <details id="profil-estimation" class="avance" hidden><summary>Estimation par le profil</summary><div id="profil-estimation-contenu"></div></details>
+    <details id="profil-estimation" hidden><summary>Estimation par le profil</summary><div id="profil-estimation-contenu"></div></details>
 
     <details class="carte volet" id="v-pred">
-      <summary>Prédictions <span class="sous" id="pred-etat"></span></summary>
+      <summary><span class="ico" aria-hidden="true">🔮</span><h2>Prédictions</h2><span class="aide" tabindex="0" aria-label="Aide : fiabilité"><span aria-hidden="true">?</span><span role="tooltip">Fiabilité selon le pourcentage d'extrapolation de vos données : <strong>Élevée</strong> jusqu'à 25 % · <strong>Correcte</strong> 25 – 50 % · <strong>Moyenne</strong> 50 – 100 % · <strong>Faible</strong> 100 – 150 % · <strong>Mauvaise</strong> au-delà de 150 %.</span></span> <span class="sous" id="pred-etat"></span></summary>
       <div class="corps">
         <div class="titre">
-          <div class="onglets avance" role="group" aria-label="Sens de la prédiction">
+          <div class="onglets" role="group" aria-label="Sens de la prédiction">
             <button type="button" class="onglet actif" data-mode="chrono" aria-pressed="true">Chronos selon distance</button>
             <button type="button" class="onglet" data-mode="distance" aria-pressed="false">Distances selon chronos</button>
           </div>
@@ -350,15 +467,14 @@
           <button type="submit" class="sec">+ Ajouter</button>
         </form>
         <p class="erreur" id="perso-erreur" role="alert" hidden></p>
-        <p class="note">Fiabilité selon le pourcentage d'extrapolation de vos données : <strong>Élevée</strong> jusqu'à 25 % · <strong>Correcte</strong> 25 – 50 % · <strong>Moyenne</strong> 50 – 100 % · <strong>Faible</strong> 100 – 150 % · <strong>Mauvaise</strong> au-delà de 150 %.</p>
       </div>
     </details>
 
-    <details class="carte volet avance" id="v-graph">
-      <summary>Courbe de tendance <span class="sous">% de la VMA selon la durée</span></summary>
+    <details class="carte volet" id="v-graph">
+      <summary><span class="ico" aria-hidden="true">📉</span><h2>Courbe de tendance</h2> <span class="sous">% de la VMA selon la durée</span></summary>
       <div class="corps">
         <div id="graphique"></div>
-        <p class="note">Le modèle s'arrête à 5 h d'effort. Au-delà, une mauvaise gestion de l'allure ou de l'alimentation, un matériel mal choisi, une préparation physique ou mentale insuffisante font chuter la performance, surtout lorsque ces défauts s'additionnent. Ces écarts n'ont rien à voir avec l'endurance elle-même et fausseraient l'indice ; sur les efforts courts, leur effet est bien moindre.</p>
+        <details class="mini"><summary>ℹ️ Limites du modèle</summary><p class="note">Le modèle s'arrête à 5 h d'effort. Au-delà, une mauvaise gestion de l'allure ou de l'alimentation, un matériel mal choisi, une préparation physique ou mentale insuffisante font chuter la performance, surtout lorsque ces défauts s'additionnent. Ces écarts n'ont rien à voir avec l'endurance elle-même et fausseraient l'indice ; sur les efforts courts, leur effet est bien moindre.</p></details>
       </div>
     </details>
 
@@ -370,30 +486,19 @@
   <div class="carte resume" id="synthese-entrainement" hidden></div>
   <div class="profil-lien" id="eq-profil"></div>
 
-  <details class="carte volet avance" id="zones-profil" open hidden>
-    <summary><h2>1. Mes zones d'entraînement</h2></summary><div class="corps">
-    <div class="pz-barre" id="pz-barre" role="img" aria-label="Zones d'entraînement, de Z1 à Z6"></div>
-    <div class="pz-bas" id="pz-bas" aria-hidden="true"></div>
-    <div class="tableau pz-tab">
-      <table>
-        <thead><tr><th>Zone</th><th class="num">% allure 1 h</th><th class="num">Allure (/km)</th><th class="num">Vitesse (km/h)</th><th>Utilité</th></tr></thead>
-        <tbody id="pz-tableau"></tbody>
-      </table>
-    </div>
-    <details class="pz-laius">
-      <summary>Les zones, une simplification : comprendre leur logique</summary>
-      <p>Découper l'effort en six zones est un <strong>outil pédagogique</strong>. Il rend les intensités plus faciles à comprendre, à planifier et à expliquer, mais il ne correspond à aucune réalité physiologique tranchée : entre 89 % et 91 % de l'allure 1 h, le corps ne « change pas de mode ». Les frontières sont des conventions, et les repères des autres méthodes (zones à 3, 5 ou 7 niveaux, seuils de fréquence cardiaque, de lactate ou de puissance) tombent à des endroits un peu différents.</p>
-      <p>En réalité, les intensités forment un <strong>continuum</strong>, sans limite perceptible d'une zone à l'autre. Un effort un peu plus rapide se ressent un peu plus dur, rien de plus.</p>
-      <p>Le seul lien factuel entre toutes ces intensités est celui-ci : <strong>plus l'effort est intense, moins longtemps on peut le soutenir</strong>. C'est précisément ce que décrit la courbe de votre profil (vitesse tenable selon la durée), dont les zones sont tirées.</p>
-      <p>L'intérêt des zones est donc surtout <strong>pratique</strong> : elles servent de repères sur le terrain pour choisir le type d'effort qui correspond à l'objectif visé (endurance, seuil, VO2Max, vitesse…). Elles guident l'entraînement, mais ne sont pas des murs : être à 99 % ou à 101 % de l'allure 1 h revient au même travail. Utilisez-les comme des ordres de grandeur, pas comme des limites à respecter à la seconde près.</p>
-    </details>
-    <p class="note">Allures indicatives, valables sur terrain plat et roulant : réduisez-les dans les parties techniques, en montée, et en cas de conditions météorologiques défavorables.</p>
-  </div></details>
+  <nav class="etapes pas-imprimer" id="etapes" aria-label="Étapes de la préparation">
+    <button type="button" data-etape="1"><span class="num">1</span><span class="nom">🎯 Objectif</span></button>
+    <button type="button" data-etape="2"><span class="num">2</span><span class="nom">📅 Ma semaine</span></button>
+    <button type="button" data-etape="3"><span class="num">3</span><span class="nom">🧭 Mon plan</span></button>
+    <button type="button" data-etape="4"><span class="num">4</span><span class="nom">📋 Mes séances</span></button>
+  </nav>
 
-  <details class="carte volet pas-imprimer" open>
-    <summary><h2>2. Mon objectif</h2></summary><div class="corps">
+  <!-- Étape 1 : objectif -->
+  <section class="carte etape pas-imprimer" data-etape="1">
+    <div class="etape-tete"><span class="ico" aria-hidden="true">🎯</span><h2>Quel est votre objectif ?</h2>
+      <span class="aide" tabindex="0" aria-label="Aide : objectif"><span aria-hidden="true">?</span><span role="tooltip">Choisissez une course de référence, déplacez le curseur sur la barre des zones, ou saisissez la durée, l'allure ou la distance : modifier l'une des trois ajuste les deux autres, d'après la prédiction de votre profil (efforts de 5 min à 5 h). Au clavier : flèches ± 0,5 %, avec Maj ± 2 %.</span></span></div>
+    <p class="info-box conseil">L'objectif sert à choisir <strong>l'allure travaillée</strong>. Le plan s'appuie sur votre <strong>niveau actuel</strong> (celui de votre profil), pas sur le niveau que vous espérez atteindre : choisissez une allure proche de ce que vous courez aujourd'hui, sinon les séances seront trop dures.</p>
     <div class="puces" id="eq-presets" role="group" aria-label="Allures de référence"></div>
-    <p class="note" style="margin:6px 0 4px">Choisissez un objectif, déplacez le curseur ou saisissez la durée, l'allure ou la distance.</p>
     <div class="reperes" id="eq-zonesReperes" aria-hidden="true"></div>
     <div class="zones-cible" id="eq-zones">
       <div class="segments" id="eq-zonesSeg"></div>
@@ -404,20 +509,45 @@
       <label>Allure (min/km) <input id="eq-cibleA" inputmode="text" placeholder="ex. 3:54" autocomplete="off"></label>
       <label>Distance <input id="eq-cibleD" inputmode="text" placeholder="ex. 10 km" autocomplete="off"></label>
     </div>
-    <p class="note" id="eq-cibleNote" style="margin:4px 0 0" hidden>Modifiez l'une de ces trois valeurs : les deux autres s'en déduisent avec la prédiction de votre profil (durées de 5 min à 5 h).</p>
     <p id="eq-cible" class="cible" role="status"></p>
-  </div></details>
 
-  <details class="carte volet pas-imprimer" open>
-    <summary><h2>3. Ma semaine d'entraînement</h2></summary><div class="corps">
+    <details class="sous-volet" id="zones-profil" hidden>
+      <summary>🎨 Mes zones d'entraînement<span class="aide" tabindex="0" aria-label="Aide : zones"><span aria-hidden="true">?</span><span role="tooltip"><strong>Les zones, une simplification.</strong> Découper l'effort en six zones est un outil pédagogique : les intensités forment un continuum, sans frontière physiologique nette (entre 89 % et 91 % de l'allure 1 h, le corps ne « change pas de mode »). Le seul lien factuel : plus l'effort est intense, moins longtemps on le tient, ce que décrit la courbe de votre profil. Utilisez les zones comme des ordres de grandeur. Réduisez les allures dans les parties techniques, en montée ou par mauvais temps.</span></span></summary><div class="corps">
+      <div class="pz-barre" id="pz-barre" role="img" aria-label="Zones d'entraînement, de Z1 à Z6"></div>
+      <div class="pz-bas" id="pz-bas" aria-hidden="true"></div>
+      <div class="tableau pz-tab">
+        <table>
+          <thead><tr><th>Zone</th><th class="num">% allure 1 h</th><th class="num">Allure (/km)</th><th class="num">Vitesse (km/h)</th><th>Utilité</th></tr></thead>
+          <tbody id="pz-tableau"></tbody>
+        </table>
+      </div>
+      <p class="sous">Allures indicatives, sur terrain plat et roulant.</p>
+    </div></details>
+
+    <div class="etape-nav"><span></span><button type="button" class="sec" data-aller="2">Ma semaine →</button></div>
+  </section>
+
+  <!-- Étape 2 : semaine -->
+  <section class="carte etape pas-imprimer" data-etape="2" hidden>
+    <div class="etape-tete"><span class="ico" aria-hidden="true">📅</span><h2>Comment s'organise votre semaine ?</h2>
+      <span class="aide" tabindex="0" aria-label="Aide : semaine"><span aria-hidden="true">?</span><span role="tooltip">Jours de course : de 3 à 7 par semaine. Un doublé est un jour à deux séances (la seconde est un footing). Le cumul de plusieurs sports n'est pas géré par cet outil : soyez vigilant sur vos capacités de récupération si vous êtes dans ce cas.</span></span></div>
     <div class="semaine-haut">
       <div class="champs">
-        <label>Séances : jours de course par semaine <select id="pl-seances"></select></label>
+        <h4 class="groupe">🏃 Fréquence et volume</h4>
+        <label>Jours de course par semaine <select id="pl-seances"></select></label>
         <label>Doublés (jours à deux séances) <select id="pl-doubles"></select></label>
-        <label>Volume moyen par semaine
+        <label><span>Volume par semaine<span class="aide" tabindex="0" aria-label="Aide : volume"><span aria-hidden="true">?</span><span role="tooltip">Une semaine prise comme base d'un plan doit être, au plus, à peine plus chargée que les semaines précédentes. Dans le doute, gardez le même volume. En km, la somme des distances des séances vaut ce volume. Sans case cochée, c'est une cible : la moyenne des semaines de charge. Maxi : la semaine la plus chargée (compétitions comprises) vaut ce volume. Mini : la semaine de charge la plus légère vaut ce volume. Le cycle (charge, décharge, affûtage) est décalé d'autant ; décharge et affûtage restent allégés.</span></span></span>
           <div class="rang">
-            <input id="eq-volume" type="number" min="0" step="0.5" inputmode="decimal">
+            <input id="eq-volume" type="text" inputmode="text" autocomplete="off" placeholder="ex. 5h30 ou 40" aria-label="Volume par semaine">
             <div class="onglets" id="eq-unit"><button type="button" class="onglet" data-u="h">h</button><button type="button" class="onglet" data-u="km">km</button></div>
+          </div>
+        </label>
+        <div class="cases-volume"><label class="case"><input type="checkbox" id="pl-volMax"> <span>Volume maxi</span></label><label class="case"><input type="checkbox" id="pl-volMin"> <span>Volume mini</span></label></div>
+        <h4 class="groupe">📏 Contraintes</h4>
+        <label><span>Longueur maximale d'une séance <span class="sous">(facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : longueur maximale"><span aria-hidden="true">?</span><span role="tooltip">Aucune séance du plan (hors compétitions et séances du club) ne dépasse cette durée ou cette distance ; une distance est convertie en durée à l'allure moyenne de la zone 2. Minimum 20 min.</span></span></span>
+          <div class="rang">
+            <input id="pl-limite" type="number" min="20" step="5" inputmode="decimal" placeholder="aucune">
+            <div class="onglets" id="pl-limiteU"><button type="button" class="onglet" data-u="min">min</button><button type="button" class="onglet" data-u="km">km</button></div>
           </div>
         </label>
         <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
@@ -426,64 +556,80 @@
       </div>
       <div class="semaine-resume" id="pl-resumeSemaine" aria-live="polite"></div>
     </div>
-    <p class="info"><span aria-hidden="true">ℹ</span><span>Le cumul de plusieurs sports n'est pas géré par cet outil. Soyez vigilant sur vos capacités de récupération si vous êtes dans ce cas.</span></p>
+    <fieldset class="club">
+      <legend>👥 Séances au club <span class="sous">(chaque semaine si compatible avec le plan)</span><span class="aide" id="pl-clubNote" tabindex="0" aria-label="Aide : séances au club" hidden><span aria-hidden="true">?</span><span role="tooltip">Le plan intègre ces séances chaque semaine quand elles sont compatibles avec le temps prévu dans chaque zone : elles comptent alors dans le volume, occupent leur jour de course et réduisent d'autant les séances du plan. Dans Spécifique LPN, une semaine où elles feraient dépasser la répartition par zone, la séance du club est remplacée par une séance du plan, avec une note sous la semaine.</span></span></legend>
+      <label class="case"><input type="checkbox" id="pl-club1"> <span><strong>Lundi</strong> : séance de PPG dont footing <span class="sous">· comptée comme 40 min en Z2 pour la charge</span></span></label>
+      <label class="case"><input type="checkbox" id="pl-club2"> <span><strong>Jeudi</strong> : séance piste <span class="sous">· charge moyenne équivalente à 1 h en Z2 + 15 min à VMA (compte comme une séance de qualité)</span></span></label>
+    </fieldset>
     <ul class="alertes" id="pl-alerteSemaine" hidden></ul>
-  </div></details>
+    <div class="etape-nav"><button type="button" class="lien" data-aller="1">← Objectif</button><button type="button" class="sec" data-aller="3">Mon plan →</button></div>
+  </section>
 
-  <details class="carte volet" open>
-    <summary><h2>4. Plan d'entraînement</h2></summary><div class="corps">
-    <p class="note profil-utilise" id="pl-contexte" style="margin:0 0 10px"></p>
-    <div class="onglets pas-imprimer" id="pl-mode" role="group" aria-label="Type de plan">
-      <button type="button" class="onglet" data-plan="zones">Personnalisé</button>
-      <button type="button" class="onglet" data-plan="methode">Méthode d'entraîneur</button>
-    </div>
-    <details class="sous-volet avance" id="eq-repartition" open>
-      <summary>Répartition par zone</summary><div class="corps">
-    <div class="info" style="margin:0 0 12px"><span aria-hidden="true">ℹ</span><div>
-      <strong>Que faire ici ?</strong> Rien d'obligatoire : la répartition est calculée d'après votre objectif, votre indice d'endurance et votre volume, et le plan « Personnalisé » la suit. Vous pouvez l'ajuster :
-      <ul>
-        <li><strong>Endurance / Intensité</strong> : part du volume en endurance facile (Z1 + Z2) ou en intensité (Z3 à Z6) ;</li>
-        <li><strong>Part de récupération</strong> : part de Z1 dans l'endurance ;</li>
-        <li>le bouton « auto » (ou « revenir au conseillé ») rétablit la valeur calculée.</li>
-      </ul>
-      Le tableau donne pour chaque zone la part du volume, le temps ou la distance par semaine et la charge d'entraînement.<br>
-      <strong>N'hésitez pas à diminuer la part d'intensité et à augmenter celle de récupération</strong> si vous pratiquez d'autres sports, ou en cas de stress personnel ou professionnel : l'outil ne les connaît pas.
-    </div></div>
-    <p class="note" id="eq-biais" style="margin:0 0 8px"></p>
-    <div class="pas-imprimer">
-      <div class="curseur-tete">
-        <label for="eq-easy">Endurance (Z1+Z2) / Intensité (Z3→Z6)</label>
-        <span><strong id="eq-easyLbl"></strong> <button class="lien" id="eq-resetEasy" type="button"></button></span>
+  <!-- Étape 3 : plan -->
+  <section class="carte etape pas-imprimer" data-etape="3" hidden>
+    <div class="etape-tete"><span class="ico" aria-hidden="true">🧭</span><h2>Quel plan voulez-vous ?</h2>
+      <span class="aide" tabindex="0" aria-label="Aide : plan"><span aria-hidden="true">?</span><span role="tooltip">Trois choix : la <strong>méthode</strong>, la <strong>durée</strong> et la <strong>charge</strong>. <strong>Spécifique LPN</strong> optimise une allure précise selon des critères paramétrables : le plan suit la répartition du volume par zone calculée pour votre objectif, que vous pouvez ajuster ; il doit être précédé d'autres cycles de préparation générale. Les autres méthodes reprennent les principes d'un entraîneur publié (répartition et durées de séances propres), avec vos allures. Aucune n'est recommandée ; une alerte signale seulement un prérequis non rempli (volume, fréquence).</span></span></div>
+    <p class="contexte" id="pl-contexte"></p>
+
+    <div class="bloc-plan">
+      <div class="bloc-titre"><span class="puce-num">1</span><h3>🧭 Méthode</h3>
+        <span class="aide" tabindex="0" aria-label="Aide : méthodes"><span aria-hidden="true">?</span><span role="tooltip">La fiche résume le public visé, les épreuves ciblées, la difficulté athlétique, la mise en œuvre et la durée habituelle du plan. Un astérisque (*) signale des sources limitées : plan construit à partir de résumés et de forums, plus approximatif que les autres. Dans la liste, les ronds indiquent la difficulté athlétique (● débutant, ●● intermédiaire, ●●● avancé) ; les méthodes sont classées par difficulté croissante, Spécifique LPN en tête.</span></span></div>
+      <div class="choix-methode"><span class="sous" id="pl-methodeLib">Méthode d'entraînement</span>
+        <div class="lm">
+          <button type="button" class="lm-bouton" id="pl-methodeBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pl-methodeLib pl-methodeBtn"></button>
+          <ul class="lm-liste" id="pl-methodeListe" role="listbox" aria-labelledby="pl-methodeLib" hidden></ul>
+        </div></div>
+      <div class="methode-choisie">
+        <h4 id="pl-titre"></h4>
+        <div class="faits" id="pl-fiche"></div>
+        <div id="pl-resume"></div>
+    <details class="sous-volet" id="eq-repartition">
+      <summary>📊 Ajuster la répartition par zone <span class="sous">(facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : répartition"><span aria-hidden="true">?</span><span role="tooltip">Rien d'obligatoire : Spécifique LPN suit cette répartition. <strong>Endurance / Intensité</strong> : part du volume en endurance facile (Z1 + Z2) ou en intensité (Z3 à Z6). <strong>Part de récupération</strong> : part de Z1 dans l'endurance. « auto » rétablit la valeur calculée. Le tableau donne, par zone, la part du volume, le temps ou la distance par semaine et la charge. <strong>N'hésitez pas à diminuer l'intensité et à augmenter la récupération</strong> si vous pratiquez d'autres sports ou en cas de stress personnel ou professionnel : l'outil ne les connaît pas.</span></span></summary><div class="corps">
+      <p class="sous">Calculée d'après votre objectif, votre indice d'endurance et votre volume.</p>
+      <div class="pas-imprimer">
+        <div class="curseur-tete">
+          <label for="eq-easy">Endurance (Z1+Z2) / Intensité (Z3→Z6)</label>
+          <span><strong id="eq-easyLbl"></strong> <button class="lien" id="eq-resetEasy" type="button"></button></span>
+        </div>
+        <input id="eq-easy" type="range" min="50" max="100" step="1">
+        <div class="extremes sous"><span>50 % facile</span><span>100 % facile</span></div>
+        <div class="curseur-tete">
+          <label for="eq-rec">Part de récupération (Z1) dans l'endurance</label>
+          <span><strong id="eq-recLbl"></strong> <button class="lien" id="eq-resetRec" type="button"></button></span>
+        </div>
+        <input id="eq-rec" type="range" min="0" max="50" step="1">
+        <div class="extremes sous"><span>0 %</span><span>50 %</span></div>
       </div>
-      <input id="eq-easy" type="range" min="50" max="100" step="1">
-      <div class="extremes sous"><span>50 % facile</span><span>100 % facile</span></div>
-      <p class="note avance" id="eq-easyNote"></p>
-      <div class="curseur-tete">
-        <label for="eq-rec">Part de récupération (Z1) dans l'endurance</label>
-        <span><strong id="eq-recLbl"></strong> <button class="lien" id="eq-resetRec" type="button"></button></span>
+      <div class="echelle" id="eq-repere" hidden style="margin-top:14px"></div>
+      <div class="barre" id="eq-bar" role="img" aria-label="Répartition du volume entre les 6 zones"></div>
+      <div class="repartition"><span id="eq-easyTot"></span><span id="eq-hardTot"></span></div>
+      <div class="tableau">
+        <table>
+          <thead><tr id="eq-thead"></tr></thead>
+          <tbody id="eq-tbody"></tbody>
+          <tfoot><tr id="eq-tfoot"></tr></tfoot>
+        </table>
       </div>
-      <input id="eq-rec" type="range" min="0" max="50" step="1">
-      <div class="extremes sous"><span>0 %</span><span>50 %</span></div>
-      <p class="note avance" id="eq-recNote"></p>
-    </div>
-    <div class="echelle" id="eq-repere" hidden style="margin-top:14px"></div>
-    <div class="barre" id="eq-bar" role="img" aria-label="Répartition du volume entre les 6 zones"></div>
-    <div class="repartition"><span id="eq-easyTot"></span><span id="eq-hardTot"></span></div>
-    <p class="note" id="eq-zoneNote" style="margin:-6px 0 12px"></p>
-    <div class="tableau">
-      <table>
-        <thead><tr id="eq-thead"></tr></thead>
-        <tbody id="eq-tbody"></tbody>
-        <tfoot><tr id="eq-tfoot"></tr></tfoot>
-      </table>
-    </div>
-    <p class="note avance" id="eq-note"></p>
+      <details class="mini">
+        <summary>🔍 Détails du calcul</summary>
+        <p class="note" id="eq-biais"></p>
+        <p class="note" id="eq-zoneNote"></p>
+        <p class="note" id="eq-easyNote"></p>
+        <p class="note" id="eq-recNote"></p>
+        <p class="note" id="eq-note"></p>
+      </details>
     </div></details>
-    <div class="pas-imprimer">
-      <h3 class="groupe">Durée du plan</h3>
+      </div>
+    </div>
+
+    <div class="bloc-plan pas-imprimer">
+      <div class="bloc-titre"><span class="puce-num">2</span><h3>📆 Durée et calendrier</h3></div>
       <div class="onglets" id="pl-horizon" role="group" aria-label="Durée du plan">
         <button type="button" class="onglet" data-hor="semaines">Nombre de semaines</button>
         <button type="button" class="onglet" data-hor="date">Jusqu'à la date de l'objectif</button>
+      </div>
+      <div class="champs">
+        <label id="pl-labSemaines">Nombre de semaines <input id="pl-semaines" type="number" min="4" max="24" step="1" inputmode="numeric"></label>
       </div>
       <div id="pl-hDate" hidden>
         <div class="champs">
@@ -491,86 +637,82 @@
           <label>Date de l'objectif <input type="date" id="pl-fin"></label>
         </div>
         <p class="note" id="pl-hResume"></p>
-        <h3 class="groupe">Compétitions intermédiaires</h3>
-        <p class="note" style="margin:4px 0 8px">Indiquez les compétitions prévues avant l'objectif (date et épreuve) : la charge (TSS) de chaque course est retranchée de la semaine concernée, en respectant le cycle choisi, et la récupération est prévue autour.</p>
+        <div class="entete-aide"><h4 class="groupe">🏁 Compétitions intermédiaires</h4>
+          <span class="aide" tabindex="0" aria-label="Aide : compétitions"><span aria-hidden="true">?</span><span role="tooltip">Indiquez les compétitions prévues avant l'objectif (date, épreuve, engagement). La charge (TSS) de chaque course est retranchée de la semaine concernée, en respectant le cycle choisi, et la récupération est prévue autour.</span></span></div>
         <div id="pl-courses"></div>
         <button type="button" class="puce" id="pl-addCourse">+ Ajouter une compétition</button>
       </div>
+    </div>
+
+    <div class="bloc-plan pas-imprimer">
+      <div class="bloc-titre"><span class="puce-num">3</span><h3>📈 Charge et difficulté</h3></div>
       <div class="champs">
-        <label id="pl-labSemaines">Nombre de semaines <input id="pl-semaines" type="number" min="4" max="24" step="1" inputmode="numeric"></label>
         <label>Cycle
-          <select id="pl-cycle"><option value="constante">Charge constante</option><option value="cycle">Semaines de charge puis de décharge</option></select>
+          <select id="pl-cycle"><option value="auto">Automatique (selon la durée et les compétitions)</option><option value="constante">Charge constante</option><option value="cycle">Semaines de charge puis de décharge (réglable)</option></select>
         </label>
         <div class="rang" id="pl-cycleNb">
           <label>Charge (sem.) <input id="pl-charge" type="number" min="1" max="6" step="1" inputmode="numeric"></label>
           <label>Décharge (sem.) <input id="pl-decharge" type="number" min="1" max="2" step="1" inputmode="numeric"></label>
         </div>
       </div>
+      <p class="info-box" id="pl-cycleAuto" hidden></p>
       <details class="aide-cycle">
-        <summary>Quel cycle choisir ?</summary>
+        <summary>❓ Quel cycle choisir ?</summary>
         <div class="tableau">
           <table>
             <thead><tr><th>Cycle</th><th>Avantages</th><th>Inconvénients</th></tr></thead>
             <tbody>
+              <tr><td><strong>Automatique</strong></td>
+                <td>Aucun réglage : sous 6 semaines, charge constante ; sinon 3 semaines de charge pour 1 de décharge (2 pour 1 sous 8 semaines). Avec des compétitions intermédiaires, la longueur de charge (2 à 5 semaines) est choisie pour que les semaines de décharge tombent sur ou juste après les courses les plus chargées.</td>
+                <td>Une décharge par cycle seulement, jamais de cycle de 2 semaines de décharge ; les compétitions de faible charge ou en footing n'influencent pas le choix. Pour un autre rythme, choisissez le cycle réglable.</td></tr>
               <tr><td><strong>Charge constante</strong></td>
                 <td>Simple et régulier, facile à tenir. Adapté aux débutants, aux reprises, aux petits volumes et aux plans courts. Pas de pic de charge brutal.</td>
                 <td>Aucune semaine de récupération prévue : la fatigue s'accumule sur un plan long, surtout à fort volume. Progression plus lente, moins de marge en cas d'imprévu ou de fatigue extérieure.</td></tr>
               <tr><td><strong>Charge puis décharge</strong></td>
-                <td>Alternance classique : la semaine allégée (70 % du volume, une séance de qualité en moins) permet d'assimiler le travail et limite le risque de blessure et de surmenage. Progression par paliers (+ 6 % par semaine de charge).</td>
+                <td>Alternance classique : la semaine allégée (70 % du volume, une séance de qualité en moins ; Spécifique LPN : travail de qualité allégé de moitié) permet d'assimiler le travail et limite le risque de blessure et de surmenage. Progression par paliers (+ 6 % par semaine de charge).</td>
                 <td>Plan un peu plus complexe, volume moyen plus faible. Peu utile sur moins de 6 semaines. Une semaine de décharge peut donner l'impression de perdre le rythme, et les semaines de charge sont plus chargées que la moyenne.</td></tr>
             </tbody>
           </table>
         </div>
       </details>
       <div class="curseur-tete">
-        <label for="pl-difficulte">Difficulté de la première semaine</label>
+        <label for="pl-difficulte">Difficulté de la première semaine
+          <span class="aide" tabindex="0" aria-label="Aide : difficulté"><span aria-hidden="true">?</span><span role="tooltip">Plus la difficulté est haute, plus les séries sont longues et les récupérations courtes. Elle monte de 3 niveaux au fil du plan ; une semaine de décharge redescend d'un niveau.</span></span></label>
         <strong id="pl-diffLbl"></strong>
       </div>
       <input id="pl-difficulte" type="range" min="1" max="10" step="1">
       <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
-      <p class="note" id="pl-diffNote"></p>
-      <p class="note avance">La difficulté monte de 3 niveaux au fil du plan. En cycle, le volume augmente de 6 % par semaine de charge ; une semaine de décharge revient à 70 % du volume, avec une séance de qualité en moins et un niveau plus bas.</p>
+      <details class="mini"><summary>👁️ Exemple de séance de la première semaine</summary><p class="note" id="pl-diffNote"></p></details>
     </div>
 
-    <div id="pl-blocMethodes" class="pas-imprimer">
-      <h3 class="groupe">Méthode</h3>
-      <p class="note" style="margin:4px 0 10px">Les plans gardent la répartition et les durées de séances propres à chaque méthode, avec vos allures. Chaque fiche résume le public visé, les épreuves ciblées, la difficulté athlétique et de mise en œuvre et la durée de plan habituelle. Aucune méthode n'est recommandée : une alerte signale seulement un prérequis (volume, fréquence) que vos données ne remplissent pas, ou un indice d'endurance très bas pour les méthodes à fractions longues.</p>
-      <div class="tri"><label>Trier par <select id="pl-tri"></select></label> <button type="button" class="lien" id="pl-triSens"></button></div>
-      <div class="methodes" id="pl-methodes"></div>
-      <p class="note">* Sources limitées : plan construit à partir de résumés et de forums, sans le livre ni le texte de l'auteur sur les phases et les séances. Il reste plus approximatif que celui des autres méthodes.</p>
-    </div>
-    <div class="methode-choisie">
-      <h3 id="pl-titre"></h3>
-      <div id="pl-resume"></div>
-    </div>
-  </div></details>
+    <div class="etape-nav"><button type="button" class="lien" data-aller="2">← Ma semaine</button><button type="button" class="sec" data-aller="4">Voir mes séances →</button></div>
+  </section>
 
-  <details class="carte volet" open>
-    <summary><h2>5. Récapitulatif et export</h2></summary><div class="corps">
+  <!-- Étape 4 : séances -->
+  <section class="carte etape" data-etape="4" hidden>
+    <div class="etape-tete"><span class="ico pas-imprimer" aria-hidden="true">📋</span><h2>Votre plan</h2>
+      <span class="aide pas-imprimer" tabindex="0" aria-label="Aide : plan"><span aria-hidden="true">?</span><span role="tooltip">Plans calculés à partir de votre profil ; les méthodes d'entraîneurs sont inspirées de leurs principes publiés, ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</span></span></div>
     <ul class="alertes" id="pl-alertes" hidden></ul>
     <div class="chiffres" id="pl-chiffres"></div>
     <div class="volumes" id="pl-volumes" role="img" aria-label="Temps de course prévu par semaine"></div>
-    <p class="note"><span class="pastille" style="background:var(--accent)"></span>Charge · <span class="pastille" style="background:var(--z2);opacity:.5"></span>Décharge · <span class="pastille" style="background:var(--z4)"></span>Affûtage · <span class="pastille" style="background:var(--z6)"></span>Compétition</p>
-    <details class="recap"><summary>Tableau semaine par semaine</summary>
-      <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
-      <p class="note">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</p>
-    </details>
-    <div class="puces pas-imprimer" id="pl-export" role="group" aria-label="Exporter le plan" style="margin-top:14px">
-      <span class="sous">Exporter :</span>
-      <button type="button" class="puce" data-format="pdf">PDF</button>
-      <button type="button" class="puce" data-format="xlsx">Excel</button>
-      <button type="button" class="puce" data-format="csv">CSV</button>
-      <button type="button" class="puce" data-format="json">JSON</button>
-      <button type="button" class="puce" data-format="fit">Montre (.fit)</button>
+    <p class="legende"><span><span class="pastille" style="background:var(--accent)"></span>Charge</span><span><span class="pastille" style="background:var(--z2);opacity:.5"></span>Décharge</span><span><span class="pastille" style="background:var(--z4)"></span>Affûtage</span><span><span class="pastille" style="background:var(--z6)"></span>Compétition</span>
+      <span class="legende-ico">⚡ qualité · 🛣️ sortie longue · 🏃 footing · 💤 récupération · 👥 club · 🏁 course</span></p>
+    <div class="puces pas-imprimer" id="pl-export" role="group" aria-label="Exporter le plan">
+      <span class="sous">📤 Exporter :</span>
+      <button type="button" class="puce" data-format="pdf">📄 PDF</button>
+      <button type="button" class="puce" data-format="xlsx">📊 Excel</button>
+      <button type="button" class="puce" data-format="csv">🧾 CSV</button>
+      <button type="button" class="puce" data-format="json">🔣 JSON</button>
+      <button type="button" class="puce" data-format="fit">⌚ Montre (.fit)</button>
+      <span class="aide" tabindex="0" aria-label="Aide : export"><span aria-hidden="true">?</span><span role="tooltip">PDF : la fenêtre d'impression s'ouvre, choisissez « Enregistrer au format PDF ». Montre : une archive .zip avec un entraînement structuré (.fit) par séance, avec les cibles d'allure ; pour une montre Garmin, copiez les fichiers dans le dossier <code>GARMIN/NewFiles</code> de la montre branchée en USB ; ils peuvent aussi être importés dans des plateformes qui acceptent les entraînements .fit (par exemple intervals.icu), qui les envoient à d'autres montres.</span></span>
     </div>
-    <p class="note pas-imprimer">PDF : la fenêtre d'impression s'ouvre, choisissez « Enregistrer au format PDF ». Montre : une archive .zip avec un entraînement structuré (.fit) par séance, avec les cibles d'allure ; pour une montre Garmin, copiez les fichiers dans le dossier <code>GARMIN/NewFiles</code> de la montre branchée en USB ; ils peuvent aussi être importés dans des plateformes qui acceptent les entraînements .fit (par exemple intervals.icu), qui les envoient à d'autres montres.</p>
-  </div></details>
-
-  <details class="carte volet" open>
-    <summary><h2>6. Semaine par semaine</h2></summary><div class="corps">
+    <h3 class="groupe">🗓️ Semaine par semaine</h3>
     <div id="pl-liste"></div>
-    <p class="note">Plans calculés à partir de votre profil ; les méthodes d'entraîneurs sont inspirées de leurs principes publiés, ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</p>
-  </div></details>
+    <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</span></span></summary>
+      <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
+    </details>
+    <div class="etape-nav pas-imprimer"><button type="button" class="lien" data-aller="3">← Modifier mon plan</button><span></span></div>
+  </section>
 </div>
 
 <datalist id="distances">
@@ -578,10 +720,11 @@
   <option value="10 km"></option><option value="semi"></option><option value="marathon"></option>
 </datalist>
 
-<script src="endurance.js"></script>
-<script src="balance.js"></script>
-<script src="plan.js"></script>
-<script src="export.js"></script>
+<script src="endurance.js?v=20261028c"></script>
+<script src="ffa.js?v=20261028c"></script>
+<script src="balance.js?v=20261028c"></script>
+<script src="plan.js?v=20261028c"></script>
+<script src="export.js?v=20261028c"></script>
 <script>
 (function () {
   'use strict';
@@ -604,7 +747,13 @@
   const rouge = (html, oui) => (oui ? `<span class="doute">${html}</span>` : html);
   const INCOHERENT = '<br><span class="doute">valeurs incohérentes</span>';
   const groupes = (vma, infoVma, seuil, infoSeuil) => `<div class="chiffre groupes"><div class="duo"><div class="gt"><div class="nom">Groupe VMA</div><div class="valeur">${Math.round(vma)} <small>km/h</small></div><div class="indic">${infoVma}</div><div class="sous">VMA courte, vitesse</div></div><div class="gt"><div class="nom">Groupe seuil</div><div class="valeur">${Math.round(seuil)} <small>km/h</small></div><div class="indic">${infoSeuil}</div><div class="sous">VMA longue, seuil</div></div></div></div>`;
-  const chiffre = (label, valeur, sous, avance) => `<div class="chiffre${avance ? ' avance' : ''}"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous}</div></div>`;
+  /** Feu tricolore de fiabilité : vert (Élevée, Correcte), orange (Moyenne, Faible), rouge (Mauvaise, Incertaine) */
+  const couleurFeu = (niveau) => ({ 'Élevée': 'v', 'Correcte': 'v', 'Moyenne': 'o', 'Faible': 'o' }[niveau] || 'r');
+  const feu = (niveau) => {
+    const c = couleurFeu(niveau);
+    return `<span class="feu ${c}" role="img" aria-label="Fiabilité : ${niveau}" title="Fiabilité : ${niveau}"><i></i><i></i><i></i></span>`;
+  };
+  const chiffre = (label, valeur, sous) => `<div class="chiffre"><div class="label">${label}</div><div class="valeur">${valeur}</div><div class="sous">${sous}</div></div>`;
 
   /* ---------- Saisie ---------- */
 
@@ -696,12 +845,15 @@
     const nb = res.performances.length + (res.vmaSaisie ? 1 : 0); // la VMA compte comme chrono de 6 min
     const endurance = REPERES_IE.find(([seuil]) => res.IE > seuil)[1];
     const incoherent = res.coherenceFaible || res.ieDouteux; // données qui s'accordent mal : synthèse en rouge
-    const fiab = E.tablePredictions(res).find(p => p.distance === 10000).fiabilite;
+    const fiab = E.fiabiliteProfil(res), fd = E.fiabiliteDetail(res); // moyenne des fiabilités de la VMA et de l'allure 1 h
     const synthese = [
       groupes(res.vvo2Kmh, rouge(`VMA ${f1(res.vvo2Kmh)} km/h · ${E.formatAllure(1000 / res.V)} /km`, hors(6)) + (hors(6) ? INCOHERENT : ''),
         vRef * 60 / 1000, rouge(`Allure 1 h ${f1(vRef * 60 / 1000)} km/h · ${E.formatAllure(1000 / vRef)} /km`, hors(60)) + (hors(60) ? INCOHERENT : '')),
       chiffre("Indice d'endurance", rouge(f1(res.IE), res.ieDouteux), `${endurance}${res.vmaSaisie && res.performances.length ? ' · VMA intégrée' : ''}${res.ieDouteux ? INCOHERENT : ''}`),
-      chiffre('Fiabilité', incoherent ? rouge('Incertaine', true) : fiab, incoherent ? `${nb} donnée(s) : à vérifier avant de se fier aux prédictions` : `${nb} donnée(s) · prédictions`),
+      chiffre(`Fiabilité<span class="aide" tabindex="0" aria-label="Aide : fiabilité"><span aria-hidden="true">?</span><span role="tooltip">Moyenne de la fiabilité de la VMA (effort de 6 min) et de celle de l'allure 1 h. Elle baisse quand ces durées sont loin de vos chronos, au-delà d'un semi (environ 1 h 45) et quand l'indice d'endurance est proche de ses limites.</span></span>`,
+        feu(incoherent ? 'Incertaine' : fiab) + (incoherent ? rouge('Incertaine', true) : fiab),
+        `<div class="fiab-detail">${[['VMA', fd.vma], ['Allure 1 h', fd.allure]].map(([nom, niv]) => `<div><span class="nom">${nom}</span><span class="pastille ${couleurFeu(niv)}"></span><span class="niv">${niv}</span></div>`).join('')}
+          <div class="nb">${incoherent ? `${nb} donnée(s) : à vérifier avant de se fier aux prédictions` : `${nb} donnée(s)`}</div></div>`),
       res.avertissements.length ? `<ul class="resume-alerte">${res.avertissements.map(a => `<li>${a}</li>`).join('')}</ul>` : ''
     ].join('');
     ['#synthese', '#synthese-entrainement'].forEach(sel => { $(sel).innerHTML = synthese; $(sel).classList.toggle('incoherent', incoherent); }); // même cartouche dans l'onglet Entraînement
@@ -755,13 +907,15 @@
       ? `<td>${NOMS[p.distance] || fDist(p.distance)}</td><td class="num">${E.formatTemps(p.temps)}</td>`
       : `<td>${E.formatTemps(p.temps)}</td><td class="num">${fDist(p.distance)}</td>`}
       <td class="num">${E.formatAllure(p.allureMinKm)} /km</td><td class="num">${f1(p.vitesseKmh)} km/h</td>
-      <td class="${p.fiabilite === 'Mauvaise' ? 'doute' : ''}">${p.fiabilite}${hors(p) ? '<br><small>valeurs incohérentes</small>' : ''}</td>
+      <td class="${p.fiabilite === 'Mauvaise' ? 'doute' : ''}">${feu(p.fiabilite)}${p.fiabilite}${hors(p) ? '<br><small>valeurs incohérentes</small>' : ''}</td>
       <td>${i === undefined ? '' : `<button type="button" class="suppr" data-i="${i}" aria-label="Supprimer cette valeur">✕</button>`}</td></tr>`;
     const standard = chrono ? E.tablePredictions(res) : E.tableDistances(res, TEMPS_STANDARD);
     const ajouts = chrono ? E.tablePredictions(res, perso.chrono) : E.tableDistances(res, perso.distance);
     $('#entete-predict').innerHTML = `<tr><th>${chrono ? 'Distance' : 'Temps'}</th><th class="num">${chrono ? 'Temps prédit' : 'Distance prédite'}</th>
       <th class="num">Allure moyenne</th><th class="num">Vitesse</th><th>Fiabilité</th><th></th></tr>`;
-    $('#tb-predict').innerHTML = standard.map(p => ligne(p)).join('') + ajouts.map(ligne).join('');
+    const cle = chrono ? 'distance' : 'temps'; // valeurs ajoutées classées parmi les valeurs standard
+    const lignes = [...standard.map(p => ({ p })), ...ajouts.map((p, i) => ({ p, i }))].sort((a, b) => a.p[cle] - b.p[cle]);
+    $('#tb-predict').innerHTML = lignes.map(({ p, i }) => ligne(p, i)).join('');
   }
 
   /* ---------- Zones ---------- */
@@ -810,6 +964,20 @@
     ligne.querySelector(b.dataset.d ? '.temps' : '.dist').focus();
   });
   $('#vider').addEventListener('click', () => { $('#lignes').innerHTML = ''; ajouterLigne(); calculer(); });
+  // Résultats FFA (ffa.js) : les chronos cochés remplacent la ligne de même distance, sinon une ligne vide, sinon une nouvelle ligne
+  $('#ffa-ouvrir').addEventListener('click', () => window.FFA.ouvrir());
+  document.addEventListener('ffa-chronos', (e) => {
+    const { chronos, athlete } = e.detail;
+    chronos.forEach(({ distance, temps }) => {
+      const lignes = [...$('#lignes').children];
+      const l = lignes.find((x) => E.parseDistance(x.querySelector('.dist').value) === distance)
+        || lignes.find((x) => !x.querySelector('.dist').value && !x.querySelector('.temps').value) || ajouterLigne();
+      l.querySelector('.dist').value = String(distance);
+      l.querySelector('.temps').value = E.formatTemps(temps);
+    });
+    $('#ffa-etat').textContent = `${chronos.length} chrono${chronos.length > 1 ? 's' : ''} FFA intégré${chronos.length > 1 ? 's' : ''} (${athlete})`;
+    calculer();
+  });
   $('#vider-profil').addEventListener('click', () => {
     PROFIL.forEach(c => { $(`#p-${c}`).value = ''; });
     calculer();
@@ -868,19 +1036,6 @@
     rendrePredictions(dernier);
   });
 
-  /** Mode simplifié (l'essentiel) ou avancé (tout le détail) ; le choix est mémorisé dans le navigateur */
-  function choisirAffichage(simple) {
-    document.body.classList.toggle('simple', simple);
-    document.querySelectorAll('[data-affichage]').forEach(b => {
-      const actif = (b.dataset.affichage === 'simple') === simple;
-      b.classList.toggle('actif', actif);
-      b.setAttribute('aria-pressed', actif);
-    });
-    if (simple && mode !== 'chrono') $('[data-mode="chrono"]').click(); // le mode « distances » n'existe qu'en avancé
-    if (simple && vueCourante === 'entrainement') choisirVue('profil'); // l'entraînement n'existe qu'en avancé
-    try { localStorage.setItem('affichage', simple ? 'simple' : 'avance'); } catch (e) { /* stockage indisponible */ }
-  }
-  document.querySelectorAll('[data-affichage]').forEach(b => b.addEventListener('click', () => choisirAffichage(b.dataset.affichage === 'simple')));
   /** Section affichée : profil et zones, ou entraînement (répartition, balance.js ; plan, plan.js ; exports, export.js) ;
       le choix est mémorisé */
   const VUES = ['profil', 'entrainement'];
@@ -894,6 +1049,41 @@
     });
     try { localStorage.setItem('vue', nom); } catch (e) { /* stockage indisponible */ }
   }
+  /** Onglet Entraînement pas à pas : 1 objectif, 2 semaine, 3 plan, 4 séances ; l'étape est mémorisée */
+  function choisirEtape(n, defiler) {
+    n = Math.min(4, Math.max(1, Number(n) || 1));
+    document.querySelectorAll('#vue-entrainement .etape').forEach(s => { s.hidden = Number(s.dataset.etape) !== n; });
+    document.querySelectorAll('#etapes [data-etape]').forEach(b => {
+      const k = Number(b.dataset.etape);
+      b.classList.toggle('actif', k === n);
+      b.classList.toggle('fait', k < n);
+      b.setAttribute('aria-current', k === n ? 'step' : 'false');
+    });
+    try { localStorage.setItem('etape', String(n)); } catch (e) { /* stockage indisponible */ }
+    if (defiler) $('#etapes').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('#vue-entrainement').addEventListener('click', (e) => {
+    const b = e.target.closest('#etapes [data-etape], [data-aller]');
+    if (b) choisirEtape(b.dataset.etape || b.dataset.aller, true);
+  });
+  /** Info-bulles « ? » : recadrées pour rester dans la fenêtre */
+  const recadrerAide = (e) => {
+    const a = e.target.closest && e.target.closest('.aide'), t = a && a.querySelector('[role="tooltip"]');
+    if (!t) return;
+    if (a.classList.contains('fixe')) { // dans un tableau défilant : position fixe, calculée sur la pastille
+      const p = a.getBoundingClientRect(), w = Math.min(380, innerWidth * 0.86);
+      t.style.left = `${Math.max(8, Math.min(p.left + p.width / 2 - w / 2, innerWidth - w - 8))}px`;
+      t.style.top = p.top > 280 ? 'auto' : `${p.bottom + 8}px`;
+      t.style.bottom = p.top > 280 ? `${innerHeight - p.top + 8}px` : 'auto';
+      return;
+    }
+    t.style.setProperty('--dx', '0px');
+    const r = t.getBoundingClientRect(), m = 8;
+    t.style.setProperty('--dx', `${r.left < m ? m - r.left : r.right > innerWidth - m ? innerWidth - m - r.right : 0}px`);
+  };
+  ['mouseover', 'focusin'].forEach(ev => document.addEventListener(ev, recadrerAide));
+  // un « ? » dans un titre repliable n'ouvre ni ne ferme le volet
+  document.addEventListener('click', (e) => { if (e.target.closest('summary .aide')) e.preventDefault(); });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-vue]');
     if (b) { choisirVue(b.dataset.vue); window.scrollTo(0, 0); }
@@ -901,10 +1091,9 @@
   let vue = null;
   try { vue = localStorage.getItem('vue'); } catch (e) { /* stockage indisponible */ }
   choisirVue(VUES.includes(vue) ? vue : vue === 'equilibre' || vue === 'plan' ? 'entrainement' : 'profil'); // anciennes vues réunies
-
-  let affichage = null;
-  try { affichage = localStorage.getItem('affichage'); } catch (e) { /* stockage indisponible */ }
-  choisirAffichage(affichage !== 'avance');
+  let etape = null;
+  try { etape = localStorage.getItem('etape'); } catch (e) { /* stockage indisponible */ }
+  choisirEtape(etape || 1, false);
 
   // Saisie mémorisée (rechargement de la page) ; sinon exemples affichés en texte indicatif grisé
   let saisie = null;
