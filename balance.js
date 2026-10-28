@@ -264,6 +264,7 @@
       + '<code>TSS = durée (h) × IF² × 100</code><br>'
       + 'IF = allure du milieu de la zone ÷ allure 1 h (Z1 fixée à 0,60). Le carré fait monter le coût plus vite que la vitesse : courir 10 % plus vite fatigue bien plus que 10 % de plus.<br>'
       + 'Pour 1 h : Z1 ≈ 36 · Z2 ≈ 53 · Z3 ≈ 72 · Z4 ≈ 90 · Z5 ≈ 120 · Z6 ≈ 150.<br>'
+      + 'Pourquoi le TSS : il se calcule à partir de l\'allure, comme tout l\'outil (vos chronos sur le terrain), et non à partir de la fréquence cardiaque comme le TRIMP de Banister : la fréquence cardiaque est une réponse de l\'organisme, qui varie avec la chaleur ou la fatigue (détails dans « Sources et études », en bas de page).<br>'
       + 'La part d\'endurance de chaque objectif est ajustée pour que la charge par heure reste équivalente d\'un objectif à l\'autre (≈ 60 TSS/h) : un objectif très intense (5 km) demande plus d\'endurance facile, un objectif centré sur la Z3 (marathon) en tolère moins.'
       + '</span></span>';
     const aide = (nom, texte) => `<span class="aide fixe" tabindex="0" aria-label="Aide : ${nom}"><span aria-hidden="true">?</span><span role="tooltip">${texte}</span></span>`;

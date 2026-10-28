@@ -194,11 +194,14 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
 - **Une liste de méthodes** (`state.methode`) : `zones` (par défaut, `ZONES_DOC`, nommée « Spécifique LPN » : optimiser une allure spécifique selon des critères paramétrables, à placer après des cycles de préparation générale ; carte en tête de liste, avertissement ZONES_DOC.avertissement en .info-box) construit le plan sur la répartition de Balance, ajustable ; les autres sont les méthodes d'entraîneurs, qui gardent leur répartition et leurs durées de séances
   (la colonne « Plan / sem. » montre l'écart avec la répartition visée). Plan de 4 semaines par défaut.
 - Mode `zones` (`semaineZones`, hypothèses) : minutes d'effort de Z3 à Z6 = volume de la semaine × part de la zone. Z6 sous
-  4 min → lignes droites de 20 s après un footing ; allure cible de semi / marathon en Z3-Z4 → une partie dans la sortie longue
+  4 min → lignes droites de 20 s après un footing ; allure cible de semi / marathon en Z3-Z4 → tout son temps dans les séances de qualité (LPN v2 : plus de sortie longue)
   (`SL_SPE`). Blocs par zone (`FORMATS` : répétitions, récupérations, `min` d'un bloc sans profil et en Z6, `seul` pour ouvrir une séance ; avec un profil, un bloc est ignoré sous `seuilBloc()` à l'allure la plus rapide de la zone (`minBloc()`) : 20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h (limite Z2/Z3), loi de puissance du temps limite entre ces points (≈ 104 s en Z3, 60 s en Z4, 20 s en Z5 pour 5 km en 18:30 et 10 km en 39:00) ; pas de durée maximale par bloc, un bloc de Z3 peut dépasser 60 min),
   dont chaque répétition ne dépasse jamais 2/3 du temps limite à l'allure courue (`TLIM_PART`, modèle T = 6 × exp((v / VMA − 1) / k) : au-delà, plus de répétitions plus courtes), scindés s'il reste des séances, regroupés sinon (zone voisine d'abord, `BLOCS_MAX` = 3 par séance, 3 min de trot entre
   blocs) ; ce qui ne rentre pas est signalé (`exces`). La zone de l'allure cible est courue à l'allure cible. `recupZ1` : des
   footings passent en Z1 (récupération) jusqu'au temps de Z1 visé. `bloc` : pas d'affûtage ni de course.
+  `TLIM_PART` s'applique aussi (toutes méthodes) à la partie à l'allure objectif de la sortie longue (`longue`, SL_SPE) et au
+  `TEMPO_OBJ` de Hanson : au plus 2/3 du chrono prédit (multiple de 5 min inférieur). Contrôle `tlim.js` (1 216 plans) : restent
+  au-delà le 105 – 110 % de VMA de Billat (temps limite < 5 min, hors du domaine du modèle) et des tempos à 70 – 73 % (méthodes).
 - Chaque séance porte `parts` (minutes par zone : échauffement en Z2, retour au calme et récupérations en Z1, effort dans
   la zone de la séance) et `etapes` (échauffement, effort, récupération, répétitions `{ rep, etapes }`, cibles d'allure en
   min/km) pour les exports ; `enveloppe()` habille toute séance de qualité.
@@ -208,6 +211,76 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   tuiles séances / temps / distance / qualité, histogramme, repli « Tableau semaine par semaine », exports), semaine par semaine. Distances estimées par séance (`km`, avec profil) : allure moyenne de la zone (`aZ`, Z1 à 60 %,
   Z6 au milieu de ses bornes), fractions à leur allure et récupérations en Z1 (`kmS`), course = distance de l'objectif.
   **Semaine par semaine = « agenda »** (variante choisie par l'utilisateur parmi 20 maquettes, retirées du projet) : un jour = une ligne `ol.seances > li` avec un bloc de date coloré par la zone de la 1re séance (`blocDate` : numéro du jour et jour de la semaine, ou « Jour k » sans date), le corps au centre (nom, zone, texte) et à droite le kilométrage estimé (`fKm1`, « ≈ 8,5 km », absent sans profil) au-dessus de la durée. Un doublé = plusieurs `.seance` dans le même `li`.
+- **Travail de nuit et doublés** : `placerJours(…, eviteSL, nuitJ)` classe les jours (0 repos, 1 départ en nuit, 2 sortie de nuit) ;
+  un doublé (jour à deux séances hors course et club) posé sur un jour de rang 1 ou 2 est échangé avec un footing simple d'un jour de
+  rang inférieur (repos d'abord) ; `manqueSL` réserve aussi un jour hors sortie de nuit pour chaque doublé posé sur un jour de footing.
+  Un doublé resté un lendemain de nuit est fondu par `construire` en un seul footing de même durée (footing et accélérations : footing
+  allongé), si la longueur maximale le permet, avec une note sous la semaine et l'alerte « Après le travail de nuit : n doublés… fondus ».
+  Doublé un jour de départ en nuit : mention « 2e séance plutôt avant votre sieste ». Alerte si les doublés demandés dépassent le nombre
+  de jours de repos d'une semaine. Test `t14.js`/`t15.js` (5 à 7 jours, 1 à 3 doublés, 5 et 8 h, nuits fixes et tournantes) : doublés un
+  lendemain de nuit 374 → 0 (nuits fixes) et 195 → 0 (tournantes), volume identique.
+- **Tests cycle + travail de nuit** (scratchpad `t9.js`, `t13.js`, Spécifique LPN, plan par date de 12 semaines) : 3 à 7 jours,
+  3 / 5 / 8 h, sans limite / 60 min / 10 km, club aucun / lundi / jeudi / les deux, × 5 scénarios (cycle, nuits fixes, nuits tournantes,
+  cycle + nuits, cycle + nuits + 5 km) = 900 comparaisons avec le plan sans option. Vérifié : volume, nombre de séances de qualité et
+  séances du club identiques ; qualité sur jours évités divisée par 3 à 5, toujours avec mention ; sortie longue jamais sur une sortie
+  de nuit ; `t13.js` compare chaque semaine (10 800) à l'optimum théorique (créneaux non évités, non consécutifs, loin des courses et
+  de la séance piste) : 0 semaine au-dessus. D'où `SENSIBLE_COUT` = 100 (priorité absolue sur la régularité des jours) et la sortie
+  longue comptée triple dans `coût`. Les cas « sans adaptation » restants sont structurels (ex. 3 jours avec les deux séances du club ;
+  séance piste du jeudi qui interdit mercredi et vendredi).
+- **Charge d'entraînement : choix du TSS** (bas de page, rubrique « Répartition du volume et charge », et infobulle TSS de
+  balance.js) : TSS (Allen & Coggan) adapté à la course (allure au lieu de la puissance, allure 1 h au lieu du seuil fonctionnel), cohérent
+  avec un outil fondé sur les chronos ; TRIMP de Banister (fréquence cardiaque, réponse physiologique variable) et RPE de séance de Foster
+  (note après coup) cités et écartés, avec les limites du TSS (barème fixe, allure moyenne de zone).
+- **Sortie longue LPN** : supprimée avec Spécifique LPN v2 (voir plus bas : « Footing long », `partageFacile`) ; `nommerSL` retiré.
+- **Plan sous contraintes** (`aComplexe`) : alerte quand 4 contraintes ou plus sont combinées (cycle, nuit, longueur maximale, doublés,
+  volume faible, compétitions intermédiaires, club), ou 3 avec des compromis ; liste les contraintes, les compromis réellement faits
+  (qualité sur jours évités, doublés retirés d'un lendemain de nuit, séances retirées autour des courses, club remplacé, effort coupé,
+  sortie longue courte, footings au minimum ou plafonnés, intensité non placée) et les pistes pour relâcher. N'empêche pas le plan.
+- **Doublé resté un lendemain de nuit** : le 2e footing est d'abord ajouté au footing simple le plus court d'un jour de repos (puis d'un
+  départ en nuit), dans la limite de longueur ; sinon fondu avec celui du jour.
+- **Biographies** (`BIOS` dans plan.js, une par méthode d'entraîneur) : affichées en tête du volet « À propos de ce plan »
+  (« L'entraîneur : … », « Origine : … » pour la méthode norvégienne et Norwegian Singles). Pas de biographie pour Spécifique LPN.
+  Une nouvelle méthode doit avoir sa biographie, sans fait non vérifié.
+- **Travail de nuit** (facultatif, Spécifique LPN seulement pour l'instant, plan par date ; `state.nuit` : actif, mode 'fixe' (soirs[7],
+  lundi = 0) ou 'tournant' (debut, nuits 1 – 7, repos 1 – 14) ; fieldset `.nuit-travail` de l'étape 2, boutons `data-nmode` — pas
+  `data-mode`, déjà pris par le mode des prédictions). `suiviNuit()` → { estNuit(t) } ; `jourNuit(t)` : nuit (départ le soir), sortie
+  (lendemain matin d'une nuit). Placement : la sortie de nuit est ajoutée aux jours où la qualité est évitée (`evite`, même mécanisme
+  que les jours sensibles du cycle) ; `placerJours(…, eviteSL)` : le choix des jours réserve aussi un jour hors sortie de nuit pour la
+  sortie longue (`manqueSL`), et une sortie longue restée sur une sortie de nuit est échangée avec un footing. Volume inchangé (choix
+  de l'utilisateur). Mention « Après une nuit de travail : à alléger, ou à faire après une sieste » sur une qualité restée un lendemain
+  de nuit ; alerte « Après le travail de nuit : n séances… » ; infos « Travail de nuit : … » (autre méthode, pas en plan par date,
+  saisie incomplète). Agenda : 🌃 (nuit le soir), 🛌 (sortie de nuit), légende `#pl-legendeNuit` ; export JSON `jours[].travailNuit`.
+  Sources : Craven et al. 2022 (sommeil court ≈ −7,5 %), consensus AASM/SRS 2015 (≥ 7 h). Test `t8.js` (scratchpad) : qualité et
+  sortie longue sur sortie de nuit 0 sauf 5 cas à 6 jours (mention), volume identique.
+- **Sources et études** (bas de page, `<details class="sources">` dans `#references`, replié) : modèle et fiabilité (Péronnet &
+  Thibault 1989, Vickers & Vertosick 2016, Riegel 1981), répartition et charge (Haugen et al. 2022, Allen & Coggan), méthodes
+  (`#sources-methodes`, rempli par plan.js depuis le champ `source` de chaque méthode, ordre alphabétique, après DOMContentLoaded ;
+  une étude propre à une méthode va dans son champ `source`, lien DOI compris, comme le 15-15 de Billat 2001 ; sous la liste, paragraphe « Allure plutôt que fréquence cardiaque » (Cottereau,
+  Fitzgerald, méthodes norvégiennes) et bouton `data-ouvre="guide-fc"` qui ouvre le dialog statique `#guide-fc` (bases de
+  l'entraînement à la FC, sources Tanaka 2001, Karvonen 1957, Coyle & González-Alonso 2001), cycle et santé (McNulty et al. 2020, Mountjoy et al. 2023 REDs), données (athle.fr, Courses 80).
+  Toute nouvelle étude utilisée doit y être ajoutée (avec DOI vérifié).
+- **Cycle menstruel** (facultatif, `state.regles` : actif, debut, duree 15 – 60, hormonale, irregulier, sensRegles, sensAvant ;
+  fieldset `.cycle-mens` de l'étape 2) : repères seulement (McNulty et al., Sports Med 2020 : effet trivial de la phase, preuves faibles,
+  approche individuelle). `suiviCycle()` : actif, sans contraception hormonale ni cycles irréguliers, date renseignée, plan par date.
+  `phaseDu(t)` : J1 – J5 règles, ovulation à durée − 14 (± 1 j), folliculaire avant, lutéale après ; jours sensibles choisis
+  (J1 – J2, 3 derniers jours du cycle). Agenda : pastille de phase sous la date (`.cyc`, cerclée si sensible) et légende
+  `#pl-legendeCycle`. `placerJours(…, sensible)` : (A) le choix des jours d'entraînement pénalise (`SENSIBLE_COUT` = 3 par séance) les
+  combinaisons qui ne laissent pas assez de créneaux de qualité hors jours sensibles (non consécutifs, à 3 jours des courses) ; la
+  qualité va d'abord aux jours non sensibles (`evite(t)` compte les motifs, cycle + lendemain de nuit : un jour qui cumule les deux
+  est évité avant un jour qui n'en a qu'un) ; (B2) une séance de qualité restée sur un jour sensible reçoit la mention « Jour sensible
+  de votre cycle : à alléger ou à décaler selon vos sensations » (volume et intensité inchangés). Tests (`t4.js`/`t7.js`, scratchpad,
+  LPN, 280 cas) : qualité sur jours sensibles divisée par 4 à 5 ; les cas restants sont structurels (avec les deux cases, 5 jours
+  sensibles d'affilée : les 2 jours libres de la semaine sont consécutifs ou trop près d'une course) et portent tous la mention. `alertesCycle()` : « Santé : … » (irréguliers/absents, > 35 j, < 21 j, plus de 3 mois depuis les règles :
+  RED-S, consulter ; aussi dans les alertes du plan) et « Cycle menstruel : … » (info : hormonale, irréguliers, pas en plan par date,
+  date manquante). Export JSON : `jours[].cycle` { jour, phase }. Choix de l'utilisateur : les 5 points proposés, sans périodisation
+  par phase. Rien n'est envoyé : données locales et fichier de sauvegarde.
+- **Mes données** (`sauvegarde.js`, boutons de l'en-tête) : « Tout effacer » (confirmation dans un `dialog.dlg`, efface les clés
+  localStorage `saisie`, `balance`, `plan`, `vue`, `etape` puis recharge) ; « Enregistrer » (fichier `profil-endurance-AAAA-MM-JJ.json`) ;
+  « Charger » (confirmation, écrit les clés puis recharge : chaque module relit et valide ses données). Format évolutif :
+  `{ format: 'profil-endurance', version, enregistre, donnees: { saisie, balance, plan }, affichage: { vue, etape } }`. Quand le
+  format change : incrémenter `VERSION` et ajouter `MIGRATIONS[ancienne version]` ; un fichier plus récent que l'outil est refusé.
+  Règle pour les évolutions : toute nouvelle clé d'état doit avoir une valeur par défaut et être validée au chargement (comme
+  `volType`), pour que les anciens fichiers restent lisibles sans migration. Le bouton des chronos s'appelle « Effacer les chronos ».
 - **Type de volume** (`state.volType` : 'cible', 'max', 'min' ; cases exclusives `pl-volMax` / `pl-volMin` sous le volume, étape 2) :
   dans `calendrier`, tous les facteurs de semaine sont multipliés par `kVol` : maxi → la semaine la plus chargée vaut le volume, mini →
   la semaine de charge la plus légère vaut le volume (choix de l'utilisateur : décharge, affûtage et semaine de l'objectif restent allégés,
@@ -299,19 +372,21 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   √(h/5) borné à [0,7 ; 1,4]. Échauffement selon la zone (`echauffement(c, zone)`) : 20 min en Z5, 15 si une longueur maximale de séance est fixée ;
   Z6 + 5 min, Z4 − 5 min, Z3 − 10 min ; retour au calme 10 min. Allures prédites par le moteur (`tablePredictions`).
 - **Deux jeux de règles dans construire** (lpn = doc === ZONES_DOC, c.lpn) : les règles ci-dessous sont celles de Spécifique LPN ; les méthodes d'entraîneurs gardent leurs règles propres, qu'on ne modifie pas (constantes _M : footing minimal 30 min, sortie longue = max(28 % du volume, 1,5 footing) plafonnée à 150 min, doublé de 0,6 footing borné à 20–45 min y compris le jour de la sortie longue, footings ≤ 1 h la semaine de l'objectif, alerte doublés sous 7 h). Seules la cohérence « sortie longue = séance la plus longue » et la longueur maximale s'appliquent à tous.
-- Volume facile (Spécifique LPN, `construire`, branche `lpn`) : pas de séance « sortie longue » réservée ni de règle de calcul, une logique en 3 temps. 1) Le lendemain
-  d'une séance de qualité : un footing court et très facile (`EF_MIN` 20 min), passé en Z1 par `recupZ1` dans la limite de la part de Z1 visée (Z1 plafonné à la
-  cible, pas systématique). 2) Sortie longue spécifique à l'objectif si le volume le permet : minimum `SL_MIN_SEMI` 90 min / `SL_MIN_MARATHON` 120 min
-  (« minimum syndical », atteint progressivement : × `lerp(0,7 ; 1, w.frac)` × facteur de la semaine) ; rien pour 5 et 10 km ; si le volume ne suffit pas, elle est
-  réduite (`slCourte`, alerte) ; si les autres séances sont au plafond, elle absorbe le surplus. 3) Le reste du volume va aux autres séances faciles
-  (`partage()`) : durées par pas de 5 min qui alternent haut / bas (jamais deux séances voisines identiques, on évite la monotonie) ; sans minimum d'objectif, le
-  dernier jour fait partie du partage et reste la plus longue séance facile. Volume saisi en km (`c.volKm`, `Balance.contexte().volKm`) : la somme des km des
-  séances vaut le volume × facteur de la semaine (les séances faciles couvrent le reste à l'allure Z2), pas la conversion km → temps. Ensuite la séance la plus longue
-  (en km, en durée sans profil) prend le nom : une séance de qualité si c'est elle (suffixe « tient lieu de sortie longue », pas de footing long à côté), sinon un
-  footing (« Sortie longue ») ; si plusieurs séances sont à égalité en tête (ex. toutes au plafond de longueur), il n'y a pas de sortie longue (alerte de
-  cohérence volume / plafond de séance). Plafond `SL_MAX` 300 min.
-- Doublés : la 2e séance est un footing Z2 de la durée des autres footings (pas de part ni de bornes), pris sur le volume facile ;
-  jamais le dernier jour de la semaine (celui de la sortie longue pour les méthodes) ; placée d'abord les jours faciles, puis le soir des jours de qualité. Utiles à partir de
+- **Spécifique LPN v2 (oct. 2026, cahier des règles validé par l'utilisateur)** : pas de sortie longue imposée (« la spécificité de la
+  distance passe d'abord par le volume hebdomadaire »). 1) Séances de qualité placées d'abord (`semaineZones`, tout Z3 – Z6, allure
+  cible du semi / marathon comprise), pas allongées. 2) Volume facile R = volume − qualités − club − courses, partagé par
+  `partageFacile(R, n, efMin, slMax)` entre les n séances faciles (footings, dernier jour, 2es séances des doublés) : m = R / n, une
+  séance longue facile de `LONG_FACILE` (4/3) × m (« Footing long », le dernier jour, ou un footing la semaine de course), les autres à
+  parts égales (à 5 min près, l'arrondi n'est pas reporté sur la séance longue) ; 20 min au moins, longueur maximale (et `SL_MAX` 300)
+  au plus ; volume non placé → alerte de plafond ; moyenne sous 20 min → alerte « volume juste ». 3) Z1 restante (cible de Z1 − Z1 des
+  qualités) : `versZ1` commence les footings du lendemain de qualité par cette Z1 (`footingZ1` : « x min en Z1, puis y en Z2 ») ; en
+  plan par date, après le placement (vrais lendemains dans le calendrier). Lendemain de qualité = repos ou séance facile. `nommerLong`
+  garde le nom « Footing long » sur le footing simple le plus long après les ajustements du travail de nuit. Sans dates : `alterner`
+  évite deux jours de qualité de suite (séance piste du club comprise). Le placement traite « Footing long » comme la sortie longue
+  (pas un lendemain de nuit si possible). Supprimés : `nommerSL`, `partage()`, footing fixe de 20 min le lendemain de qualité,
+  partie à l'allure cible en fin de sortie longue. Tests : `lpn2.js` (exemples VMA 15), `lpn-sweep.js` (384 plans, 5 040 semaines).
+- Doublés : la 2e séance est une séance facile du partage ; LPN : jamais deux séances de qualité le même jour, et jamais le jour de la
+  plus grosse séance de la semaine (le nombre de doublés est réduit s'il le faut) ; méthodes : jamais le dernier jour de la semaine ; placée d'abord les jours faciles, puis le soir des jours de qualité. Utiles à partir de
   `DOUBLES_SEANCES` (5) séances par semaine : ils libèrent des jours de repos (alerte en dessous).
   Affichage par jour. Option « Séance d'intensité les jours de doublé » (`moment` : matin, midi, soir, sans importance par
   défaut ; visible s'il y a des doublés) : `moments()` place la séance de qualité au moment choisi (midi : footing « matin ou
@@ -412,6 +487,12 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   volume sous un minimum pour l'objectif (5 km 1,5 h ; 10 km 2 h ; semi 3 h ; marathon 4 h par semaine), durée moyenne par séance
   au-dessus d'un maximum (75, 90, 105, 120 min) ou séances de moins de 20 min par jour de course (même minimum que la longueur maximale) (hypothèses). Ex. 3 séances en
   2 h pour un marathon, 4 séances en 10 h pour un 10 km.
+  **Objectif hors du modèle** : chrono prédit de l'objectif au-delà de 5 h → alerte du plan (allures indicatives, course-marche ou
+  objectif plus court) et « chrono prédit au-delà de 5 h, hors du modèle » dans le résumé. **Course un lendemain de nuit** (travail de
+  nuit, objectif ou compétition intermédiaire) : alerte dans `aNuit` (la date ne bouge pas). **Course un jour sensible du cycle** :
+  information `aCycleC` (plan et bloc 1). **Difficulté bridée** (LPN) : sous le volume minimal de `RAPPORT`, note `#pl-diffVolume`
+  sous le curseur (le faible volume ne permet pas l'ajustement, augmenter le volume ; tout regrouper dans une séance est assumé).
+  Export : `dureeMin` arrondie.
   Note de difficulté par méthode (`difficulte` : [1–5, justification], affichée sur 3 niveaux par `niveau3` : 1 – 2 Débutant, 3 Intermédiaire, 4 – 5 Avancé, avec trois ronds HTML `.ronds` (même taille, remplis jusqu au niveau, vert / ambre / orangé via `--z4` / `--z5` / `--z6`, à droite de chaque ligne de la liste) dans la liste et la fiche ; Spécifique LPN vaut 3 : intermédiaire) :
   Seiler 1, Lydiard 2, Daniels 3, Billat 4 (fractions longues à VMA très éprouvantes, le reste accessible), Pfitzinger 4,
   Hanson 4, Canova 5, norvégienne 4, Cottereau 1, Heubi 3, McMillan 2, Tinman 2, Magness 4, Kellogg 4, Galloway 1, Fitzgerald 2, Norwegian Singles 3, Rousset 3. Une séance peut porter un avertissement (`alerte`,

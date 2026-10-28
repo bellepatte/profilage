@@ -242,6 +242,18 @@
   .seances .date { background: var(--c); color: #fff; text-align: center; padding: 10px 4px; display: grid; align-content: center; line-height: 1.1; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .seances .date b { font-size: 1.5rem; }
   .seances .date span { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+  /* Cycle menstruel : pastille de phase sous la date (blanche cerclée les jours sensibles) */
+  .seances .date .cyc { display: block; width: 10px; height: 10px; margin: 5px auto 0; border-radius: 50%; border: 2px solid #fff; }
+  .cyc.regles { background: #e4577a; } .cyc.folliculaire { background: #6fcf97; } .cyc.ovulation { background: #b48cf2; } .cyc.luteale { background: #f2b84b; }
+  .cyc.sensible { box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .legende-cycle .cyc { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin: 0 2px 0 4px; }
+  .seances .date .cyc { width: 12px; height: 12px; }
+  .cycle-mens .champs { margin: 6px 0 4px; }
+  .seances .date .nuit { display: block; font-style: normal; font-size: .85rem; line-height: 1.2; margin-top: 3px; }
+  .nuit-travail .onglets { margin: 6px 0; display: inline-flex; flex-wrap: wrap; }
+  .nuit-travail .soirs { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  .nuit-travail .champs { margin: 6px 0 4px; }
+  .cycle-mens > div > .sous { margin: 8px 0 0; }
   .seances .corps { padding: 8px 0; display: grid; }
   .seances .corps > .jour { padding: 0 14px; }
   .seances .seance { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 4px 16px 4px 14px; }
@@ -258,6 +270,11 @@
   #references h2 { font-size: 1rem; margin: 14px 0 0; }
   #references .note { margin: 0; }
   #references ul { margin: 6px 0 0; }
+  #references .sources { margin-top: 12px; border: 1px solid var(--bord); border-radius: 12px; padding: 8px 14px 12px; background: var(--carte); }
+  #references .sources > summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  #references .sources > summary h2 { display: inline; margin: 0; color: var(--accent); }
+  #references .sources h3 { font-size: .9rem; margin: 14px 0 0; color: var(--discret); }
+  #references .sources li { margin: 3px 0; line-height: 1.45; }
   .zones-cible { position: relative; height: 44px; cursor: pointer; touch-action: none; user-select: none; }
   .zones-cible .segments { position: absolute; inset: 0; display: flex; border-radius: 8px; overflow: hidden; }
   .repere.fin { width: 1px; margin-left: -.5px; opacity: .6; box-shadow: none; }
@@ -367,7 +384,17 @@
   /* Résultats FFA : bouton d'import et fenêtre de sélection des chronos */
   .ffa-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 12px; }
   #ffa-dialog { width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--bord); border-radius: 16px; background: var(--carte); color: var(--texte); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
-  #ffa-dialog::backdrop { background: rgba(10, 20, 35, .55); }
+  #ffa-dialog::backdrop, .dlg::backdrop { background: rgba(10, 20, 35, .55); }
+  .dlg { width: min(460px, calc(100vw - 24px)); padding: 0; border: 1px solid var(--bord); border-radius: 16px; background: var(--carte); color: var(--texte); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  .dlg-corps { padding: 16px 18px 4px; } .dlg-corps h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--accent); } .dlg-corps p { margin: 0; line-height: 1.5; }
+  .dlg-large { width: min(640px, calc(100vw - 24px)); max-height: 85vh; }
+  .dlg-corps h3, #references .dlg-corps h3 { margin: 14px 0 4px; font-size: .95rem; color: var(--texte); } .dlg-corps ul { margin: 0; padding-left: 20px; line-height: 1.5; } .dlg-corps li { margin: 3px 0; } .dlg-corps .note { margin-top: 12px; }
+  .dlg-pied { display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 14px 18px; }
+  .sec.danger { background: var(--rouge); border-color: var(--rouge); color: #fff; }
+  .outils-donnees { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+  .outils-donnees button { border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.18); color: #fff; border-radius: 999px; padding: 5px 12px; font-size: .82rem; cursor: pointer; }
+  .outils-donnees button:hover, .outils-donnees button:focus-visible { background: rgba(255,255,255,.32); }
+  @media (max-width: 520px) { .outils-donnees { margin-left: 0; } .outils-donnees button { padding: 4px 10px; } }
   .ffa-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--bord); }
   .ffa-tete h2 { margin: 0; display: flex; align-items: center; color: var(--accent); }
   .ffa-corps { padding: 14px 16px; overflow-y: auto; max-height: calc(100vh - 180px); }
@@ -399,6 +426,12 @@
 <body>
 <header>
   <h1><span class="logo"><img src="logo-lpn80.png" alt="Les Pieds Nicleys"></span>Profil d'endurance <button type="button" class="test-cache" id="test-aleatoire" title="Données de test aléatoires" aria-label="Remplir avec des données de test aléatoires">🎲</button></h1>
+  <div class="outils-donnees" role="group" aria-label="Mes données">
+    <button type="button" id="donnees-enregistrer" title="Enregistrer toutes vos saisies dans un fichier">💾 Enregistrer</button>
+    <button type="button" id="donnees-charger" title="Recharger un fichier enregistré">📂 Charger</button>
+    <button type="button" id="donnees-effacer" title="Supprimer toutes vos saisies (profil et entraînement)">🗑️ Tout effacer</button>
+    <input type="file" id="donnees-fichier" accept=".json,application/json" hidden>
+  </div>
 </header>
 <nav class="vues" role="group" aria-label="Section">
   <button type="button" class="onglet" data-vue="profil"><span aria-hidden="true">📈</span> Profil</button>
@@ -429,7 +462,7 @@
           <button type="button" class="puce" data-d="21097">Semi</button>
           <button type="button" class="puce" data-d="42195">Marathon</button>
           <button type="button" class="puce" data-d="">Autre</button>
-          <button type="button" class="lien" id="vider">Tout effacer</button>
+          <button type="button" class="lien" id="vider">Effacer les chronos</button>
         </div>
         <label class="champ"><span>VMA connue <span class="sous">(km/h, facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : VMA"><span aria-hidden="true">?</span><span role="tooltip">Comptée comme un chrono de 6 min, au même titre que vos performances.</span></span></span>
           <input type="number" id="vvo2" min="5" max="30" step="0.1" placeholder="ex. 17.5" inputmode="decimal">
@@ -561,6 +594,37 @@
       <label class="case"><input type="checkbox" id="pl-club1"> <span><strong>Lundi</strong> : séance de PPG dont footing <span class="sous">· comptée comme 40 min en Z2 pour la charge</span></span></label>
       <label class="case"><input type="checkbox" id="pl-club2"> <span><strong>Jeudi</strong> : séance piste <span class="sous">· charge moyenne équivalente à 1 h en Z2 + 15 min à VMA (compte comme une séance de qualité)</span></span></label>
     </fieldset>
+    <fieldset class="club cycle-mens">
+      <legend>🌙 Cycle menstruel <span class="sous">(facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : cycle menstruel"><span aria-hidden="true">?</span><span role="tooltip">Les études ne trouvent qu'un effet très faible de la phase du cycle sur la performance (au plus une légère baisse pendant les règles), avec des preuves de faible qualité : la réponse est propre à chacune. Le plan ne change donc ni le volume ni l'intensité selon la phase. Il affiche la phase estimée de chaque jour (plan par date) et, si vous le demandez, évite de placer les séances de qualité les jours où vous êtes moins bien. Ces données restent dans votre navigateur (et dans le fichier si vous enregistrez) : rien n'est envoyé.</span></span></legend>
+      <label class="case"><input type="checkbox" id="pl-reglesActif"> <span>Tenir compte de mon cycle</span></label>
+      <div id="pl-reglesBloc" hidden>
+        <div class="champs">
+          <label>Début des dernières règles <input type="date" id="pl-reglesDebut"></label>
+          <label>Durée moyenne du cycle (jours) <input type="number" id="pl-reglesDuree" min="15" max="60" step="1" inputmode="numeric"></label>
+        </div>
+        <label class="case"><input type="checkbox" id="pl-reglesHormonale"> <span>Contraception hormonale <span class="sous">(pilule, implant, stérilet hormonal… : pas de phases naturelles)</span></span></label>
+        <label class="case"><input type="checkbox" id="pl-reglesIrregulier"> <span>Cycles irréguliers ou absents</span></label>
+        <p class="sous">Jours où je préfère éviter les séances de qualité :</p>
+        <label class="case"><input type="checkbox" id="pl-reglesSensRegles"> <span>Les 2 premiers jours des règles</span></label>
+        <label class="case"><input type="checkbox" id="pl-reglesSensAvant"> <span>Les 3 jours avant les règles</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="club nuit-travail">
+      <legend>🌃 Travail de nuit <span class="sous">(facultatif, Spécifique LPN)</span><span class="aide" tabindex="0" aria-label="Aide : travail de nuit"><span aria-hidden="true">?</span><span role="tooltip">Le manque de sommeil réduit la performance (environ 7 % en moyenne après une nuit courte) et la récupération. Le plan ne change pas le volume : il évite de placer les séances de qualité, la sortie longue et les doublés le lendemain matin d'une nuit travaillée, et les met de préférence sur vos jours de repos (un doublé sans jour libre devient un seul footing, de même durée). Conseils : au moins 7 h de sommeil sur 24 h, une sieste avant une séance, pas d'intensité juste après la nuit.</span></span></legend>
+      <label class="case"><input type="checkbox" id="pl-nuitActif"> <span>Je travaille de nuit</span></label>
+      <div id="pl-nuitBloc" hidden>
+        <div class="onglets" id="pl-nuitMode" role="group" aria-label="Type de planning"><button type="button" class="onglet" data-nmode="fixe">Nuits fixes chaque semaine</button><button type="button" class="onglet" data-nmode="tournant">Planning tournant</button></div>
+        <div id="pl-nuitFixe">
+          <p class="sous">Soirs où je pars travailler :</p>
+          <div class="soirs" id="pl-nuitSoirs"><label class="case"><input type="checkbox" data-k="0"> <span>Lun</span></label><label class="case"><input type="checkbox" data-k="1"> <span>Mar</span></label><label class="case"><input type="checkbox" data-k="2"> <span>Mer</span></label><label class="case"><input type="checkbox" data-k="3"> <span>Jeu</span></label><label class="case"><input type="checkbox" data-k="4"> <span>Ven</span></label><label class="case"><input type="checkbox" data-k="5"> <span>Sam</span></label><label class="case"><input type="checkbox" data-k="6"> <span>Dim</span></label></div>
+        </div>
+        <div id="pl-nuitTournant" class="champs champs3" hidden>
+          <label>Première nuit <input type="date" id="pl-nuitDebut"></label>
+          <label>Nuits d'affilée <input type="number" id="pl-nuitNuits" min="1" max="7" step="1" inputmode="numeric"></label>
+          <label>Jours de repos ensuite <input type="number" id="pl-nuitRepos" min="1" max="14" step="1" inputmode="numeric"></label>
+        </div>
+      </div>
+    </fieldset>
     <ul class="alertes" id="pl-alerteSemaine" hidden></ul>
     <div class="etape-nav"><button type="button" class="lien" data-aller="1">← Objectif</button><button type="button" class="sec" data-aller="3">Mon plan →</button></div>
   </section>
@@ -682,6 +746,7 @@
       </div>
       <input id="pl-difficulte" type="range" min="1" max="10" step="1">
       <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
+      <p class="note" id="pl-diffVolume" hidden>⚠️ Avec ce volume, le temps de qualité de la semaine est trop court pour que ce réglage change vraiment les séances : le faible volume ne permet pas cet ajustement. L'axe de progression principal est d'augmenter le volume.</p>
       <details class="mini"><summary>👁️ Exemple de séance de la première semaine</summary><p class="note" id="pl-diffNote"></p></details>
     </div>
 
@@ -696,7 +761,7 @@
     <div class="chiffres" id="pl-chiffres"></div>
     <div class="volumes" id="pl-volumes" role="img" aria-label="Temps de course prévu par semaine"></div>
     <p class="legende"><span><span class="pastille" style="background:var(--accent)"></span>Charge</span><span><span class="pastille" style="background:var(--z2);opacity:.5"></span>Décharge</span><span><span class="pastille" style="background:var(--z4)"></span>Affûtage</span><span><span class="pastille" style="background:var(--z6)"></span>Compétition</span>
-      <span class="legende-ico">⚡ qualité · 🛣️ sortie longue · 🏃 footing · 💤 récupération · 👥 club · 🏁 course</span></p>
+      <span class="legende-ico">⚡ qualité · 🛣️ sortie longue ou footing long · 🏃 footing · 💤 récupération · 👥 club · 🏁 course</span></p>
     <div class="puces pas-imprimer" id="pl-export" role="group" aria-label="Exporter le plan">
       <span class="sous">📤 Exporter :</span>
       <button type="button" class="puce" data-format="pdf">📄 PDF</button>
@@ -707,6 +772,8 @@
       <span class="aide" tabindex="0" aria-label="Aide : export"><span aria-hidden="true">?</span><span role="tooltip">PDF : la fenêtre d'impression s'ouvre, choisissez « Enregistrer au format PDF ». Montre : une archive .zip avec un entraînement structuré (.fit) par séance, avec les cibles d'allure ; pour une montre Garmin, copiez les fichiers dans le dossier <code>GARMIN/NewFiles</code> de la montre branchée en USB ; ils peuvent aussi être importés dans des plateformes qui acceptent les entraînements .fit (par exemple intervals.icu), qui les envoient à d'autres montres.</span></span>
     </div>
     <h3 class="groupe">🗓️ Semaine par semaine</h3>
+    <p class="note legende-cycle" id="pl-legendeNuit" hidden>🌃 nuit de travail le soir · 🛌 sortie de nuit (lendemain matin) : séances de qualité et sortie longue (ou footing long) placées ailleurs si possible.</p>
+    <p class="note legende-cycle" id="pl-legendeCycle" hidden>🌙 Pastille sous la date : <i class="cyc regles"></i> règles · <i class="cyc folliculaire"></i> phase folliculaire · <i class="cyc ovulation"></i> ovulation (estimée) · <i class="cyc luteale"></i> phase lutéale · <i class="cyc folliculaire sensible"></i> cerclée : jour sensible (qualité évitée si possible). Repères estimés à partir de vos saisies.</p>
     <div id="pl-liste"></div>
     <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</span></span></summary>
       <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
@@ -720,11 +787,12 @@
   <option value="10 km"></option><option value="semi"></option><option value="marathon"></option>
 </datalist>
 
-<script src="endurance.js?v=20261028c"></script>
-<script src="ffa.js?v=20261028c"></script>
-<script src="balance.js?v=20261028c"></script>
-<script src="plan.js?v=20261028c"></script>
-<script src="export.js?v=20261028c"></script>
+<script src="endurance.js?v=20261028r"></script>
+<script src="ffa.js?v=20261028r"></script>
+<script src="balance.js?v=20261028r"></script>
+<script src="plan.js?v=20261028r"></script>
+<script src="export.js?v=20261028r"></script>
+<script src="sauvegarde.js?v=20261028r"></script>
 <script>
 (function () {
   'use strict';
@@ -1110,11 +1178,83 @@
 <footer class="page" id="references">
   <p class="note">Modèle basé sur l'indice d'endurance de Péronnet et Thibault, valable pour des efforts de 5 min à 5 h.
     <span class="aide" tabindex="0" aria-label="Pourquoi 5 h au maximum ?" aria-describedby="aide-5h">?<span role="tooltip" id="aide-5h"><strong>Pourquoi 5 h au maximum ?</strong> Sur les efforts longs, la performance dépend de bien plus que de la condition physique : gestion de l'allure, alimentation et hydratation, choix du matériel, préparation physique et mentale. Une erreur sur un seul de ces points peut déjà coûter cher, et plusieurs erreurs se cumulent. Sur les distances courtes, ces effets restent faibles. Pour que ces écarts ne faussent pas l'indice d'endurance, le modèle de cet outil limite l'effort à 5 h.</span></span></p>
-  <h2>Références</h2>
-  <ul class="note">
-    <li>Péronnet F., Thibault G., <a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology, 1989 : modèle de l'indice d'endurance.</li>
-    <li>Vickers A. J., Vertosick E. A., <a href="https://doi.org/10.1186/s13102-016-0052-y" target="_blank" rel="noopener"><cite>An empirical study of race times in recreational endurance runners</cite></a>, BMC Sports Science, Medicine and Rehabilitation, 2016 : coefficients du profil d'entraînement (1 848 coureurs amateurs).</li>
-  </ul>
+  <details class="sources">
+    <summary><h2>📚 Sources et études</h2> <span class="sous">· études et ouvrages sur lesquels s'appuie l'outil</span></summary>
+    <h3>Modèle d'endurance, prédictions et fiabilité</h3>
+    <ul class="note">
+      <li>Péronnet F., Thibault G., <a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology 67(1), 1989 : modèle de l'indice d'endurance (% de VMA selon la durée).</li>
+      <li>Vickers A. J., Vertosick E. A., <a href="https://doi.org/10.1186/s13102-016-0052-y" target="_blank" rel="noopener"><cite>An empirical study of race times in recreational endurance runners</cite></a>, BMC Sports Science, Medicine and Rehabilitation 8:26, 2016 : coefficients du profil d'entraînement (volume, âge, sexe), durée médiane du semi (1 h 39 hommes, 1 h 56 femmes) et prédictions fiables jusqu'au semi, à la base des seuils de fiabilité.</li>
+      <li>Riegel P. S., <a href="https://www.jstor.org/stable/27850427" target="_blank" rel="noopener"><cite>Athletic records and human endurance</cite></a>, American Scientist 69(3), 1981 : loi de puissance des temps de course, référence de comparaison pour l'extrapolation.</li>
+    </ul>
+    <h3>Répartition du volume et charge d'entraînement</h3>
+    <ul class="note">
+      <li>Haugen T., Sandbakk Ø., Seiler S., Tønnessen E., <a href="https://doi.org/10.1186/s40798-022-00438-7" target="_blank" rel="noopener"><cite>The Training Characteristics of World-Class Distance Runners: An Integration of Scientific Literature and Results-Proven Practice</cite></a>, Sports Medicine – Open 8:46, 2022 : au moins 80 % du volume en faible intensité, base de la répartition par zone.</li>
+      <li>Allen H., Coggan A., <cite>Training and Racing with a Power Meter</cite>, VeloPress : charge d'entraînement TSS (durée × IF² × 100), utilisée pour la répartition, les semaines de compétition et l'infobulle de l'histogramme.</li>
+    </ul>
+    <p class="note"><strong>Pourquoi le TSS, et pas une charge fondée sur la fréquence cardiaque ?</strong> L'outil part de ce que vous faites sur le terrain : vos chronos donnent la VMA, l'indice d'endurance et l'allure 1 h, et toutes les séances sont prescrites en allure. Le TSS mesure la charge de la même façon, par l'intensité de l'effort rapportée à l'allure tenue une heure (IF = allure ÷ allure 1 h, au carré pour que les efforts rapides pèsent plus lourd), multipliée par la durée. Conçu pour le cyclisme avec la puissance, il s'applique à la course en prenant l'allure à la place de la puissance et l'allure 1 h à la place du seuil fonctionnel, comme le font les versions « course à pied » des logiciels d'entraînement. Le TRIMP de Banister, lui, pondère la durée par la fréquence cardiaque : c'est une réponse de l'organisme à l'effort, qui varie avec la chaleur, la fatigue, la déshydratation ou la dérive cardiaque, et que l'outil ne connaît pas avant la séance. La RPE de séance de Foster (effort perçu × durée) dépend d'une note donnée après coup : elle sert à suivre l'entraînement réalisé, pas à le planifier. Limites : le TSS repose sur un barème fixe (IF au carré) et sur l'allure moyenne de chaque zone ; c'est une estimation de charge, pas une mesure de la fatigue réelle.</p>
+    <ul class="note">
+      <li>Banister E. W., Calvert T. W., Savage M. V., Bach T., <cite>A systems model of training for athletic performance</cite>, Australian Journal of Sports Medicine 7, 1975 : modèle impulsion d'entraînement / performance, à l'origine du TRIMP (durée × fréquence cardiaque pondérée), non retenu ici.</li>
+      <li>Foster C., Florhaug J. A., Franklin J. et al., <cite>A New Approach to Monitoring Exercise Training</cite>, Journal of Strength and Conditioning Research 15(1), 2001 : charge par l'effort perçu de séance (RPE × durée), non retenue ici (mesure après coup).</li>
+    </ul>
+    <h3>Méthodes d'entraînement</h3>
+    <p class="note">Les plans des méthodes sont des adaptations de leurs principes publiés, pas les plans officiels des entraîneurs. Spécifique LPN applique des règles de conception propres à l'outil (hypothèses), pas une méthode publiée.</p>
+    <ul class="note" id="sources-methodes"></ul>
+    <p class="note"><strong>Allure plutôt que fréquence cardiaque.</strong> La plupart des méthodes reprises ici règlent l'intensité par l'allure et par le ressenti, et l'outil évite délibérément les modèles fondés sur la fréquence cardiaque. Certaines méthodes s'en servent toutefois pour fixer les zones ou le niveau d'intensité : Cottereau (% de la fréquence cardiaque maximale), Fitzgerald (% de la fréquence cardiaque au seuil) et les méthodes norvégiennes (contrôle des séances sous le seuil) ; l'outil les traduit en allures. La fréquence cardiaque varie avec de nombreux paramètres physiologiques et environnementaux, et bien l'exploiter demande souvent une solide expertise : dans la plupart des situations, une allure est plus commode. Pour approfondir l'entraînement à la fréquence cardiaque : <button type="button" class="lien" data-ouvre="guide-fc">petit guide pour bien débuter</button>.</p>
+    <ul class="note">
+      <li>Tanaka H., Monahan K. D., Seals D. R., <a href="https://doi.org/10.1016/S0735-1097(00)01054-8" target="_blank" rel="noopener"><cite>Age-predicted maximal heart rate revisited</cite></a>, Journal of the American College of Cardiology 37(1), 2001 : fréquence cardiaque maximale estimée à 208 − 0,7 × âge, une moyenne de population (guide).</li>
+      <li>Karvonen M. J., Kentala E., Mustala O., <cite>The effects of training on heart rate: a longitudinal study</cite>, Annales Medicinae Experimentalis et Biologiae Fenniae 35(3), 1957 : zones en % de la fréquence cardiaque de réserve (guide).</li>
+      <li>Coyle E. F., González-Alonso J., <a href="https://doi.org/10.1097/00003677-200104000-00009" target="_blank" rel="noopener"><cite>Cardiovascular drift during prolonged exercise: new perspectives</cite></a>, Exercise and Sport Sciences Reviews 29(2), 2001 : dérive cardiaque, la fréquence cardiaque monte à allure constante au fil d'un effort long (guide).</li>
+    </ul>
+    <dialog class="dlg dlg-large" id="guide-fc" aria-labelledby="guide-fc-titre">
+      <div class="dlg-corps">
+        <h2 id="guide-fc-titre">❤️ S'entraîner à la fréquence cardiaque : les bases</h2>
+        <h3>Ce qu'elle mesure</h3>
+        <p>La fréquence cardiaque (FC) est la réponse de l'organisme à l'effort, pas l'effort lui-même. Elle réagit avec un retard d'une à deux minutes : utile pour les efforts continus et les fractions longues, elle ne dit rien de juste sur des fractions courtes (30-30, 200 m), qui se règlent à l'allure.</p>
+        <h3>Les trois repères à connaître</h3>
+        <ul>
+          <li><strong>FC maximale</strong> : à mesurer plutôt qu'à estimer. Les formules (220 − âge, ou 208 − 0,7 × âge selon Tanaka) donnent une moyenne de population, avec une erreur fréquente de 10 battements ou plus pour une personne donnée. Repère de terrain : la valeur la plus haute relevée en fin de course courte à fond ou après plusieurs montées de côte à fond, bien échauffé et en bonne santé (avis médical au moindre doute).</li>
+          <li><strong>FC de repos</strong> : au réveil, allongé, sur plusieurs matins.</li>
+          <li><strong>FC au seuil</strong> : moyenne des 20 dernières minutes d'un effort de 30 min, seul, le plus rapide possible de façon régulière. C'est la base des zones de Fitzgerald.</li>
+        </ul>
+        <h3>Construire ses zones</h3>
+        <ul>
+          <li>En % de la FC maximale (Cottereau) : endurance à 60 – 80 %, surtout 65 – 75 % ; résistance douce à 80 – 90 % ; résistance dure jusqu'à 95 % environ.</li>
+          <li>En % de la FC au seuil (Fitzgerald) : 75 – 80 % en zone 1, 81 – 89 % en zone 2, 96 – 100 % en zone 3, 102 – 105 % en zone 4.</li>
+          <li>En % de la FC de réserve (Karvonen) : FC cible = FC de repos + % × (FC max − FC de repos), qui tient compte de la FC de repos de chacun.</li>
+        </ul>
+        <h3>Ce qui la fait varier, à effort égal</h3>
+        <p>Chaleur et humidité, déshydratation, altitude, dérive cardiaque sur les efforts longs (elle monte à allure constante), fatigue accumulée, manque de sommeil, maladie, stress, caféine, certains médicaments (les bêtabloquants la brident), et parfois la phase du cycle menstruel. Une même FC ne correspond donc pas toujours au même effort : on la lit avec l'allure et le ressenti, jamais seule.</p>
+        <h3>Bien l'utiliser</h3>
+        <ul>
+          <li>Comme plafond en endurance : ne pas dépasser le haut de sa zone, quitte à ralentir en côte ou par forte chaleur.</li>
+          <li>Pour contrôler les séances sous le seuil : finir la dernière répétition juste sous sa FC au seuil.</li>
+          <li>Pour suivre sa forme : une FC de repos durablement plus haute que d'habitude signale souvent fatigue ou maladie.</li>
+          <li>Matériel : la ceinture pectorale est plus fiable que le capteur optique au poignet, surtout en fractionné et par temps froid.</li>
+          <li>En compétition, l'allure et le ressenti priment.</li>
+        </ul>
+        <p class="note">Douleur thoracique, palpitations, malaise ou FC anormalement haute au repos : arrêter et consulter un médecin.</p>
+      </div>
+      <form method="dialog" class="dlg-pied"><button class="sec">Fermer</button></form>
+    </dialog>
+    <script>
+      document.addEventListener('click', (e) => { const b = e.target.closest('[data-ouvre]'); if (b) document.getElementById(b.dataset.ouvre).showModal(); });
+    </script>
+    <h3>Cycle menstruel et santé</h3>
+    <ul class="note">
+      <li>McNulty K. L., Elliott-Sale K. J., Dolan E. et al., <a href="https://doi.org/10.1007/s40279-020-01319-3" target="_blank" rel="noopener"><cite>The Effects of Menstrual Cycle Phase on Exercise Performance in Eumenorrheic Women: A Systematic Review and Meta-Analysis</cite></a>, Sports Medicine 50(10), 2020 : effet trivial de la phase du cycle, approche individuelle conseillée.</li>
+      <li>Mountjoy M., Ackerman K. E., Bailey D. M. et al., <a href="https://doi.org/10.1136/bjsports-2023-106994" target="_blank" rel="noopener"><cite>2023 International Olympic Committee's (IOC) consensus statement on Relative Energy Deficiency in Sport (REDs)</cite></a>, British Journal of Sports Medicine 57(17), 2023 : règles absentes ou espacées, signal de déficit énergétique (alerte santé).</li>
+    </ul>
+    <h3>Sommeil et travail de nuit</h3>
+    <ul class="note">
+      <li>Craven J. et al., <a href="https://doi.org/10.1007/s40279-022-01706-y" target="_blank" rel="noopener"><cite>Effects of Acute Sleep Loss on Physical Performance: A Systematic and Meta-Analytical Review</cite></a>, Sports Medicine 52(11), 2022 : baisse moyenne de la performance d'environ 7,5 % après une nuit courte.</li>
+      <li>Watson N. F., Badr M. S., Belenky G. et al., <a href="https://doi.org/10.5664/jcsm.4758" target="_blank" rel="noopener"><cite>Recommended Amount of Sleep for a Healthy Adult: A Joint Consensus Statement of the American Academy of Sleep Medicine and Sleep Research Society</cite></a>, Journal of Clinical Sleep Medicine 11(6), 2015 : au moins 7 h de sommeil par nuit.</li>
+    </ul>
+    <h3>Données</h3>
+    <ul class="note">
+      <li>Fédération française d'athlétisme, <a href="https://www.athle.fr/bases/" target="_blank" rel="noopener">base de résultats</a> (athle.fr) : import des résultats FFA des adhérents du club.</li>
+      <li>Challenge <a href="https://courses80.fr/archive/" target="_blank" rel="noopener">Courses 80</a> : liste des courses du challenge, reconnues dans les résultats FFA.</li>
+    </ul>
+  </details>
 </footer>
 </body>
 </html>
