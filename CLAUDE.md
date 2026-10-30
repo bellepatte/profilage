@@ -76,10 +76,19 @@ Interface et contenus **en français**. Ne pas introduire de dépendance externe
   (aucune saisie de VMA/IE dans Balance). Le dernier profil est mémorisé (`localStorage`, clé `balance`) ; sans profil, seules
   les proportions et l'unité saisie s'affichent. Ids DOM préfixés `eq-`. Le dossier `balance/` (projet d'origine, non versionné)
   n'est plus utilisé.
-- `plan.js` : plan d'entraînement (ids préfixés `pl-`, choix mémorisés en `localStorage` clé `plan`). Lit `Balance.contexte()`
-  (allure cible, volume hebdomadaire en h, parts par zone, profil) et se recalcule à l'événement `balance` émis par
-  `balance.js` à chaque rendu ; remplit la colonne « Plan / sem. » du tableau de répartition (`eq-plan0..5`, `eq-planTot`) ;
-  expose `window.Plan.donnees()` (plan affiché, textes sans balises, étapes). Voir « Plan d'entraînement » ci-dessous.
+- Plan d'entraînement, en plusieurs fichiers sources réunis pour la page en un seul, **`plan.bundle.js`** (généré, ne pas le
+  modifier : relancer `node outils/assembler-plan.js` après toute modification d'une source ; c'est lui que charge index.html) :
+  - `plan.js` : le moteur (ids préfixés `pl-`, choix mémorisés en `localStorage` clé `plan`). Lit `Balance.contexte()` (allure cible,
+    volume hebdomadaire en h, parts par zone, profil) et se recalcule à l'événement `balance` émis par `balance.js` à chaque rendu ;
+    remplit la colonne « Plan / sem. » du tableau de répartition (`eq-plan0..5`, `eq-planTot`) ; expose `window.Plan.donnees()` (plan
+    affiché, textes sans balises, étapes) et `window.PlanCore` (fonctions et registres pour les autres sources).
+  - `plan-seances.js` : fonctions de construction des séances (`series`, `fractions`, `continu`, `tRef`) et séances / allures communes
+    à plusieurs méthodes.
+  - `contraintes/*.js` : une contrainte de planification par fichier (doublés, cycle menstruel, travail de nuit, séances du club,
+    longueur maximale, volume cible / maxi / mini, compétitions intermédiaires).
+  - `methodes/*.js` : une méthode par fichier (`lpn.js` = Spécifique LPN, puis les 18 méthodes d'entraîneurs).
+  - `outils/assembler-plan.js` : assemble les sources dans l'ordre moteur, séances communes, contraintes, méthodes.
+  Voir « Plan d'entraînement » ci-dessous.
 - `export.js` : boutons `#pl-export` (data-format) : PDF (= `window.print()`, CSS `@media print` : blocs `.pas-imprimer`
   masqués, semaines dépliées et titre `#impression-titre` le temps de l'impression), CSV (« ; », virgule décimale, BOM),
   Excel (.xlsx minimal écrit à la main : feuilles Plan, Répartition, Paramètres, chaînes en ligne), JSON, montres (archive
@@ -88,7 +97,7 @@ Interface et contenus **en français**. Ne pas introduire de dépendance externe
   `GARMIN/NewFiles`. Vérifié : structure et CRC par un décodeur indépendant, .xlsx ouvert par Excel ; pas encore testé sur
   une vraie montre.
 
-Il n'y a pas de build, pas de gestionnaire de paquets, pas de tests versionnés.
+Pas de gestionnaire de paquets ni de tests versionnés. Seule étape de construction : `node outils/assembler-plan.js` (plan.bundle.js).
 
 ## Modèle (forme simplifiée de Péronnet & Thibault)
 
@@ -111,7 +120,9 @@ es.V ; as et haut donnent les bornes finies : Z1 à 50 %, Z6 sur LARGEUR_Z6 = 1
 - **Fiabilité d'une prédiction** (angFiabilite, en durées d'effort) : marge d'erreur sur la vitesse = incertitude de l'indice × ln × (1 + ln / `LN_COURBE`), avec ln = |ln(durée visée / durée du chrono le plus proche)| (l'erreur d'indice se propage en ln(T/6), un peu plus vite quand l'extrapolation est très longue), plus une dérive au-delà du semi : un saut `SAUT_LONG` (4 %) dès que la durée visée dépasse le semi et le chrono le plus proche, puis `DERIVE_LONGUE` (7,5 %) par durée de semi dépassée (DUREE_SEMI = 105 min, médianes Vickers & Vertosick 2016 : 1 h 39 hommes, 1 h 56 femmes), appliquée progressivement selon l'écart (pleine à partir d'un rapport ×2, LN_DERIVE) pour qu'une cible égale à un chrono saisi ne soit pas pénalisée. Incertitude : celle du profil (stimation.incertitude, ±2,5 à ±4) quand l'indice vient du profil, INCERT_MESURE = 1,5 quand il est calculé sur des chronos (la VMA saisie compte comme chrono à 6 min). Niveaux (SEUILS_MARGE) : Élevée ≤ 4,5 % ; Correcte ≤ 6 % ; Moyenne ≤ 9 % ; Faible ≤ 13 % ; Mauvaise au-delà (seuils choisis, non validés par une étude). Plancher « Correcte » tant que les données sont cohérentes (ni coherenceFaible ni ieDouteux) et que chronos et durée visée ne dépassent pas le semi et que le rapport de durées (visée / chrono le plus proche) reste ≤ ×5 (`RAPPORT_PLANCHER`). Données incohérentes : un cran plus bas ; indice hors de `IE_BORD` ([−12 ; −4], proche des bornes habituelles) : un cran plus bas. Sans performance ni VMA, « Indicative ». Fiabilité du cartouche (iabiliteProfil) : moyenne arrondie de celles de la VMA (6 min) et de l'allure 1 h ; la tuile affiche le détail (`fiabiliteDetail` : « VMA : … · Allure 1 h : … ») et une infobulle `.aide` explique le calcul.
 - **Contrôles** : vitesses hors 4–30 km/h, indice ≥ 0 et, avec exactement deux données, un écart de
   distances inférieur à 10 % (`ECART_DISTANCE_MIN`, la VMA comptant comme VMA × 6 min) bloquent le calcul ; doublons et indice sous −14
-  (`IE_HABITUEL`) sont des alertes. La VMA saisie compte partout comme une performance (VMA × 6 min,
+  (`IE_HABITUEL`) sont des alertes. Indice positif ou nul : calcul bloqué, avec un message qui nomme les performances en cause
+  (« le 10 000 m … est plus rapide que le 5 000 m …, alors que la distance est plus longue ») et explique que l'allure ralentit
+  forcément quand la distance augmente ; sans paire fautive (3 points ou plus), message général. La VMA saisie compte partout comme une performance (VMA × 6 min,
   en 6:00), y compris dans la régression et donc dans le contrôle de l'indice. **Cohérence** : (1) une
   vitesse qui augmente quand la distance augmente est signalée par paire, VMA comprise ; (2) une contre-performance est une performance hors de
   la tendance (> 2 points de % VMA) dont le retrait rend les autres cohérentes (≥ 4 points au total).
@@ -189,9 +200,32 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
 - Unités : chaque valeur est une fourchette `[bas, haut]` (allure basse à haute de la zone). En km avec profil, le temps total est
   déduit de l'allure médiane de chaque zone. Sans profil en km : pas de temps ni de TSS absolu.
 
-## Plan d'entraînement (`plan.js`)
+## Plan d'entraînement (`plan.js`, `plan-seances.js`, `contraintes/`, `methodes/`)
 
-- **Une liste de méthodes** (`state.methode`) : `zones` (par défaut, `ZONES_DOC`, nommée « Spécifique LPN » : optimiser une allure spécifique selon des critères paramétrables, à placer après des cycles de préparation générale ; carte en tête de liste, avertissement ZONES_DOC.avertissement en .info-box) construit le plan sur la répartition de Balance, ajustable ; les autres sont les méthodes d'entraîneurs, qui gardent leur répartition et leurs durées de séances
+- **Organisation (découpage d'oct. 2026, résultat vérifié identique sur 4 104 plans avant / après)** :
+  - **Moteur** (`plan.js`) : état, calendrier (charge, décharge, affûtage), étapes de construction d'une semaine (`construire`),
+    placement sur les dates (`placerJours`), rendu, alertes générales. Il ne connaît **aucune méthode par son nom** : il lit les champs de
+    la méthode choisie et ses règles `regles` (fusionnées avec `REGLES_DEFAUT`, celles des méthodes d'entraîneurs : sortie longue,
+    footings égaux, doublés courts). Points d'extension : `doc.semaine` (séances de qualité de la semaine), `regles.volumeFacile` (partage
+    du volume facile), `regles.echauffement`, et des réglages (`slMax`, `efMin`, `efLeger`, `filtreClub`, `chargeObjectif`, `equilibreZones`,
+    `dechargeQ`, `doublesUtiles`, `sansSortieLongue`, `volumeKm`, `z1Lendemain`, `alterner`).
+  - **Méthodes** (`methodes/<id>.js`) : chacune s'enregistre par `PlanCore.methode({ … })` avec ses textes (source, résumé, principes),
+    sa fiche (`fiche`), sa biographie (`bio`, `bioTitre`), son rang (`ordre`), ses phases, ses réglages, et enregistre ses séances et allures
+    propres (`PlanCore.seances`, `PlanCore.allures`). Le contrat des champs est décrit et vérifié dans plan.js (`CHAMPS_METHODE`,
+    `enregistrerMethode`, `verifierMethodes` : champ inconnu, séance inexistante, phases dans le désordre → avertissement en console).
+    Méthode propre à l'outil : `lpn.js` (`parDefaut`, `repartition`, `semaine: semaineZones`, `regles` LPN). Ajouter une méthode = ajouter un
+    fichier, puis réassembler.
+  - **Contraintes** (`contraintes/<nom>.js`) : chacune s'enregistre par `PlanCore.contrainte(nom, { … })` et regroupe ses réglages par
+    défaut, ses calculs, ses alertes, ses champs de l'étape 2 ou 3 et ses écouteurs ; le moteur l'appelle par `PlanCore.contraintes.<nom>`
+    (`K.<nom>` dans plan.js). **Toutes les contraintes s'appliquent à toutes les méthodes** (étape B) : travail de nuit (avant : Spécifique
+    LPN seulement), doublés (jamais deux séances de qualité le même jour, sauf le double seuil déclaré par la méthode norvégienne ; jamais le
+    jour de la plus grosse séance de la semaine, séances du club comprises : une séance strictement plus longue que toutes les autres, à
+    égalité aucune ; le nombre de doublés est réduit s'il n'y a pas assez de jours), cycle, club, longueur maximale, volume, compétitions.
+    Seul le tri des séances du club selon la répartition par zone (`regles.filtreClub`) reste propre aux méthodes construites sur cette
+    répartition (Spécifique LPN), les autres n'ayant pas de répartition par zone à respecter.
+  - **Chargement** : le premier affichage attend `DOMContentLoaded` (les méthodes et contraintes s'enregistrent après plan.js, dans
+    n'importe quel ordre, sauf limite.js qui s'enregistre avant ses écouteurs).
+- **Une liste de méthodes** (`state.methode`) : `zones` (par défaut, `methodes/lpn.js`, nommée « Spécifique LPN » : optimiser une allure spécifique selon des critères paramétrables, à placer après des cycles de préparation générale ; carte en tête de liste, son champ avertissement en .info-box) construit le plan sur la répartition de Balance, ajustable ; les autres sont les méthodes d'entraîneurs, qui gardent leur répartition et leurs durées de séances
   (la colonne « Plan / sem. » montre l'écart avec la répartition visée). Plan de 4 semaines par défaut.
 - Mode `zones` (`semaineZones`, hypothèses) : minutes d'effort de Z3 à Z6 = volume de la semaine × part de la zone. Z6 sous
   4 min → lignes droites de 20 s après un footing ; allure cible de semi / marathon en Z3-Z4 → tout son temps dans les séances de qualité (LPN v2 : plus de sortie longue)
@@ -210,6 +244,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   public, épreuves visées, difficulté athlétique, mise en œuvre, durée du plan, prérequis manquants ; sous la fiche, résumé et repli « Principes et source »), récapitulatif (alertes,
   tuiles séances / temps / distance / qualité, histogramme, repli « Tableau semaine par semaine », exports), semaine par semaine. Distances estimées par séance (`km`, avec profil) : allure moyenne de la zone (`aZ`, Z1 à 60 %,
   Z6 au milieu de ses bornes), fractions à leur allure et récupérations en Z1 (`kmS`), course = distance de l'objectif.
+  **Tableau récapitulatif** (repli, bloc 4) : en plus du tableau par semaine, un tableau « Temps de travail par zone » (`#pl-recapZones`, plan.js) donne pour chaque zone la durée sur tout le plan, la durée moyenne par semaine, la distance (avec profil : `parts` de chaque séance / `aZ`, allure médiane de la zone ; total un peu différent du total par semaine, dont les fractions sont courues à leur allure) et la part du temps.
   **Semaine par semaine = « agenda »** (variante choisie par l'utilisateur parmi 20 maquettes, retirées du projet) : un jour = une ligne `ol.seances > li` avec un bloc de date coloré par la zone de la 1re séance (`blocDate` : numéro du jour et jour de la semaine, ou « Jour k » sans date), le corps au centre (nom, zone, texte) et à droite le kilométrage estimé (`fKm1`, « ≈ 8,5 km », absent sans profil) au-dessus de la durée. Un doublé = plusieurs `.seance` dans le même `li`.
 - **Travail de nuit et doublés** : `placerJours(…, eviteSL, nuitJ)` classe les jours (0 repos, 1 départ en nuit, 2 sortie de nuit) ;
   un doublé (jour à deux séances hors course et club) posé sur un jour de rang 1 ou 2 est échangé avec un footing simple d'un jour de
@@ -238,7 +273,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   sortie longue courte, footings au minimum ou plafonnés, intensité non placée) et les pistes pour relâcher. N'empêche pas le plan.
 - **Doublé resté un lendemain de nuit** : le 2e footing est d'abord ajouté au footing simple le plus court d'un jour de repos (puis d'un
   départ en nuit), dans la limite de longueur ; sinon fondu avec celui du jour.
-- **Biographies** (`BIOS` dans plan.js, une par méthode d'entraîneur) : affichées en tête du volet « À propos de ce plan »
+- **Biographies** (champ `bio` de chaque fichier de méthode, `bioTitre` « Origine » pour la norvégienne et Singles) : affichées en tête du volet « À propos de ce plan »
   (« L'entraîneur : … », « Origine : … » pour la méthode norvégienne et Norwegian Singles). Pas de biographie pour Spécifique LPN.
   Une nouvelle méthode doit avoir sa biographie, sans fait non vérifié.
 - **Travail de nuit** (facultatif, Spécifique LPN seulement pour l'instant, plan par date ; `state.nuit` : actif, mode 'fixe' (soirs[7],
@@ -309,7 +344,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   ⛔ `a-err` (incohérence, incompatible, prérequis), ⚠️ `a-warn` (défaut), ℹ️ `a-info` (tient lieu, doublés, club écarté, moins de 6 semaines…), les trie
   dans cet ordre et replie au-delà de 3. Séances : icône par type (`iconeSeance` : ⚡ qualité, 🛣️ sortie longue, 🏃 footing, 💤 récupération, 👥 club,
   🏁 course) et puce de zone `zoneChip` ; en-tête de semaine : badge du type (`.badge`) et puces 🗓️ ⏱️ 📏 ⚡ 📶 📝 ; notes de semaine `.note-sem` (📝).
-  Conseils `.info-box.conseil` (💡), contexte du plan `.contexte` (🎯). Règles : celles de Spécifique LPN sont toutes dans `ZONES_DOC.principes`
+  Conseils `.info-box.conseil` (💡), contexte du plan `.contexte` (🎯). Règles : celles de Spécifique LPN sont toutes dans les `principes` de methodes/lpn.js
   (source unique, affichée « Règles de construction ») ; `REGLES_COMMUNES` ne garde que ce qui vaut pour tous les plans.
 - **Sortie longue = séance la plus longue de la semaine** (`construire`, durée et distance) : `sl` est relevée jusqu'à la plus longue séance de qualité ou du club (`besoin`, au plus `slPlafond = min(slMax0, limite exacte)`), les footings (et footing + lignes/accélérations, `sousLimite`) restent sous elle ; le volume est conservé (les footings raccourcissent). Si le plafond (méthode ou longueur maximale) l'empêche, la séance la plus longue « tient lieu de sortie longue » (suffixe du nom) et la dernière séance s'appelle « Sortie facile » (« Sortie avec fin rapide » si elle a du travail). Sans effet les semaines de course (la course remplace la sortie longue).
 - **Longueur maximale d'une séance** (étape 2, facultative : `state.limite` + `state.limiteU` `min` | `km`, champ `#pl-limite`, bornes `bornesLimite` : minimum 20 min (`LIMITE_MIN` ; en km, la distance de 20 min à l'allure de Z2), maximum 300 min ou 60 km ; changer d'unité convertit à l'allure moyenne de Z2, 6 min/km sans profil). `limiteDe(c)` → `c.limite = { min, km, txt }` (une distance est convertie en durée à l'allure moyenne de Z2 ; une séance de qualité est aussi contrôlée sur sa distance `km`). Effets dans `construire` : sortie longue et footings plafonnés (`slMax = min(slMax0, lim5)`, par pas de 5 min ; footing + lignes droites ou accélérations compris : `sousLimite`) ; séances de qualité ramenées sous la limite par `reduire()` (échauffement et retour au calme inchangés, travail multiplié par k, la séance se régénère avec `echelle × k` ; en Spécifique LPN les blocs sont raccourcis ensemble dans `semaineZones`, et l'effort retiré est reporté sur les autres séances de qualité qui ont de la place, puis sur de nouvelles séances de qualité jusqu'à `maxS` ; `coupe` = effort qu'on n'a pas pu replacer) ; compétitions et séances du club non limitées. Alertes (`aLimite`, étape 2 et étape 3) : incompatible avec l'objectif (5 km et 10 km seulement : la séance la plus longue doit couvrir au moins 5 km ou 10 km ; semi et marathon : pas de minimum, seul le volume global compte), incompatible avec le volume (jours × limite + doublés < volume visé), volume plafonné, qualité raccourcie (`coupe`), séances impossibles à raccourcir (2 répétitions minimum : `trop`), séance du club au-dessus de la limite. Export : champ `limite` (feuille Paramètres).
@@ -371,7 +406,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   durée de répétition, travail total et récupération (en part de la répétition) selon le niveau, × facteur de volume
   √(h/5) borné à [0,7 ; 1,4]. Échauffement selon la zone (`echauffement(c, zone)`) : 20 min en Z5, 15 si une longueur maximale de séance est fixée ;
   Z6 + 5 min, Z4 − 5 min, Z3 − 10 min ; retour au calme 10 min. Allures prédites par le moteur (`tablePredictions`).
-- **Deux jeux de règles dans construire** (lpn = doc === ZONES_DOC, c.lpn) : les règles ci-dessous sont celles de Spécifique LPN ; les méthodes d'entraîneurs gardent leurs règles propres, qu'on ne modifie pas (constantes _M : footing minimal 30 min, sortie longue = max(28 % du volume, 1,5 footing) plafonnée à 150 min, doublé de 0,6 footing borné à 20–45 min y compris le jour de la sortie longue, footings ≤ 1 h la semaine de l'objectif, alerte doublés sous 7 h). Seules la cohérence « sortie longue = séance la plus longue » et la longueur maximale s'appliquent à tous.
+- **Deux jeux de règles dans construire** (`REGLES_DEFAUT` du moteur, remplacées en partie par le champ `regles` de la méthode : celui de methodes/lpn.js pour Spécifique LPN) : les règles ci-dessous sont celles de Spécifique LPN ; les méthodes d'entraîneurs gardent leurs règles propres, qu'on ne modifie pas (constantes _M : footing minimal 30 min, sortie longue = max(28 % du volume, 1,5 footing) plafonnée à 150 min, doublé de 0,6 footing borné à 20–45 min y compris le jour de la sortie longue, footings ≤ 1 h la semaine de l'objectif, alerte doublés sous 7 h). Seules la cohérence « sortie longue = séance la plus longue » et la longueur maximale s'appliquent à tous.
 - **Spécifique LPN v2 (oct. 2026, cahier des règles validé par l'utilisateur)** : pas de sortie longue imposée (« la spécificité de la
   distance passe d'abord par le volume hebdomadaire »). 1) Séances de qualité placées d'abord (`semaineZones`, tout Z3 – Z6, allure
   cible du semi / marathon comprise), pas allongées. 2) Volume facile R = volume − qualités − club − courses, partagé par
@@ -405,7 +440,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   niveau). La distance « ≈ … m » affichée est indicative, calculée avec l'allure prédite. Les méthodes données en distance
   par leur auteur (Pfitzinger 600 – 1600 m, Tinman 1 km et 200 m, norvégienne 1000 m et 400 m, Hanson, Galloway) sont
   converties en durées ; seul le mile magique de Galloway, un test, reste une distance.
-- Options génériques de `DOCTRINES` : `q` d'une phase peut être une fonction du contexte, `footingMax` plafonne les footings,
+- Options génériques des méthodes (registre `METHODES`, fichiers methodes/*.js) : `q` d'une phase peut être une fonction du contexte, `footingMax` plafonne les footings,
   `slSi`/`slNote` décident et expliquent l'absence de sortie longue, `lignes` ajoute des accélérations après le premier
   footing de la semaine, `slKm` (nombre ou fonction) plafonne la sortie longue en km, `joursMax` (alerte de prérequis au-delà),
   `test` ({ id, tous } : séance test toutes les n semaines, à la place de la dernière qualité), `courseMarche` (footings et
@@ -458,13 +493,13 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   - Kellogg : phases Base, Base et seuil, Anaérobie ; séances décrites dans la consolidation LetsRun ci-dessous. Sortie longue
     une semaine sur deux (synthèse, non trouvée dans ses textes). Indice −0,25. Difficulté 4/5.
   - Les accélérations de la méthode (`lignes`) ne s'ajoutent pas une semaine qui a déjà une séance de lignes droites.
-- Méthodes (`DOCTRINES`) : Daniels, Lydiard, Seiler (polarisé), Pfitzinger, Hanson, Canova, Billat, norvégienne, Cottereau,
+- Méthodes (fichiers methodes/*.js) : Daniels, Lydiard, Seiler (polarisé), Pfitzinger, Hanson, Canova, Billat, norvégienne, Cottereau,
   Heubi, McMillan, Tinman, Magness, Kellogg, Galloway, Fitzgerald, Norwegian Singles (sirpoc), Rousset ; chacune a des phases (séances de qualité par priorité, type de sortie longue) et un `score` par objectif (adéquation de 0 à 3,
   qui sert seulement à afficher les épreuves visées). **Aucune méthode n'est recommandée** : pas de classement, de filtre ni de
   badge ; la méthode affichée par défaut est Spécifique LPN. Le choix se fait dans une liste déroulante (`#pl-methodeBtn` / `#pl-methodeListe`, 
   Spécifique LPN en tête, puis les méthodes par difficulté athlétique croissante, `parDifficulte`) ; la fiche de la méthode choisie (`#pl-fiche`) remplace les anciennes tuiles et le tri (`TRIS`, `state.tri` supprimés).
   Astérisque `*` (`limitee`) sur les méthodes aux sources limitées, faute de texte de l'auteur sur les phases et les séances : Billat, Tinman (Canova a perdu l'astérisque après lecture de ses articles FIDAL de 1996 et 1998 et de ses fils LetsRun ; Daniels, Pfitzinger, Hanson, Fitzgerald et Lydiard ont perdu l'astérisque après lecture de leur livre, dossier `books/`, Seiler et la norvégienne après lecture d'un article de référence, Norwegian Singles après lecture du livre de Copeland) (voir « Consolidation » et les sources de chaque méthode).
-  La mention « old school » (pastille `.badge-old`, champ `ancienne` de `FICHES`) a été retirée à la demande de l'utilisateur : ne pas la remettre.
+  La mention « old school » (pastille `.badge-old`, champ `ancienne` de la fiche) a été retirée à la demande de l'utilisateur : ne pas la remettre.
   Message informatif visible pour tous les plans (étape 2 « Ma semaine », sous le volume, `.info-box`) : une semaine d'entraînement prise comme base d'un plan doit être au plus à peine plus chargée que les précédentes, dans le doute garder le même volume.
   **Séances au club** (étape 2, deux cases `#pl-club1` / `#pl-club2`, `state.club1` / `state.club2`, constantes `CLUB`, `seanceClub()`) : lundi, « séance de PPG dont footing » comptée comme 40 min de Z2 pour la charge ; jeudi, « séance piste » de
   charge moyenne équivalente à 1 h de Z2 + 15 min à VMA (75 min : 60 de Z2 + 15 de Z5), comptée comme une séance de qualité. Intégrées chaque semaine si compatibles par `construire()` : elles se déduisent du volume (`volP = vol − clubT`) et des parts par zone (`horsClub()` : Z2 et Z5 du
@@ -475,7 +510,7 @@ On répartit le **volume** (temps) entre les zones ; le **TSS** (Coggan) en déc
   les méthodes d'entraîneurs gardent le club chaque semaine ; libellé du champ : « chaque semaine si compatible avec le plan »), séance de qualité du jeudi tenant lieu de séance
   de qualité du plan, séance du jeudi à moins de 3 jours d'une compétition ou de l'objectif (mode par date). Limites : les séances du club ne sont pas retirées une semaine de compétition ; une semaine partielle sans lundi ou jeudi
   perd la séance correspondante (son volume reste déduit).
-  Fiche (`FICHES`, hypothèses de conception) : public visé, `plan` (durée habituelle), `mise` (simple, moyenne, complexe),
+  Fiche (champ `fiche` de chaque méthode, hypothèses de conception) : public visé, `plan` (durée habituelle), `mise` (simple, moyenne, complexe),
   prérequis `h` (volume, h / semaine) et `j` (jours de course) ; `ie` (Billat, norvégienne : fractions longues à VMA ou au seuil)
   ajoute une alerte si l'indice d'endurance est ≤ −10 (reflet de la capacité du moment ou d'un choix d'entraînement, formulé sans jugement). Pas de
   seuil de VMA ni de vitesse sur 1 h : la capacité ne dit rien de l'expérience (un master de 70 ans à 13 km/h de VMA), et les séances se
@@ -654,6 +689,12 @@ otation, constant (pas de décharge), sansAffutage (code), partQualite 0,25
 Node.js (v24 installé) est dans `C:\Program Files\nodejs\node.exe`, et `node` n'est pas dans le PATH de
 certaines sessions : utiliser le chemin complet.
 
+- Plan d'entraînement : après toute modification d'une source (plan.js, plan-seances.js, contraintes/, methodes/), relancer
+  `node outils/assembler-plan.js` (il vérifie la syntaxe de chaque source avant d'écrire plan.bundle.js). Pour une modification qui ne
+  doit rien changer (réorganisation), comparer un instantané avant / après : charger les scripts d'index.html dans un contexte `vm` avec un
+  DOM simulé, date du jour figée, pour un grand nombre de configurations (19 méthodes × objectifs × jours × volumes × doublés × club ×
+  longueur maximale, et plans par date avec cycle, nuit, compétitions, volume maxi / mini, volume en km), et comparer l'empreinte de
+  `Plan.donnees()` et du HTML produit : elle doit être identique au caractère près.
 - Syntaxe moteur : `node --check endurance.js` (idem `balance.js`)
 - Syntaxe du script de la page : extraire le contenu de `<script>…</script>` et lancer `node --check`.
 - Non-régression du calcul : comparer les sorties de `calibrerComplet`, `calibrer`, `tablePredictions`,
@@ -664,7 +705,7 @@ certaines sessions : utiliser le chemin complet.
   produit une capture lisible. Il impose une largeur minimale d'environ 500 px : pour le téléphone,
   afficher la page dans une `<iframe>` de 390 px. Lancer une capture à la fois, avec un `--user-data-dir` temporaire.
   Edge headless peut refuser de démarrer (journal : « Edge is running elevated ») : tester alors la logique dans Node avec un
-  DOM simulé (charger `endurance.js`, `balance.js`, `plan.js` dans un contexte `vm`, simuler `getElementById` et les événements).
+  DOM simulé (charger `endurance.js`, `balance.js`, `plan.bundle.js` dans un contexte `vm`, puis déclencher les écouteurs de `DOMContentLoaded`, simuler `getElementById` et les événements).
 
 ## Sources de la répartition (Balance)
 
@@ -709,6 +750,16 @@ charge entre objectifs (choix de conception, pas un résultat de recherche).
   à confirmer sur des coureurs du public visé si des données sont disponibles.
 - Affichage téléphone vérifié en capture à 390 px ; reste à tester sur un vrai appareil (saisie tactile).
 - Les tests de non-régression ne sont pas dans le projet : les ajouter si le projet doit évoluer.
+- **Sortie longue un lendemain de nuit avec des doublés** (défaut antérieur au découpage, mis en évidence en oct. 2026) : `placerJours`
+  compte les créneaux hors lendemain de nuit nécessaires (qualités + sortie longue + doublés) en un seul test (`manqueSL`, 0 ou 1). Quand
+  les doublés rendent la semaine impossible à satisfaire entièrement, la pénalité est la même pour toutes les combinaisons et la sortie
+  longue n'est plus protégée : avec 5 – 6 jours, un doublé et 3 – 4 nuits par semaine, elle tombe souvent un lendemain de nuit alors que
+  c'était évitable (Spécifique LPN 5 → 100 semaines sur 210 avec un doublé ; Daniels 0 → 31). Corrigé pour les méthodes d'entraîneurs
+  par des manques gradués dans `placerJours` (`manqueSL`, `manqueDbl` : la sortie longue et les qualités passent avant les doublés :
+  0 semaine sur 210 pour Daniels, Singles, Hanson, Canova). **Reste pour Spécifique LPN : 81 semaines sur 210** (exemple : plan du
+  16/11/2026, 5 jours, 1 doublé, nuits 3/3, semaine 4 : le footing long est sur une sortie de nuit alors qu'un footing simple d'un
+  jour hors nuit existe) : l'échange « sortie longue ↔ footing » de `placerJours` ne s'applique pas ici, ou le renommage `nommerLong`
+  (après report des doublés) déplace le nom ; à examiner (script de contrôle : nuit-toutes.js, variables d'environnement METH, DBL).
 
 - **Feu de fiabilité** : dans le cartouche profil (et la colonne Fiabilité des prédictions), un feu tricolore `feu(niveau)` accompagne le libellé : vert = Élevée/Correcte, orange = Moyenne/Faible, rouge = Mauvaise/Incertaine.
  La fiabilité du cartouche (`E.fiabiliteProfil`) est la moyenne arrondie des rangs de fiabilité de la VMA (6 min) et de l'allure 1 h ; « Incertaine » (rouge) si données incohérentes.

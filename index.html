@@ -610,7 +610,7 @@
       </div>
     </fieldset>
     <fieldset class="club nuit-travail">
-      <legend>🌃 Travail de nuit <span class="sous">(facultatif, Spécifique LPN)</span><span class="aide" tabindex="0" aria-label="Aide : travail de nuit"><span aria-hidden="true">?</span><span role="tooltip">Le manque de sommeil réduit la performance (environ 7 % en moyenne après une nuit courte) et la récupération. Le plan ne change pas le volume : il évite de placer les séances de qualité, la sortie longue et les doublés le lendemain matin d'une nuit travaillée, et les met de préférence sur vos jours de repos (un doublé sans jour libre devient un seul footing, de même durée). Conseils : au moins 7 h de sommeil sur 24 h, une sieste avant une séance, pas d'intensité juste après la nuit.</span></span></legend>
+      <legend>🌃 Travail de nuit <span class="sous">(facultatif, plan par date)</span><span class="aide" tabindex="0" aria-label="Aide : travail de nuit"><span aria-hidden="true">?</span><span role="tooltip">Le manque de sommeil réduit la performance (environ 7 % en moyenne après une nuit courte) et la récupération. Le plan ne change pas le volume : il évite de placer les séances de qualité, la sortie longue et les doublés le lendemain matin d'une nuit travaillée, et les met de préférence sur vos jours de repos (un doublé sans jour libre devient un seul footing, de même durée). Conseils : au moins 7 h de sommeil sur 24 h, une sieste avant une séance, pas d'intensité juste après la nuit.</span></span></legend>
       <label class="case"><input type="checkbox" id="pl-nuitActif"> <span>Je travaille de nuit</span></label>
       <div id="pl-nuitBloc" hidden>
         <div class="onglets" id="pl-nuitMode" role="group" aria-label="Type de planning"><button type="button" class="onglet" data-nmode="fixe">Nuits fixes chaque semaine</button><button type="button" class="onglet" data-nmode="tournant">Planning tournant</button></div>
@@ -775,8 +775,10 @@
     <p class="note legende-cycle" id="pl-legendeNuit" hidden>🌃 nuit de travail le soir · 🛌 sortie de nuit (lendemain matin) : séances de qualité et sortie longue (ou footing long) placées ailleurs si possible.</p>
     <p class="note legende-cycle" id="pl-legendeCycle" hidden>🌙 Pastille sous la date : <i class="cyc regles"></i> règles · <i class="cyc folliculaire"></i> phase folliculaire · <i class="cyc ovulation"></i> ovulation (estimée) · <i class="cyc luteale"></i> phase lutéale · <i class="cyc folliculaire sensible"></i> cerclée : jour sensible (qualité évitée si possible). Repères estimés à partir de vos saisies.</p>
     <div id="pl-liste"></div>
-    <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité.</span></span></summary>
+    <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité. Tableau par zone : durée de chaque zone sur tout le plan (échauffements et récupérations comptés en Z1 – Z2), distance = durée / allure médiane de la zone, donc un peu différente du total ci-dessus (qui court les fractions à leur allure).</span></span></summary>
       <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
+      <h4 class="groupe">⏱️ Temps de travail par zone</h4>
+      <div class="tableau"><table><thead id="pl-recapZonesTete"></thead><tbody id="pl-recapZones"></tbody><tfoot id="pl-recapZonesTotal"></tfoot></table></div>
     </details>
     <div class="etape-nav pas-imprimer"><button type="button" class="lien" data-aller="3">← Modifier mon plan</button><span></span></div>
   </section>
@@ -787,12 +789,12 @@
   <option value="10 km"></option><option value="semi"></option><option value="marathon"></option>
 </datalist>
 
-<script src="endurance.js?v=20261028r"></script>
-<script src="ffa.js?v=20261028r"></script>
-<script src="balance.js?v=20261028r"></script>
-<script src="plan.js?v=20261028r"></script>
-<script src="export.js?v=20261028r"></script>
-<script src="sauvegarde.js?v=20261028r"></script>
+<script src="endurance.js?v=20261029a"></script>
+<script src="ffa.js?v=20261029a"></script>
+<script src="balance.js?v=20261029a"></script>
+<script src="plan.bundle.js?v=20261030b"></script>
+<script src="export.js?v=20261029a"></script>
+<script src="sauvegarde.js?v=20261029a"></script>
 <script>
 (function () {
   'use strict';

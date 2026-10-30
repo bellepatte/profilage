@@ -157,7 +157,6 @@
       : "Il faut au moins deux durées différentes (ex. 1500 m et 10 km) pour calibrer le modèle, ou renseigner la VMA connue.");
     const V = reg.a, k = reg.b / reg.a;
     const r2 = points.length > 2 ? reg.r2 : null; // avec 2 points, la droite passe exactement par les deux
-    if (k >= 0) throw new Error(`L'indice d'endurance calculé est positif ou nul (${virgule(100 * k)}) : les performances saisies ne peuvent pas être modélisées. Vérifiez les distances et les temps.`);
 
     // Cohérence (1) : une vitesse ne doit pas augmenter quand la distance augmente ; la VMA saisie
     // compte comme une performance (VMA × 6 min, en 6:00)
@@ -166,6 +165,14 @@
     if (vmaKmh > 0) saisies.push({ distance: vVma * REF_MIN, v: vVma, vma: true, nom: `la VMA saisie (${virgule(vmaKmh)} km/h, soit ${metres(Math.round(vVma * REF_MIN))} en 6:00)` });
     const violations = [];
     saisies.forEach(a => saisies.forEach(b => { if (b.distance > a.distance && b.v > a.v) violations.push([a, b]); }));
+    // Indice positif ou nul : on va plus vite (ou aussi vite) sur les distances longues que sur les courtes ; le message nomme les
+    // performances en cause, pour que l'utilisateur comprenne d'où vient le problème
+    if (k >= 0) {
+      const cas = violations.slice(0, 2).map(([a, b]) => `${b.nom} est plus rapide que ${a.nom}, alors que la distance est plus longue`);
+      throw new Error(`Données incohérentes : ${cas.length ? `${cas.join(' ; ')}.` : 'dans l\'ensemble, vos performances sur les distances longues sont aussi rapides ou plus rapides que sur les courtes.'}`
+        + ` Plus la distance augmente, plus l'allure ralentit forcément : une allure plus rapide sur une distance plus longue est impossible à modéliser (indice d'endurance calculé : ${virgule(100 * k)}, il doit être négatif).`
+        + ' Vérifiez les distances et les temps saisis (erreur de frappe, parcours mal mesuré, course en descente ou chrono d\'une autre distance).');
+    }
 
     // Cohérence (2) : une performance hors de la tendance des autres est une contre-performance
     // si son retrait rend les autres cohérentes entre elles (il faut alors au moins 3 points restants)
