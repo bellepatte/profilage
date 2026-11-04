@@ -24,7 +24,9 @@
   const DOUBLE_PART_M = 0.6, DOUBLE_BORNES_M = [20, 45], DOUBLE_VOLUME_M = 7; // méthodes : 2e séance d'un doublé (part d'un footing, bornes en min) ; volume (h) sous lequel les doublés servent peu
   // methode : identifiant de la méthode choisie (methodes/*.js) ; par défaut, celle qui s'enregistre avec parDefaut (Spécifique LPN, 'zones')
   const METHODE_DEFAUT = 'zones';
-  const state = { seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'auto', charge: 3, decharge: 1, difficulte: 4, methode: null, club1: false, club2: false, limite: null, limiteU: 'min', volType: 'cible',
+  const state = { seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'auto', charge: 3, decharge: 1, difficulte: 4, methode: null, club1: false, club2: false, limite: null, limiteU: 'min', volType: 'cible', ordre: 'progressif', jourDoubles: [false, false, false, false, false, false, false], // jours préférés des doublés (lundi = 0), plan par date
+    jourQualite: [false, false, false, false, false, false, false], // jours préférés des séances de qualité (lundi = 0), plan par date
+    jourCourse: [false, false, false, false, false, false, false], // jours de course choisis (lundi = 0), plan par date
     regles: { actif: false, debut: '', duree: 28, hormonale: false, irregulier: false, sensRegles: false, sensAvant: false }, // suivi du cycle menstruel (facultatif)
     nuit: { actif: false, mode: 'fixe', soirs: [false, false, false, false, false, false, false], debut: '', nuits: 3, repos: 4 } }; // travail de nuit (facultatif)
 
@@ -37,7 +39,9 @@
   if (!['auto', 'constante', 'cycle'].includes(state.cycle)) state.cycle = 'auto';
   if (state.horizon !== 'date') state.horizon = 'semaines';
   if (state.limiteU !== 'km') state.limiteU = 'min';
+  if (!['progressif', 'inverse', 'alterne'].includes(state.ordre)) state.ordre = 'progressif';
   if (!(state.limite > 0)) state.limite = null;
+  for (const cle of ['jourDoubles', 'jourQualite', 'jourCourse']) state[cle] = Array.from({ length: 7 }, (_, k) => !!(Array.isArray(state[cle]) && state[cle][k]));
   const save = () => { try { localStorage.setItem('plan', JSON.stringify(state)); } catch (e) { /* stockage indisponible */ } };
 
   /* ---------- Formats ---------- */
@@ -227,12 +231,19 @@
   const RAPPORT = { '5k': { km: 10, moy: 75 }, '10k': { km: 20, moy: 90 }, semi: { km: 30, moy: 105 }, marathon: { km: 50, moy: 120 } };
   const volumeMini = (c) => RAPPORT[c.goal].km * (c.profil ? aZ(c, 'Z2') : 6) / 60;
   const volumeMiniTxt = (c) => `${RAPPORT[c.goal].km} km`;
+  // Volume sous le minimum de l'objectif : c'est la moyenne des semaines de charge qui compte (volume saisi × facteur moyen des semaines de charge du
+  // calendrier : égale au volume saisi en cible, au-dessous en maxi, au-dessus en mini). Saisi en km, comparé en km (sinon 30 km pile pour un semi,
+  // convertis en heures à une autre allure, déclenchaient l'alerte)
+  const moyCharge = (c, cal) => { const f = cal.filter(w => w.type === 'Charge').map(w => w.facteur); return (f.length ? f.reduce((a, x) => a + x, 0) / f.length : 1) * (c.volKm ?? c.heures); };
+  const sousVolume = (c, cal) => (c.volKm != null ? moyCharge(c, cal) < RAPPORT[c.goal].km - 0.05 : moyCharge(c, cal) < volumeMini(c) - 0.5 / 60);
+  const volMoyTxt = (c, cal) => (c.volKm != null ? `${String(Math.round(moyCharge(c, cal) * 10) / 10).replace('.', ',')} km` : fD(moyCharge(c, cal) * 60));
   const MOY_MIN = 20; // même minimum que la longueur maximale d'une séance
   /** Alertes sur le rapport entre volume, nombre de séances et objectif (ex. 3 séances en 2 h pour un marathon) */
-  function rapportSemaine(c) {
+  function rapportSemaine(c, cal) {
     const R = RAPPORT[c.goal], n = state.seances + nbDoubles(), jour = c.heures * 60 / state.seances, moy = c.heures * 60 / n, a = [];
     const nom = OBJECTIFS.find(([k]) => k === c.goal)[2], pour = `${c.course ? '' : 'une allure proche d\'' }un ${nom}`;
-    if (c.heures < volumeMini(c)) a.push(`Rapport défavorable : ${fD(c.heures * 60)} en ${n} séance${n > 1 ? 's' : ''} par semaine, c'est peu pour ${pour} (au moins ${volumeMiniTxt(c)}). ${state.methode === 'zones' ? 'Les séances resteront courtes' : 'La sortie longue restera courte'} et la préparation limitée.`);
+    const saisi = { max: 'volume maxi de ', min: 'volume mini de ' }[state.volType];
+    if (sousVolume(c, cal)) a.push(`Rapport défavorable : ${saisi ? '≈ ' : ''}${volMoyTxt(c, cal)} par semaine en moyenne${saisi ? ` (${saisi}${c.volKm != null ? `${String(c.volKm).replace('.', ',')} km` : fD(c.heures * 60)})` : ''}, en ${n} séance${n > 1 ? 's' : ''}, c'est peu pour ${pour} : il faut au moins ${volumeMiniTxt(c)} par semaine en moyenne sur les semaines de charge (décharge et affûtage non comptés). ${state.methode === 'zones' ? 'Les séances resteront courtes' : 'La sortie longue restera courte'} et la préparation limitée. Si vous ne pouvez pas augmenter votre volume, revoyez l'objectif : ${c.goal === '5k' ? '' : 'une distance plus courte ou '}un objectif chronométrique beaucoup plus large (vérifiez toutefois la présence d'une barrière horaire sur votre course).${c.goal === '5k' ? '' : ' Ne sous-estimez pas l\'importance du volume d\'entraînement lorsque les distances s\'allongent : une carence dans ce domaine est très punitive et rendra l\'expérience très désagréable, physiquement et psychologiquement.'}`);
     else if (moy > R.moy) a.push(`Rapport défavorable : ${fD(c.heures * 60)} en ${n} séances par semaine, soit ≈ ${fD(moy)} par séance, c'est long pour ${pour} (≈ ${fD(R.moy)} au plus en moyenne). Ajoutez des jours de course ou des doublés, ou baissez le volume.`);
     else if (jour < MOY_MIN) a.push(`Séances trop courtes : ≈ ${fD(jour)} par jour de course. Regroupez le volume sur moins de jours.`);
     return a;
@@ -306,8 +317,14 @@
     const joursHorsSortie = (S) => (eviteSL ? S.filter(o => !eviteSL(w.debut + o * JOUR)).length : Infinity);
     const manqueSL = (S) => (eviteSL ? Math.max(0, nQ + (avecSLsem ? 1 : 0) - joursHorsSortie(S)) : 0);
     const manqueDbl = (S) => (eviteSL ? Math.max(0, nDblF - Math.max(0, joursHorsSortie(S) - nQ - (avecSLsem ? 1 : 0))) : 0);
+    // jours de qualité choisis (state.jourQualite, lundi = 0, facultatif) : les séances de qualité vont de préférence à ces jours, sans passer avant le cycle, la nuit ni les courses
+    const prefQ = (o) => state.jourQualite[(new Date(w.debut + o * JOUR).getUTCDay() + 6) % 7], Pq = nQ > 0 && state.jourQualite.some(Boolean), nPrefLibres = Pq ? libres.filter(prefQ).length : 0;
+    // jours de course choisis (state.jourCourse) : ils comptent avec les jours cochés de qualité et de doublé ; les combinaisons de jours qui en laissent un de côté coûtent PREF_JOUR_COUT chacune (sous SENSIBLE_COUT)
+    const PREF_JOUR_COUT = 20, prefJ = (o) => { const k = (new Date(w.debut + o * JOUR).getUTCDay() + 6) % 7; return state.jourCourse[k] || state.jourQualite[k] || state.jourDoubles[k]; };
+    const Pj = state.jourCourse.some(Boolean) || state.jourQualite.some(Boolean) || state.jourDoubles.some(Boolean), nPrefJ = Pj ? libres.filter(prefJ).length : 0;
     const coût = (S) => {
-      const tous = [...S, ...R, ...Co].sort((a, b) => a - b), n = tous.length, pen = SENSIBLE_COUT * (manqueSens(S) + 3 * manqueSL(S) + 0.5 * manqueDbl(S)); // la sortie longue pèse triple (une seule par semaine, la plus longue : à tenir hors sortie de nuit, même au prix de jours moins réguliers), les doublés moitié
+      const tous = [...S, ...R, ...Co].sort((a, b) => a - b), n = tous.length, pen = SENSIBLE_COUT * (manqueSens(S) + 3 * manqueSL(S) + 0.5 * manqueDbl(S)) + (Pq ? 3 * Math.max(0, Math.min(nQ, nPrefLibres) - S.filter(prefQ).length) : 0)
+        + (Pj ? PREF_JOUR_COUT * Math.max(0, Math.min(autres.length, nPrefJ) - S.filter(prefJ).length) : 0); // la sortie longue pèse triple (une seule par semaine, la plus longue : à tenir hors sortie de nuit, même au prix de jours moins réguliers), les doublés moitié
       if (n < 2) return pen;
       const cycle = oMax === 6, ecarts = tous.slice(1).map((o, k) => o - tous[k]).concat(cycle ? [7 - tous[n - 1] + tous[0]] : []);
       const ideal = cycle ? 7 / n : oMax / (n - 1);
@@ -322,8 +339,8 @@
     const creneaux = meilleur ? meilleur.S : [], distCourse = (o) => Math.min(9, ...Rd.map(r => Math.abs(o - r)), ...Rq.slice(Rd.length).map(r => Math.min(3, Math.abs(o - r)))); // courses voisines : au-delà de 3 jours, sans préférence (pas de qualité repoussée en fin de semaine)
     const attribue = new Map(); // décalage → jour
     const qualite = autres.filter(j => j[0].qualite), faciles = autres.filter(j => !j[0].qualite);
-    if ((Rq.length || Cq.length || Sx.size) && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite (ni à côté du club de qualité)
-      const tries = creneaux.slice().sort((a, b) => (Sx.get(a) || 0) - (Sx.get(b) || 0) || distCourse(b) - distCourse(a) || a - b), pris = [];
+    if ((Rq.length || Cq.length || Sx.size || Pq) && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite (ni à côté du club de qualité) ; jours choisis d'abord (Pq)
+      const tries = creneaux.slice().sort((a, b) => (Sx.get(a) || 0) - (Sx.get(b) || 0) || (Pq ? !!prefQ(b) - !!prefQ(a) : 0) || distCourse(b) - distCourse(a) || a - b), pris = [];
       for (const o of tries) if (pris.length < qualite.length && distCourse(o) >= 3 && !pris.some(p => Math.abs(p - o) === 1) && !Cq.some(q => Math.abs(q - o) === 1)) pris.push(o);
       for (const o of tries) if (pris.length < qualite.length && !pris.includes(o) && distCourse(o) >= 3) pris.push(o); // à défaut, deux jours de qualité de suite plutôt qu'à moins de 3 jours d'une course
       for (const o of tries) if (pris.length < qualite.length && !pris.includes(o)) pris.push(o); // en dernier recours, le plus éloigné restant
@@ -467,7 +484,7 @@
   function construire(doc, ctx) {
     const R = { ...REGLES_DEFAUT, ...(doc.regles || {}) }; // règles de construction de la méthode (par défaut : celles des méthodes d'entraîneurs)
     const c = { ...ctx, regles: R, ...(doc.courseMarche ? { courseMarche: doc.courseMarche } : {}) }; // footings et sorties longues en course-marche
-    const { cal, alertes: aCourses, cycle } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3);
+    const { cal, alertes: aCourses, cycle } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, doc.repartition ? (state.seances <= 4 ? 1 : 2) : state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3); // Spécifique LPN : 1 séance de qualité jusqu'à 4 séances, 2 au plus
     // Plafond de la sortie longue : slKm (km, nombre ou fonction du contexte) converti à l'allure de la sortie longue, sinon le plafond des règles de la méthode (R.slMax)
     const slKm = typeof doc.slKm === 'function' ? doc.slKm(c) : doc.slKm;
     const slMax0 = slKm && c.profil ? slKm * (c.courseMarche ? c.courseMarche.allure(c) : (c.zones.Z2.allureRapide + c.zones.Z2.allureLente) / 2) : R.slMax;
@@ -563,7 +580,7 @@
       if (clubQ && nbQ1 > 0 && nbQ === 0) aClubSem.sansQualite++;
       const club = clubs.map(k => K.club.seance(k, c));
       // semaine (plan selon la répartition) : séances de qualité, lignes droites et type de sortie longue tirés des minutes par zone
-      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, volP, l, nbQ, (decharge ? R.dechargeQ / DECHARGE : 1) * kComp, Math.max(nbQ, Math.min(doc.maxQ, w.qMax ?? Infinity, jourLibres - 2) - clubQ)) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
+      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, volP, l, nbQ, (decharge ? R.dechargeQ / DECHARGE : 1) * kComp, Math.max(nbQ, Math.min(nbQ0, w.qMax ?? Infinity, jourLibres - 2) - clubQ)) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
       if (sem) { coupe += sem.coupe || 0; trop = Math.max(trop, sem.trop || 0); }
       if (sem && !(w.qMax < Infinity)) exces = Math.max(exces, sem.exces); // autour d'une compétition, la qualité est volontairement limitée
       const ids = sem ? [] : typeof phase.q === 'function' ? phase.q(c) : phase.q, L = sem ? sem.lignes : doc.lignes;
@@ -692,6 +709,7 @@
         const mention = (t) => [cyc && K.cycle.phaseDu(t, cyc).sensible && 'Jour sensible de votre cycle : à alléger ou à décaler selon vos sensations.',
           nuitS && K.nuit.mention(t, nuitS)].filter(Boolean).join(' ');
         // travail de nuit : doublés restés un lendemain de nuit, reportés sur un autre footing ou fondus en un seul footing
+        if (p.dates && nD0) K.doubles.surJours(p.jours, p.dates); // doublés de préférence sur les jours choisis
         const jr = p.dates && nuitS ? p.jours.map(j => j.slice()) : p.jours;
         let fondus = p.dates && nuitS ? K.nuit.reporterDoubles(jr, p.dates, nuitS, c, lim, lim5) : 0;
         const jp = !p.dates || !evite ? jr : jr.map((j, k) => {
@@ -720,7 +738,7 @@
     const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
     const aClub = K.club.alertes({ c, clubs, nClub, clubQ, jourLibres, aClubSem, semaines });
     // Alertes sur la longueur maximale d'une séance : compatibilité avec l'objectif et le volume, puis effets sur le plan construit
-    const aLimite = lim ? K.limite.alertes({ c, lim, semaines, parLimite, coupe, trop, clubs }) : [];
+    const aLimite = lim ? K.limite.alertes({ c, lim, semaines, parLimite, coupe, trop, clubs, nbQ: doc.repartition ? nbQ0 : 0 }) : [];
     // Travail de nuit : conditions du suivi, doublés sans jour de repos, doublés fondus, courses et séances de qualité un lendemain de nuit
     const aNuit = K.nuit.alertesPlan({ s: nuitS, cal, doublesFondus, datesCourses, qSortie });
     const aCycleC = K.cycle.alertesCourses(datesCourses, cyc); // course sur un jour sensible du cycle (information)
@@ -728,7 +746,7 @@
     // les contraintes actives, les compromis qu'elles ont imposés et comment retrouver de la marge
     const nCompet = cal.reduce((a, w) => a + (w.courses || []).length, 0), nD = nbDoubles(); // pl : défini plus haut (alertes du club)
     const contraintes = [state.regles.actif && 'le suivi du cycle menstruel', state.nuit.actif && 'le travail de nuit', lim && `la longueur maximale de séance (${lim.txt})`, nD && pl(nD, 'doublé'),
-      (court || c.heures < volumeMini(c)) && 'un volume faible pour l\'objectif', nCompet && pl(nCompet, 'compétition intermédiaire').replace('intermédiaire', nCompet > 1 ? 'intermédiaires' : 'intermédiaire'),
+      (court || sousVolume(c, cal)) && 'un volume faible pour l\'objectif', nCompet && pl(nCompet, 'compétition intermédiaire').replace('intermédiaire', nCompet > 1 ? 'intermédiaires' : 'intermédiaire'),
       nClub && `${pl(nClub, 'séance')} du club`].filter(Boolean);
     const compromis = [qEvitees && `${pl(qEvitees, 'séance')} de qualité sur un jour à éviter (cycle ou lendemain de nuit, avec la mention « à alléger »)`,
       doublesFondus && `${pl(doublesFondus, 'doublé')} retiré${doublesFondus > 1 ? 's' : ''} d'un lendemain de nuit`, retirees && `${pl(retirees, 'séance')} retirée${retirees > 1 ? 's' : ''} autour des compétitions`,
@@ -738,7 +756,7 @@
     const aComplexe = contraintes.length >= 4 || (contraintes.length >= 3 && compromis.length)
       ? [`Plan sous contraintes : ${contraintes.length} contraintes combinées (${contraintes.join(', ')}). Le plan est construit, mais ${compromis.length
         ? `il a dû faire des compromis : ${compromis.join(' ; ')}.` : 'il reste peu de marge : le moindre changement peut forcer des compromis.'} Pour un plan plus fidèle à la méthode, relâchez une contrainte (moins de doublés, une longueur maximale plus haute, plus de jours de course ou de volume, moins de compétitions).`] : [];
-    return { semaines, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses: [...aCourses, ...aZones] };
+    return { semaines, cal, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses: [...aCourses, ...aZones] };
   }
 
   /* ---------- Rendu ---------- */
@@ -809,7 +827,7 @@
       + `<span class="ligne-fiche"><span class="sous">⏳ Durée du plan</span> ${fm.plan}</span>`
       + (lacunes.length ? `<span class="prerequis" style="grid-column:1/-1">⚠ Prérequis : ${lacunes.join(' ; ')}</span>` : '');
 
-    const { semaines, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses } = construire(doc, c), hor = horizon();
+    const { semaines, cal, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses } = construire(doc, c), hor = horizon();
     const nD = nbDoubles(), total = state.seances + nD;
     const pl = (n, mot) => `<strong>${n}</strong> ${mot}${n > 1 ? 's' : ''}`;
     $('pl-resumeSemaine').innerHTML = `<div class="grand">${total}<small>séance${total > 1 ? 's' : ''} / semaine</small></div><ul>`
@@ -827,7 +845,7 @@
       `<details class="mini"><summary>🧩 Règles communes à tous les plans</summary><ul class="note">${REGLES_COMMUNES.map(p => `<li>${p}</li>`).join('')}</ul></details></div>`;
 
     const alertes = [];
-    if (exces >= 1) alertes.push(`Beaucoup d'intensité pour le nombre de séances de qualité : jusqu'à ${fD(exces)} d'effort par semaine n'ont pas pu être placés (${doc.blocsMax} blocs par séance au plus). Ajoutez des jours de course ou baissez la part d'intensité.`);
+    if (exces >= 1) alertes.push(`Effort coupé : jusqu'à ${fD(exces)} d'effort d'intensité par semaine n'ont pas pu être placés (${doc.maxQ} séances de qualité au plus par semaine, ${doc.blocsMax} blocs par séance au plus${doc.repartition ? ', effort d\'un bloc plafonné selon son temps limite' : ''}). Baissez la part d'intensité ou ajoutez des jours de course.`);
     if (court) alertes.push(`${state.volType === 'max' ? 'Volume maxi incompatible avec' : 'Volume juste pour'} ${total} séances par semaine : les footings sont portés à ${RG.efMin} min, le volume réel dépasse donc ${volRef()} certaines semaines.${nD ? ' Réduisez le nombre de doublés.' : ''}`);
     if (plafond) alertes.push(`Volume élevé pour ${total} séances par semaine : les footings sont limités à ${doc.footingMax ? `${doc.footingMax} min (durée maximale conseillée par la méthode)` : zones ? 'la durée maximale d\'une séance' : 'la durée de la sortie longue'}, le volume réel reste sous ${volRef()} certaines semaines. ${doc.joursMax ? `La méthode prévoit ${doc.joursMax} jours de course : baissez plutôt le volume hebdomadaire.` : 'Ajoutez des jours de course ou des doublés.'}`);
     const manque = zones ? [] : prerequis(doc, c);
@@ -840,6 +858,8 @@
     if (c.profil && c.course && c.tObj > 300) alertes.push(`Objectif hors du modèle : le chrono prédit sur ${c.label.toLowerCase()} dépasse 5 h, durée au-delà de laquelle l'indice d'endurance n'est plus valable. Les allures de course du plan sont indicatives : envisagez la course-marche (méthode Galloway) ou un objectif plus court.`);
     aLimite.forEach(a => alertes.push(a));
     aClub.forEach(a => alertes.push(a));
+    const nJoursCoches = state.jourCourse.map((b, k) => b || state.jourQualite[k] || state.jourDoubles[k]).filter(Boolean).length;
+    if (state.horizon === 'date' && nJoursCoches > state.seances) alertes.push(`Jours choisis : ${nJoursCoches} jours cochés pour ${state.seances} jours de course par semaine. Seuls ${state.seances} sont utilisés (les autres restent des jours de repos), augmentez les jours de course ou décochez-en.`);
     aCourses.forEach(a => alertes.push(a));
     const aCycle = K.cycle.alertes(); // cycle menstruel : l'alerte santé figure aussi dans les alertes du plan
     aCycle.filter(a => /^Santé/.test(a)).forEach(a => alertes.push(a));
@@ -847,10 +867,16 @@
     aNuit.forEach(a => alertes.push(a));
     aComplexe.forEach(a => alertes.push(a));
     listeAlertes($('pl-alertes'), alertes);
-    const rapport = [...aComplexe, ...rapportSemaine(c), ...aLimite, ...aClub, ...aCycle, ...aCycleC, ...aNuit];
+    const rapport = [...aComplexe, ...rapportSemaine(c, cal), ...aLimite, ...aClub, ...aCycle, ...aCycleC, ...aNuit];
     // Difficulté (méthodes construites sur la répartition) : sous le volume minimal de l'objectif (RAPPORT), le temps de qualité est trop court pour que la longueur des
     // séries et des récupérations varie vraiment
-    $('pl-diffVolume').hidden = !(zones && c.heures < volumeMini(c));
+    $('pl-diffVolume').hidden = !(zones && sousVolume(c, cal));
+    // grille des jours (course, qualité, doublé : plan par date seulement ; club : toujours)
+    const grilleDate = state.horizon === 'date';
+    document.querySelectorAll('#pl-grille .dates-seul').forEach(r => { r.hidden = !grilleDate; });
+    document.querySelectorAll('#pl-grille input[data-r]').forEach(i => { i.checked = state[i.dataset.r][+i.dataset.k]; });
+    $('pl-grilleInfo').textContent = grilleDate ? '' : 'Plan en nombre de semaines : seule la ligne Club s\'applique. Choisissez « jusqu\'à la date de l\'objectif » pour fixer les jours.';
+    $('pl-ordreBloc').hidden = !zones; // ordre des blocs d'une séance de qualité : Spécifique LPN seulement
     K.limite.afficher(); // champ de la longueur maximale (étape 2)
     K.club.afficher(); // cases et note des séances du club (étape 2)
     K.cycle.afficher(); // champs du cycle menstruel (étape 2)
@@ -977,6 +1003,21 @@
   });
   $('pl-cycle').value = state.cycle;
   $('pl-cycle').addEventListener('change', e => { state.cycle = e.target.value; render(); });
+  // grille des jours : toute case cochée (qualité, doublé, club) coche le jour de course ; décocher le jour de course vide toute la colonne du jour
+  const CLUB_JOUR = { 'pl-club1': ['club1', 0], 'pl-club2': ['club2', 3] }; // séances du club : lundi, jeudi (leur écouteur est dans contraintes/club.js)
+  $('pl-grille').addEventListener('change', e => {
+    const club = CLUB_JOUR[e.target.id], r = club ? null : e.target.dataset.r, k = club ? club[1] : +e.target.dataset.k;
+    if (!club && !r) return;
+    if (r) state[r][k] = e.target.checked;
+    if (e.target.checked) state.jourCourse[k] = true;
+    else if (r === 'jourCourse') {
+      state.jourQualite[k] = false; state.jourDoubles[k] = false;
+      Object.values(CLUB_JOUR).forEach(([cle, j]) => { if (j === k) state[cle] = false; });
+    }
+    render();
+  });
+  $('pl-ordre').value = state.ordre;
+  $('pl-ordre').addEventListener('change', e => { state.ordre = e.target.value; render(); });
   // Liste déroulante des méthodes (listbox accessible : flèches, Entrée, Échap) ; les ronds de difficulté sont à droite de chaque ligne
   const btn = $('pl-methodeBtn'), liste = $('pl-methodeListe');
   const activer = (li) => { liste.querySelectorAll('li.actif').forEach(x => x.classList.remove('actif')); if (li) { li.classList.add('actif'); btn.setAttribute('aria-activedescendant', li.id); li.scrollIntoView({ block: 'nearest' }); } };

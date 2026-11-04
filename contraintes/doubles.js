@@ -21,6 +21,18 @@
     [...libres.filter(j => !j[0].qualite), ...libres.filter(j => j[0].qualite)].slice(0, nD)
       .forEach((j, m) => j.push(footing(secD ? secD[m] : Math.min(dD, dF), c)));
   };
+  /** Plan par date : ramène les doublés sur les jours choisis (state.jourDoubles, lundi = 0) quand c'est possible. Un doublé (2e séance = footing simple) posé
+      sur un autre jour passe à un jour choisi qui n'a qu'une séance, qui n'est ni une course, ni une séance du club, ni le jour de la plus grosse séance de la
+      semaine ; sinon il reste où il est (choix automatique). Sans jour choisi : aucun effet. */
+  const surJours = (jours, dates) => {
+    const pref = state.jourDoubles;
+    if (!pref.some(Boolean)) return;
+    const wd = (k) => (new Date(dates[k]).getUTCDay() + 6) % 7, toutes = jours.flat(), max = Math.max(...toutes.map(x => x.duree)), tete = toutes.filter(x => x.duree === max);
+    const grosse = tete.length === 1 ? tete[0] : null;
+    const mobiles = jours.map((j, k) => k).filter(k => jours[k].length === 2 && jours[k][1].nom === 'Footing' && !jours[k][1].qualite && !jours[k][1].club && !pref[wd(k)]);
+    const cibles = jours.map((j, k) => k).filter(k => pref[wd(k)] && jours[k].length === 1 && !jours[k][0].club && jours[k][0].nom !== 'Course' && !jours[k].includes(grosse));
+    for (let i = 0; i < Math.min(mobiles.length, cibles.length); i++) jours[cibles[i]].push(jours[mobiles[i]].pop());
+  };
   /** Alertes : doublés peu utiles (en dessous de utiles séances par semaine, ou de volumeMin heures) */
   const alertes = ({ nD, total, c, utiles, volumeMin }) => {
     const a = [];
@@ -49,9 +61,10 @@
   /** Moment de la séance d'intensité (affiché s'il y a des doublés) */
   const afficher = () => {
     $('pl-momentBloc').hidden = !nombre();
+    $('pl-ligneDoubles').hidden = !nombre(); // ligne « Doublé » de la grille des jours (plan.js : cases, plan par date seulement)
   };
 
-  PlanCore.contrainte('doubles', { nombre, placer, alertes, moments, options, afficher });
+  PlanCore.contrainte('doubles', { nombre, placer, surJours, alertes, moments, options, afficher });
   options();
   $('pl-moment').value = state.moment;
   $('pl-moment').addEventListener('change', e => { state.moment = e.target.value; render(); });

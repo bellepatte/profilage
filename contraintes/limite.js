@@ -37,7 +37,7 @@
   }
 
   /** Alertes : compatibilité avec l'objectif et le volume, puis effets sur le plan construit (lim : limite du contexte) */
-  const alertes = ({ c, lim, semaines, parLimite, coupe, trop, clubs }) => {
+  const alertes = ({ c, lim, semaines, parLimite, coupe, trop, clubs, nbQ }) => { // nbQ : séances de qualité au plus par semaine (Spécifique LPN seulement)
     const aLimite = [];
       const nD = nbDoubles(), capacite = (state.seances + nD) * lim.min, W = semaines.length;
       const nom = OBJECTIFS.find(([k]) => k === c.goal)[2], pour = `${c.course ? '' : "une allure proche d'"}un ${nom}`;
@@ -50,7 +50,7 @@
       else if (parLimite) aLimite.push(`La longueur maximale de ${lim.txt} plafonne la sortie longue et les footings : le volume réel reste sous ${volRef()} certaines semaines.`);
       const fixe = echauffement(c, 'Z5') + RETOUR;
       if (lim.min < fixe + 20) aLimite.push(`Avec ${lim.txt} au plus, l'échauffement et le retour au calme (${fixe} min) laissent très peu de place au travail de qualité.`);
-      else if (coupe >= 1) aLimite.push(`La longueur maximale de ${lim.txt} raccourcit les séances de qualité : l'effort retiré est reporté sur d'autres séances quand c'est possible, mais ≈ ${fD(coupe / W)} d'effort par semaine en moyenne n'a pas pu être replacé, le temps en intensité visé n'est pas atteint.`);
+      else if (coupe >= 1) aLimite.push(`La longueur maximale de ${lim.txt} raccourcit les séances de qualité : l'effort retiré est reporté sur d'autres séances quand c'est possible, mais ≈ ${fD(coupe / W)} d'effort par semaine en moyenne n'a pas pu être replacé${nbQ ? ` (${nbQ} séance${nbQ > 1 ? 's' : ''} de qualité au plus par semaine${nbQ === 1 ? ', 2 à partir de 5 séances' : ''}, récupérations à l'arrêt déjà utilisées si la limite est en km)` : ''}, le temps en intensité visé n'est pas atteint. Relevez la limite${nbQ === 1 ? ', ajoutez un jour de course' : ''} ou baissez la part d'intensité.`);
       if (trop) aLimite.push(`Certaines séances de qualité ne peuvent pas être raccourcies davantage (répétitions trop longues pour la limite) : jusqu'à ${fD(trop)}, au-dessus de la longueur maximale de ${lim.txt}. Relevez la limite ou choisissez une autre méthode.`);
       clubs.filter(k => k.duree > lim.min + 0.01).forEach(k => aLimite.push(`La séance du club du ${k.jour} (${fD(k.duree)}) dépasse la longueur maximale de ${lim.txt} : elle est gardée telle quelle.`));
     return aLimite;

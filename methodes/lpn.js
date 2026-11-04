@@ -22,9 +22,11 @@
     Z3: { nom: 'Allure soutenue', rep: [8, 20], recup: [0.3, 0.1], min: 5, seul: 15 },
     Z4: { nom: 'Seuil', rep: [4, 12], recup: [0.4, 0.15], min: 4, seul: 10 },
     Z5: { nom: 'VMA', rep: [1.5, 4], recup: [1, 0.6], min: 3, seul: 8 },
-    Z6: { nom: 'Vitesse', rep: [0.33, 1], recup: [3, 2], min: 4, seul: 5 }
+    Z6: { nom: 'Vitesse', rep: [0.33, 1], recup: [3, 2], min: 2, seul: 5 }
   };
   const ZI = Object.keys(FORMATS), BLOCS_MAX = 3, ENTRE_BLOCS = 3; // blocs par séance ; trot entre deux blocs (min)
+  const TLIM_REP = 1 / 2; // LPN : une répétition ne dépasse pas la moitié du temps limite à son allure (au-delà, trop dur : mieux vaut fractionner qu'allonger) ; les autres méthodes gardent TLIM_PART (2/3)
+  const CAP_TLIM = 2, REF_TLIM = 10; // plafond du temps d'effort d'un bloc : 2 × √(10 × temps limite) min (≈ 15 min à la VMA, ≈ 28 min à allure 5 km) : limite haute choisie par l'utilisateur
 
   /** Temps d'effort minimal d'un bloc à l'allure a (min/km) : 20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h (limite Z2/Z3).
       Loi de puissance du temps limite T entre ces trois points (T = 6 min à la VMA, 60 min à l'allure 1 h), prolongée au-delà avec la pente du segment voisin. */
@@ -35,33 +37,51 @@
   /** Seuil d'ignorance d'un bloc de la zone z : seuilBloc à l'allure la plus rapide de la zone (allure cible si spe, VMA pour Z5) ;
       sans profil, ou en Z6 (lignes droites sous ce seuil), valeur fixe de FORMATS */
   const minBloc = (c, z, spe) => (!c.profil || z === 'Z6' ? FORMATS[z].min
-    : seuilBloc(c, spe ? c.allureObj : z === 'Z5' ? 1000 / c.profil.V : c.zones[z].allureRapide));
+    : seuilBloc(c, spe ? c.allureObj : c.zones[z].allureRapide));
+  /** Allure moyenne (min/km) d'un bloc de la zone z (allure cible si spe, sinon milieu de la zone), comme dans blocZone */
+  const allureBloc = (c, z, spe) => moy(spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : plageZ(c, z));
+  /** Temps d'effort maximal (min) d'un bloc d'une séance : la difficulté ne dépend pas que du volume d'intensité, mais de la durée tenable à cette allure.
+      Plafond = CAP_TLIM × √(REF_TLIM × T), T = temps limite à l'allure du bloc : l'intensité plus faible permet plus de temps, mais moins que proportionnellement */
+  const capBloc = (c, z, spe) => CAP_TLIM * Math.sqrt(REF_TLIM * tlim(c, allureBloc(c, z, spe)));
   /** Bloc de m minutes d'effort dans la zone z, en répétitions (ou en continu) selon le niveau l ; spe : à l'allure cible */
-  function blocZone(c, z, m, l, spe) {
+  function blocZone(c, z, m, l, spe, st = 0) { // st : récupérations à l'arrêt (0 non, 1 en Z5 et Z6, 2 dans toutes les zones, 3 et le trot entre blocs, voir seanceZones), pour tenir la distance maximale
     // au moins 2 répétitions hors Z3 dès que le temps le permet (pas d'effort continu en Z4 à Z6 sur un bloc court)
-    // Z5 va de l'allure 1 h à la VMA : les répétitions se courent à 95 – 100 % de VMA (sans passer sous l'allure 1 h)
-    const vma5 = !spe && z === 'Z5' && c.profil;
-    const allure = c.profil && (spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : vma5 ? [1000 / c.profil.V, Math.min(1000 / (c.profil.V * 0.95), c.zones.Z5.allureLente)] : plageZ(c, z)), a = allure && moy(allure);
+    const allure = c.profil && (spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : plageZ(c, z)), a = allure && moy(allure); // Z5 : entre l'allure 1 h et la VMA
     // un effort continu ne dépasse pas 2/3 du temps limite à l'allure courue (modèle : T = 6 × exp((v / VMA − 1) / k))
-    const cap = a ? TLIM_PART * tlim(c, a) : Infinity;
+    const cap = a ? TLIM_REP * tlim(c, a) : Infinity;
     const F = FORMATS[z], n = Math.max(z !== 'Z3' && m >= 2 * F.rep[0] ? 2 : 1, Math.round(m / Math.min(m, lerp(F.rep[0], F.rep[1], l))), Math.ceil(m / cap - 1e-9));
     const r = arrondi(m / n) > cap ? Math.floor(cap * 12) / 12 : arrondi(m / n);
     const rc = n > 1 ? arrondi(Math.max(0.5, r * lerp(F.recup[0], F.recup[1], l))) : 0;
-    const ou = spe ? `à allure ${c.nomObj}${a ? ` (${fA(c.allureObj)}, ${z})` : ''}` : vma5 ? `en Z5 (${fourchette(allure)}, 95 – 100 % de VMA)` : `en ${zt(c, z)}`;
-    return { z, spe, effort: n * r, recup: (n - 1) * rc, km: c.profil ? n * r / a + (n - 1) * rc / aZ(c, 'Z1') : null,
-      texte: n > 1 ? `${n} × ${fD(r)}${a ? ` (≈ ${Math.round(r / a * 10) * 100} m)` : ''} ${ou}, récupération ${fD(rc)} en trottinant (Z1)`
+    const ou = spe ? `à allure ${c.nomObj}${a ? ` (${fA(c.allureObj)}, ${z})` : ''}` : `en ${zt(c, z)}`;
+    const statique = n > 1 && (st >= 2 || (st >= 1 && (z === 'Z5' || z === 'Z6'))); // récupération à l'arrêt : 0 km, hors charge (ni Z1 ni effort)
+    return { z, spe, statique, effort: n * r, recup: (n - 1) * rc, km: c.profil ? n * r / a + (statique ? 0 : (n - 1) * rc / aZ(c, 'Z1')) : null,
+      texte: n > 1 ? `${n} × ${fD(r)}${a ? ` (≈ ${Math.round(r / a * 10) * 100} m)` : ''} ${ou}, récupération ${fD(rc)} ${statique ? 'à l\'arrêt' : 'en trottinant (Z1)'}`
         : `${fD(r)} en continu ${ou}${a ? ` (≈ ${(r / a).toFixed(1).replace('.', ',')} km)` : ''}`,
-      etapes: n > 1 ? [{ rep: n, etapes: [{ t: 'effort', duree: r, allure }, { t: 'recup', duree: rc }] }] : [{ t: 'effort', duree: r, allure }] };
+      etapes: n > 1 ? [{ rep: n, etapes: [{ t: 'effort', duree: r, allure }, statique ? { t: 'recup', duree: rc, nom: 'Récupération à l\'arrêt' } : { t: 'recup', duree: rc }] }] : [{ t: 'effort', duree: r, allure }] };
   }
-  /** Séance de qualité de un à trois blocs ([{ z, min, spe }]), du plus lent au plus rapide, 3 min de trot entre les blocs */
-  function seanceZones(c, blocs, l) {
-    const B = blocs.sort((a, b) => ZI.indexOf(a.z) - ZI.indexOf(b.z)).map(b => blocZone(c, b.z, b.min, l, b.spe)), entre = ENTRE_BLOCS * (B.length - 1);
+  /** Trot (min) après un bloc : réduit après un effort court en Z3 (≤ 6 min : 1 ; ≤ 12 min : 2) et en Z4 (≤ 4 min : 1 ; ≤ 8 min : 2), sinon ENTRE_BLOCS (hypothèse de conception) */
+  function trot(b) {
+    const seuils = { Z3: [6, 12], Z4: [4, 8] }[b.z];
+    return !seuils || b.effort > seuils[1] ? ENTRE_BLOCS : b.effort <= seuils[0] ? 1 : 2;
+  }
+  /** Ordre des blocs (déjà triés du plus lent au plus rapide) selon le réglage de l'utilisateur : progressif (tel quel), inversé, ou alterné (lent, rapide, moyen) */
+  function ordonner(a) {
+    if (PlanCore.state.ordre === 'inverse') return a.slice().reverse();
+    if (PlanCore.state.ordre !== 'alterne') return a;
+    const r = [];
+    for (let i = 0, j = a.length - 1; i <= j;) { r.push(a[i++]); if (i <= j) r.push(a[j--]); }
+    return r;
+  }
+  /** Séance de qualité de un à trois blocs ([{ z, min, spe }]), trot de 1 à 3 min entre les blocs (voir trot ; ordre : voir ordonner) */
+  function seanceZones(c, blocs, l, st = 0) {
+    const B = ordonner(blocs.sort((a, b) => ZI.indexOf(a.z) - ZI.indexOf(b.z))).map(b => blocZone(c, b.z, b.min, l, b.spe, st));
+    const tr = B.map(trot), entre = tr.slice(0, -1).reduce((a, t) => a + t, 0), arret = st >= 3; // trot après chaque bloc sauf le dernier ; arret : à l'arrêt (dernier recours)
     const somme = (f) => B.reduce((a, b) => a + f(b), 0), effort = somme(b => b.effort), principal = B.reduce((a, b) => (b.effort > a.effort ? b : a));
     const noms = [...new Set(B.map(b => (b.spe ? `Allure ${c.nomObj}` : FORMATS[b.z].nom)))];
-    const r = { travail: effort + somme(b => b.recup) + entre, effort, km: c.profil ? somme(b => b.km) + entre / aZ(c, 'Z1') : null,
-      parts: ajoute({ Z1: somme(b => b.recup) + entre }, ...B.map(b => ({ [b.z]: b.effort }))),
-      etapes: B.flatMap((b, k) => (k ? [{ t: 'recup', duree: ENTRE_BLOCS }, ...b.etapes] : b.etapes)),
-      texte: B.map(b => b.texte).join(` · ${ENTRE_BLOCS} min de trot · `) };
+    const r = { travail: effort + somme(b => b.recup) + entre, effort, km: c.profil ? somme(b => b.km) + (arret ? 0 : entre / aZ(c, 'Z1')) : null,
+      parts: ajoute({ Z1: somme(b => (b.statique ? 0 : b.recup)) + (arret ? 0 : entre) }, ...B.map(b => ({ [b.z]: b.effort }))),
+      etapes: B.flatMap((b, k) => (k ? [{ t: 'recup', duree: tr[k - 1], ...(arret ? { nom: 'Récupération à l\'arrêt' } : {}) }, ...b.etapes] : b.etapes)),
+      texte: B.map((b, k) => (k ? ` · ${tr[k - 1]} min ${arret ? 'à l\'arrêt' : 'de trot'} · ` : '') + b.texte).join('') };
     return enveloppe(c, 'ZONES', noms.join(' + '), principal.z, r);
   }
 
@@ -98,7 +118,8 @@
     }
     // longueur maximale d'une séance : une séance trop longue est raccourcie (blocs réduits ensemble) et l'effort retiré est reporté sur les
     // autres séances de qualité qui ont de la place, puis sur de nouvelles séances de qualité (jusqu'à maxS) ; coupe : effort qu'on n'a pas pu placer (min)
-    const copie = (b, k) => b.map(x => ({ ...x, min: x.min * k })), sz = (b) => seanceZones(c, copie(b, 1), l);
+    // récupérations à l'arrêt (distance maximale seulement) : d'abord en Z5 et Z6, puis dans toutes les zones, avant de raccourcir l'effort
+    const ST = c.limite && c.limite.km && c.profil ? 3 : 0, copie = (b, k) => b.map(x => ({ ...x, min: x.min * k })), sz = (b, st = ST) => seanceZones(c, copie(b, 1), l, st);
     const plusGrand = (ok, max) => { // plus grande valeur dans [0, max] pour laquelle ok(v) est vrai (dichotomie, ok décroissant)
       if (ok(max)) return max;
       let lo = 0, hi = max;
@@ -107,10 +128,17 @@
     };
     let coupe = 0, trop = 0; // trop : durée de la plus longue séance qui reste au-dessus de la limite
     const S = seances.map(b => b.map(x => ({ ...x }))), reportes = [];
+    // plafond du temps d'effort d'un bloc selon l'allure courue (voir capBloc) ; l'excédent est coupé et signalé (exces : alerte « Effort coupé »),
+    // pas reporté sur une autre séance (elle deviendrait aussi dure)
+    // dans une séance à plusieurs blocs, les parts de plafond s'additionnent (somme ≤ 1) : un bloc de seuil plein ne laisse pas la place d'un bloc plein de Z5
+    if (c.profil) S.forEach(b => {
+      const charge = b.reduce((a, x) => a + x.min / capBloc(c, x.z, x.spe), 0);
+      if (charge > 1) b.forEach(x => { exces += x.min * (1 - 1 / charge); x.min /= charge; });
+    });
     if (c.limite) {
       S.forEach(b => {
         if (!depasse(c, sz(b))) return;
-        const k = Math.max(0.05, plusGrand(k => !depasse(c, seanceZones(c, copie(b, k), l)), 1));
+        const k = Math.max(0.05, plusGrand(k => !depasse(c, seanceZones(c, copie(b, k), l, ST)), 1));
         b.forEach(x => { reportes.push({ ...x, min: x.min * (1 - k) }); x.min *= k; });
       });
       reportes.sort((a, b) => b.min - a.min);
@@ -123,7 +151,7 @@
             const meme = b.find(y => y.z === x.z && !!y.spe === !!x.spe);
             if (!meme && b.length >= BLOCS_MAX) return;
             const avec = (v) => (meme ? b.map(y => (y === meme ? { ...y, min: y.min + v } : { ...y })) : [...b.map(y => ({ ...y })), { ...x, min: v }]);
-            const v = plusGrand(t => !depasse(c, seanceZones(c, avec(t), l)), m);
+            const v = plusGrand(t => !depasse(c, seanceZones(c, avec(t), l, ST)), m);
             if (v >= minBloc(c, x.z, x.spe) && (!meilleur || v > meilleur.v)) meilleur = { i, v, meme };
           });
           if (meilleur) {
@@ -131,7 +159,7 @@
             if (meilleur.meme) meilleur.meme.min += meilleur.v; else b.push({ ...x, min: meilleur.v });
             m -= meilleur.v;
           } else if (S.length < maxS) { // nouvelle séance de qualité
-            const v = Math.max(minBloc(c, x.z, x.spe), plusGrand(t => !depasse(c, seanceZones(c, [{ ...x, min: t }], l)), m));
+            const v = Math.max(minBloc(c, x.z, x.spe), plusGrand(t => !depasse(c, seanceZones(c, [{ ...x, min: t }], l, ST)), m));
             S.push([{ ...x, min: Math.min(v, m) }]);
             m -= Math.min(v, m);
           } else break;
@@ -140,7 +168,7 @@
       }
     }
     const q = S.map(b => {
-      const x = sz(b);
+      const x = [0, 1, 2, 3].filter(s => s <= ST).map(s => sz(b, s)).find(y => !depasse(c, y)) || sz(b); // niveau d'arrêt le plus faible qui tient
       if (c.limite && depasse(c, x)) trop = Math.max(trop, x.duree);
       return x;
     });
@@ -149,7 +177,7 @@
 
   // Spécifique LPN : choisit une allure à optimiser (l'allure cible) et construit le plan sur la répartition du volume par zone (ajustable)
   const LPN = { id: 'zones', nom: 'Spécifique LPN', titre: 'Spécifique LPN', ordre: 0, parDefaut: true, blocsMax: BLOCS_MAX, bloc: true,
-    fiche: { public: 'Optimiser une allure spécifique selon des critères paramétrables, après des cycles de préparation générale', plan: '4 à 24 semaines', mise: 'moyenne', h: 0, j: 0 }, recupZ1: true, maxQ: 3, repartition: true,
+    fiche: { public: 'Optimiser une allure spécifique selon des critères paramétrables, après des cycles de préparation générale', plan: '4 à 24 semaines', mise: 'moyenne', h: 0, j: 0 }, recupZ1: true, maxQ: 2, repartition: true,
     regles: { echauffement: (c, zone) => (c.limite ? 15 : 20) + (ECHAUFFEMENT_Z[zone] || 0), slMax: SL_MAX, efMin: EF_MIN, efLeger: EF_LEGER,
       filtreClub: true, chargeObjectif: OBJECTIF_CHARGE, equilibreZones: true, dechargeQ: DECHARGE_Q, doublesUtiles: DOUBLES_SEANCES, sansSortieLongue: true, volumeKm: true,
       z1Lendemain: true, alterner: true, volumeFacile: (x) => volumeFacileLPN(x) },
@@ -158,15 +186,24 @@
     semaine: semaineZones, phases: [{ nom: 'Travail des zones', f: 1, q: [], sl: 'SL' }],
     resume: "Chaque semaine reprend la répartition par zone ci-dessus : le temps d'intensité de chaque zone (Z3 à Z6) forme des séances de qualité, la zone de l'allure cible étant courue à cette allure. Pas de sortie longue imposée : la spécificité de la distance passe d'abord par le volume de la semaine. Le reste du volume va aux séances faciles : une séance longue facile, les autres de même durée. La difficulté règle la longueur des répétitions et des récupérations, pas le temps d'intensité.",
     principes: [
-      "Intensité : temps d'effort d'une zone = volume de la semaine × part de la zone, découpé en blocs regroupés en séances de qualité (1 à 3 blocs, zones voisines ensemble) ; Z6 sous 4 min devient des lignes droites de 20 s. Z5 se court à 95 – 100 % de VMA.",
-      "Répétitions : jamais plus des 2/3 du temps limite à leur allure (T = 6 × exp((v / VMA − 1) / k)) ; un bloc trop court pour son allure (20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h) est ignoré.",
+      "Temps d'effort par zone : pour chaque zone de Z3 à Z6, volume de la semaine × part de la zone dans la répartition.",
+      "Nombre de séances de qualité : 1 jusqu'à 4 séances par semaine, 2 au plus à partir de 5 séances.",
+      "Blocs : le temps de chaque zone forme un bloc ; les plus gros ouvrent une séance, les autres s'ajoutent à une séance (zone voisine d'abord), 3 blocs au plus par séance ; un bloc est coupé en deux s'il reste une séance libre et qu'il est assez long.",
+      "Z5 : zone entre l'allure 1 h et la VMA, courue entre ces deux allures ; la zone de l'allure cible est courue à cette allure.",
+      "Z6 : au-delà de la VMA ; sous 2 min d'effort dans la semaine, elle devient des lignes droites de 20 s après un footing, au-delà elle forme des blocs spécifiques.",
+      "Trot entre blocs : 3 min de trot (Z1), ramené à 1 min après un effort de Z3 jusqu'à 6 min ou de Z4 jusqu'à 4 min, et à 2 min jusqu'à 12 min en Z3 ou 8 min en Z4.",
+      "Effort qui ne tient pas (trop de blocs, séances en nombre limité, plafond d'un bloc, longueur maximale) : coupé et signalé par l'alerte « Effort coupé ».",
+      "Répétitions : jamais plus de la moitié du temps limite à leur allure (T = 6 × exp((v / VMA − 1) / k)) : au-delà c'est trop dur, mieux vaut fractionner qu'allonger ; un bloc trop court pour son allure (20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h) est ignoré.",
       "Échauffement selon la zone principale : 20 min en Z5 (15 min si une longueur maximale de séance est fixée), 5 min de plus en Z6, 5 de moins en Z4, 10 de moins en Z3 ; retour au calme 10 min.",
       "Séances de qualité placées en premier, sans être allongées au-delà du nécessaire ; pour le semi et le marathon, tout le temps de la zone de l'allure cible se court à cette allure dans les séances de qualité.",
       "Pas de sortie longue imposée : la spécificité de la distance passe d'abord par le volume de la semaine. Les séances faciles (Z1 et Z2, 2es séances des doublés comprises) se partagent le volume restant : m = durée moyenne, une séance longue facile de 4/3 × m (le dernier jour), les autres à parts égales ; 20 min au moins, la longueur maximale de séance au plus.",
       "Lendemain d'une séance de qualité : jour de repos ou séance facile ; la Z1 qui reste à faire (cible de Z1 moins la Z1 des séances de qualité) est courue ces jours-là.",
       "Autres séances faciles : le reste du volume, en durées qui varient de 5 min d'une séance à l'autre (20 min au moins). Volume saisi en km : la somme des km des séances vaut ce volume.",
-      "Longueur maximale de séance : une séance de qualité trop longue est raccourcie, et l'effort retiré est reporté sur une autre séance de qualité ou sur une nouvelle.",
-      "Doublés : la 2e séance est un footing pris sur le volume facile, jamais le dernier jour de la semaine ; utiles à partir de 5 séances par semaine, ils libèrent des jours de repos.",
+      "Plafond d'un bloc : le temps d'effort d'un bloc ne dépasse pas 2 × √(10 × T) minutes, T étant le temps limite à son allure (≈ 15 min à la VMA, ≈ 28 min à allure 5 km, ≈ 40 min à allure 10 km). Dans une séance à plusieurs blocs, les parts de plafond s'additionnent (somme au plus égale à 1) : sinon les blocs sont réduits proportionnellement.",
+      "Longueur maximale de séance : une séance de qualité qui la dépasse est d'abord allégée en kilomètres si la limite est en km (récupérations à l'arrêt, durée inchangée), puis raccourcie ; l'effort retiré est reporté sur une autre séance de qualité qui a de la place, sans dépasser le nombre de séances de qualité autorisé, sinon coupé (alerte).",
+      "Récupérations à l'arrêt (limite en km dépassée seulement) : dans l'ordre, récupérations de Z5 et Z6, puis de Z3 et Z4, puis trot entre blocs ; même durée, 0 km, retirées de la charge (ni Z1 ni effort). Une séance qui tient sous la limite garde ses récupérations trottées.",
+      "Ordre des blocs d'une séance : réglable (étape 3), progressif du plus lent au plus rapide (par défaut), inversé, ou alterné (lent, rapide, moyen). Hypothèse de conception : aucune étude ne compare ces ordres en course à pied.",
+      "Doublés : la 2e séance est un footing pris sur le volume facile ; utiles à partir de 5 séances par semaine, ils libèrent des jours de repos.",
       "Décharge : les séances de qualité restent, avec la moitié du travail d'une semaine de charge. Semaine de l'objectif : charge ramenée à 50 %, même nombre de séances. Affûtage et course finale seulement si le plan va jusqu'à la date de l'objectif.",
       "Séances du club : intégrées une semaine seulement si elles tiennent dans la répartition (leur Z2 dans le Z1 + Z2 prévu, leur Z5 dans le Z5 prévu) ; sinon, séance du plan à la place et note sous la semaine.",
       "Compétitions : leur temps en zone est déduit de la répartition de leur semaine ; s'il dépasse, les autres semaines compensent (jusqu'à la moitié de leur temps dans la zone), sinon une alerte le signale.",

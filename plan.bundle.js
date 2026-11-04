@@ -28,7 +28,9 @@
   const DOUBLE_PART_M = 0.6, DOUBLE_BORNES_M = [20, 45], DOUBLE_VOLUME_M = 7; // méthodes : 2e séance d'un doublé (part d'un footing, bornes en min) ; volume (h) sous lequel les doublés servent peu
   // methode : identifiant de la méthode choisie (methodes/*.js) ; par défaut, celle qui s'enregistre avec parDefaut (Spécifique LPN, 'zones')
   const METHODE_DEFAUT = 'zones';
-  const state = { seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'auto', charge: 3, decharge: 1, difficulte: 4, methode: null, club1: false, club2: false, limite: null, limiteU: 'min', volType: 'cible',
+  const state = { seances: 4, doubles: 0, moment: 'indifferent', semaines: 4, horizon: 'semaines', debut: '', fin: '', courses: [], cycle: 'auto', charge: 3, decharge: 1, difficulte: 4, methode: null, club1: false, club2: false, limite: null, limiteU: 'min', volType: 'cible', ordre: 'progressif', jourDoubles: [false, false, false, false, false, false, false], // jours préférés des doublés (lundi = 0), plan par date
+    jourQualite: [false, false, false, false, false, false, false], // jours préférés des séances de qualité (lundi = 0), plan par date
+    jourCourse: [false, false, false, false, false, false, false], // jours de course choisis (lundi = 0), plan par date
     regles: { actif: false, debut: '', duree: 28, hormonale: false, irregulier: false, sensRegles: false, sensAvant: false }, // suivi du cycle menstruel (facultatif)
     nuit: { actif: false, mode: 'fixe', soirs: [false, false, false, false, false, false, false], debut: '', nuits: 3, repos: 4 } }; // travail de nuit (facultatif)
 
@@ -41,7 +43,9 @@
   if (!['auto', 'constante', 'cycle'].includes(state.cycle)) state.cycle = 'auto';
   if (state.horizon !== 'date') state.horizon = 'semaines';
   if (state.limiteU !== 'km') state.limiteU = 'min';
+  if (!['progressif', 'inverse', 'alterne'].includes(state.ordre)) state.ordre = 'progressif';
   if (!(state.limite > 0)) state.limite = null;
+  for (const cle of ['jourDoubles', 'jourQualite', 'jourCourse']) state[cle] = Array.from({ length: 7 }, (_, k) => !!(Array.isArray(state[cle]) && state[cle][k]));
   const save = () => { try { localStorage.setItem('plan', JSON.stringify(state)); } catch (e) { /* stockage indisponible */ } };
 
   /* ---------- Formats ---------- */
@@ -231,12 +235,19 @@
   const RAPPORT = { '5k': { km: 10, moy: 75 }, '10k': { km: 20, moy: 90 }, semi: { km: 30, moy: 105 }, marathon: { km: 50, moy: 120 } };
   const volumeMini = (c) => RAPPORT[c.goal].km * (c.profil ? aZ(c, 'Z2') : 6) / 60;
   const volumeMiniTxt = (c) => `${RAPPORT[c.goal].km} km`;
+  // Volume sous le minimum de l'objectif : c'est la moyenne des semaines de charge qui compte (volume saisi × facteur moyen des semaines de charge du
+  // calendrier : égale au volume saisi en cible, au-dessous en maxi, au-dessus en mini). Saisi en km, comparé en km (sinon 30 km pile pour un semi,
+  // convertis en heures à une autre allure, déclenchaient l'alerte)
+  const moyCharge = (c, cal) => { const f = cal.filter(w => w.type === 'Charge').map(w => w.facteur); return (f.length ? f.reduce((a, x) => a + x, 0) / f.length : 1) * (c.volKm ?? c.heures); };
+  const sousVolume = (c, cal) => (c.volKm != null ? moyCharge(c, cal) < RAPPORT[c.goal].km - 0.05 : moyCharge(c, cal) < volumeMini(c) - 0.5 / 60);
+  const volMoyTxt = (c, cal) => (c.volKm != null ? `${String(Math.round(moyCharge(c, cal) * 10) / 10).replace('.', ',')} km` : fD(moyCharge(c, cal) * 60));
   const MOY_MIN = 20; // même minimum que la longueur maximale d'une séance
   /** Alertes sur le rapport entre volume, nombre de séances et objectif (ex. 3 séances en 2 h pour un marathon) */
-  function rapportSemaine(c) {
+  function rapportSemaine(c, cal) {
     const R = RAPPORT[c.goal], n = state.seances + nbDoubles(), jour = c.heures * 60 / state.seances, moy = c.heures * 60 / n, a = [];
     const nom = OBJECTIFS.find(([k]) => k === c.goal)[2], pour = `${c.course ? '' : 'une allure proche d\'' }un ${nom}`;
-    if (c.heures < volumeMini(c)) a.push(`Rapport défavorable : ${fD(c.heures * 60)} en ${n} séance${n > 1 ? 's' : ''} par semaine, c'est peu pour ${pour} (au moins ${volumeMiniTxt(c)}). ${state.methode === 'zones' ? 'Les séances resteront courtes' : 'La sortie longue restera courte'} et la préparation limitée.`);
+    const saisi = { max: 'volume maxi de ', min: 'volume mini de ' }[state.volType];
+    if (sousVolume(c, cal)) a.push(`Rapport défavorable : ${saisi ? '≈ ' : ''}${volMoyTxt(c, cal)} par semaine en moyenne${saisi ? ` (${saisi}${c.volKm != null ? `${String(c.volKm).replace('.', ',')} km` : fD(c.heures * 60)})` : ''}, en ${n} séance${n > 1 ? 's' : ''}, c'est peu pour ${pour} : il faut au moins ${volumeMiniTxt(c)} par semaine en moyenne sur les semaines de charge (décharge et affûtage non comptés). ${state.methode === 'zones' ? 'Les séances resteront courtes' : 'La sortie longue restera courte'} et la préparation limitée. Si vous ne pouvez pas augmenter votre volume, revoyez l'objectif : ${c.goal === '5k' ? '' : 'une distance plus courte ou '}un objectif chronométrique beaucoup plus large (vérifiez toutefois la présence d'une barrière horaire sur votre course).${c.goal === '5k' ? '' : ' Ne sous-estimez pas l\'importance du volume d\'entraînement lorsque les distances s\'allongent : une carence dans ce domaine est très punitive et rendra l\'expérience très désagréable, physiquement et psychologiquement.'}`);
     else if (moy > R.moy) a.push(`Rapport défavorable : ${fD(c.heures * 60)} en ${n} séances par semaine, soit ≈ ${fD(moy)} par séance, c'est long pour ${pour} (≈ ${fD(R.moy)} au plus en moyenne). Ajoutez des jours de course ou des doublés, ou baissez le volume.`);
     else if (jour < MOY_MIN) a.push(`Séances trop courtes : ≈ ${fD(jour)} par jour de course. Regroupez le volume sur moins de jours.`);
     return a;
@@ -310,8 +321,14 @@
     const joursHorsSortie = (S) => (eviteSL ? S.filter(o => !eviteSL(w.debut + o * JOUR)).length : Infinity);
     const manqueSL = (S) => (eviteSL ? Math.max(0, nQ + (avecSLsem ? 1 : 0) - joursHorsSortie(S)) : 0);
     const manqueDbl = (S) => (eviteSL ? Math.max(0, nDblF - Math.max(0, joursHorsSortie(S) - nQ - (avecSLsem ? 1 : 0))) : 0);
+    // jours de qualité choisis (state.jourQualite, lundi = 0, facultatif) : les séances de qualité vont de préférence à ces jours, sans passer avant le cycle, la nuit ni les courses
+    const prefQ = (o) => state.jourQualite[(new Date(w.debut + o * JOUR).getUTCDay() + 6) % 7], Pq = nQ > 0 && state.jourQualite.some(Boolean), nPrefLibres = Pq ? libres.filter(prefQ).length : 0;
+    // jours de course choisis (state.jourCourse) : ils comptent avec les jours cochés de qualité et de doublé ; les combinaisons de jours qui en laissent un de côté coûtent PREF_JOUR_COUT chacune (sous SENSIBLE_COUT)
+    const PREF_JOUR_COUT = 20, prefJ = (o) => { const k = (new Date(w.debut + o * JOUR).getUTCDay() + 6) % 7; return state.jourCourse[k] || state.jourQualite[k] || state.jourDoubles[k]; };
+    const Pj = state.jourCourse.some(Boolean) || state.jourQualite.some(Boolean) || state.jourDoubles.some(Boolean), nPrefJ = Pj ? libres.filter(prefJ).length : 0;
     const coût = (S) => {
-      const tous = [...S, ...R, ...Co].sort((a, b) => a - b), n = tous.length, pen = SENSIBLE_COUT * (manqueSens(S) + 3 * manqueSL(S) + 0.5 * manqueDbl(S)); // la sortie longue pèse triple (une seule par semaine, la plus longue : à tenir hors sortie de nuit, même au prix de jours moins réguliers), les doublés moitié
+      const tous = [...S, ...R, ...Co].sort((a, b) => a - b), n = tous.length, pen = SENSIBLE_COUT * (manqueSens(S) + 3 * manqueSL(S) + 0.5 * manqueDbl(S)) + (Pq ? 3 * Math.max(0, Math.min(nQ, nPrefLibres) - S.filter(prefQ).length) : 0)
+        + (Pj ? PREF_JOUR_COUT * Math.max(0, Math.min(autres.length, nPrefJ) - S.filter(prefJ).length) : 0); // la sortie longue pèse triple (une seule par semaine, la plus longue : à tenir hors sortie de nuit, même au prix de jours moins réguliers), les doublés moitié
       if (n < 2) return pen;
       const cycle = oMax === 6, ecarts = tous.slice(1).map((o, k) => o - tous[k]).concat(cycle ? [7 - tous[n - 1] + tous[0]] : []);
       const ideal = cycle ? 7 / n : oMax / (n - 1);
@@ -326,8 +343,8 @@
     const creneaux = meilleur ? meilleur.S : [], distCourse = (o) => Math.min(9, ...Rd.map(r => Math.abs(o - r)), ...Rq.slice(Rd.length).map(r => Math.min(3, Math.abs(o - r)))); // courses voisines : au-delà de 3 jours, sans préférence (pas de qualité repoussée en fin de semaine)
     const attribue = new Map(); // décalage → jour
     const qualite = autres.filter(j => j[0].qualite), faciles = autres.filter(j => !j[0].qualite);
-    if ((Rq.length || Cq.length || Sx.size) && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite (ni à côté du club de qualité)
-      const tries = creneaux.slice().sort((a, b) => (Sx.get(a) || 0) - (Sx.get(b) || 0) || distCourse(b) - distCourse(a) || a - b), pris = [];
+    if ((Rq.length || Cq.length || Sx.size || Pq) && qualite.length) { // autour d'une course, la qualité va aux créneaux les plus éloignés des courses, jamais deux jours de suite (ni à côté du club de qualité) ; jours choisis d'abord (Pq)
+      const tries = creneaux.slice().sort((a, b) => (Sx.get(a) || 0) - (Sx.get(b) || 0) || (Pq ? !!prefQ(b) - !!prefQ(a) : 0) || distCourse(b) - distCourse(a) || a - b), pris = [];
       for (const o of tries) if (pris.length < qualite.length && distCourse(o) >= 3 && !pris.some(p => Math.abs(p - o) === 1) && !Cq.some(q => Math.abs(q - o) === 1)) pris.push(o);
       for (const o of tries) if (pris.length < qualite.length && !pris.includes(o) && distCourse(o) >= 3) pris.push(o); // à défaut, deux jours de qualité de suite plutôt qu'à moins de 3 jours d'une course
       for (const o of tries) if (pris.length < qualite.length && !pris.includes(o)) pris.push(o); // en dernier recours, le plus éloigné restant
@@ -471,7 +488,7 @@
   function construire(doc, ctx) {
     const R = { ...REGLES_DEFAUT, ...(doc.regles || {}) }; // règles de construction de la méthode (par défaut : celles des méthodes d'entraîneurs)
     const c = { ...ctx, regles: R, ...(doc.courseMarche ? { courseMarche: doc.courseMarche } : {}) }; // footings et sorties longues en course-marche
-    const { cal, alertes: aCourses, cycle } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3);
+    const { cal, alertes: aCourses, cycle } = calendrier(c, doc), nbQ0 = Math.min(doc.maxQ, doc.repartition ? (state.seances <= 4 ? 1 : 2) : state.seances <= 3 ? 1 : state.seances <= 5 ? 2 : 3); // Spécifique LPN : 1 séance de qualité jusqu'à 4 séances, 2 au plus
     // Plafond de la sortie longue : slKm (km, nombre ou fonction du contexte) converti à l'allure de la sortie longue, sinon le plafond des règles de la méthode (R.slMax)
     const slKm = typeof doc.slKm === 'function' ? doc.slKm(c) : doc.slKm;
     const slMax0 = slKm && c.profil ? slKm * (c.courseMarche ? c.courseMarche.allure(c) : (c.zones.Z2.allureRapide + c.zones.Z2.allureLente) / 2) : R.slMax;
@@ -567,7 +584,7 @@
       if (clubQ && nbQ1 > 0 && nbQ === 0) aClubSem.sansQualite++;
       const club = clubs.map(k => K.club.seance(k, c));
       // semaine (plan selon la répartition) : séances de qualité, lignes droites et type de sortie longue tirés des minutes par zone
-      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, volP, l, nbQ, (decharge ? R.dechargeQ / DECHARGE : 1) * kComp, Math.max(nbQ, Math.min(doc.maxQ, w.qMax ?? Infinity, jourLibres - 2) - clubQ)) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
+      const sem = doc.semaine ? (nbQ ? doc.semaine(cp, volP, l, nbQ, (decharge ? R.dechargeQ / DECHARGE : 1) * kComp, Math.max(nbQ, Math.min(nbQ0, w.qMax ?? Infinity, jourLibres - 2) - clubQ)) : { q: [], lignes: null, sl: 'SL', exces: 0 }) : null;
       if (sem) { coupe += sem.coupe || 0; trop = Math.max(trop, sem.trop || 0); }
       if (sem && !(w.qMax < Infinity)) exces = Math.max(exces, sem.exces); // autour d'une compétition, la qualité est volontairement limitée
       const ids = sem ? [] : typeof phase.q === 'function' ? phase.q(c) : phase.q, L = sem ? sem.lignes : doc.lignes;
@@ -696,6 +713,7 @@
         const mention = (t) => [cyc && K.cycle.phaseDu(t, cyc).sensible && 'Jour sensible de votre cycle : à alléger ou à décaler selon vos sensations.',
           nuitS && K.nuit.mention(t, nuitS)].filter(Boolean).join(' ');
         // travail de nuit : doublés restés un lendemain de nuit, reportés sur un autre footing ou fondus en un seul footing
+        if (p.dates && nD0) K.doubles.surJours(p.jours, p.dates); // doublés de préférence sur les jours choisis
         const jr = p.dates && nuitS ? p.jours.map(j => j.slice()) : p.jours;
         let fondus = p.dates && nuitS ? K.nuit.reporterDoubles(jr, p.dates, nuitS, c, lim, lim5) : 0;
         const jp = !p.dates || !evite ? jr : jr.map((j, k) => {
@@ -724,7 +742,7 @@
     const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
     const aClub = K.club.alertes({ c, clubs, nClub, clubQ, jourLibres, aClubSem, semaines });
     // Alertes sur la longueur maximale d'une séance : compatibilité avec l'objectif et le volume, puis effets sur le plan construit
-    const aLimite = lim ? K.limite.alertes({ c, lim, semaines, parLimite, coupe, trop, clubs }) : [];
+    const aLimite = lim ? K.limite.alertes({ c, lim, semaines, parLimite, coupe, trop, clubs, nbQ: doc.repartition ? nbQ0 : 0 }) : [];
     // Travail de nuit : conditions du suivi, doublés sans jour de repos, doublés fondus, courses et séances de qualité un lendemain de nuit
     const aNuit = K.nuit.alertesPlan({ s: nuitS, cal, doublesFondus, datesCourses, qSortie });
     const aCycleC = K.cycle.alertesCourses(datesCourses, cyc); // course sur un jour sensible du cycle (information)
@@ -732,7 +750,7 @@
     // les contraintes actives, les compromis qu'elles ont imposés et comment retrouver de la marge
     const nCompet = cal.reduce((a, w) => a + (w.courses || []).length, 0), nD = nbDoubles(); // pl : défini plus haut (alertes du club)
     const contraintes = [state.regles.actif && 'le suivi du cycle menstruel', state.nuit.actif && 'le travail de nuit', lim && `la longueur maximale de séance (${lim.txt})`, nD && pl(nD, 'doublé'),
-      (court || c.heures < volumeMini(c)) && 'un volume faible pour l\'objectif', nCompet && pl(nCompet, 'compétition intermédiaire').replace('intermédiaire', nCompet > 1 ? 'intermédiaires' : 'intermédiaire'),
+      (court || sousVolume(c, cal)) && 'un volume faible pour l\'objectif', nCompet && pl(nCompet, 'compétition intermédiaire').replace('intermédiaire', nCompet > 1 ? 'intermédiaires' : 'intermédiaire'),
       nClub && `${pl(nClub, 'séance')} du club`].filter(Boolean);
     const compromis = [qEvitees && `${pl(qEvitees, 'séance')} de qualité sur un jour à éviter (cycle ou lendemain de nuit, avec la mention « à alléger »)`,
       doublesFondus && `${pl(doublesFondus, 'doublé')} retiré${doublesFondus > 1 ? 's' : ''} d'un lendemain de nuit`, retirees && `${pl(retirees, 'séance')} retirée${retirees > 1 ? 's' : ''} autour des compétitions`,
@@ -742,7 +760,7 @@
     const aComplexe = contraintes.length >= 4 || (contraintes.length >= 3 && compromis.length)
       ? [`Plan sous contraintes : ${contraintes.length} contraintes combinées (${contraintes.join(', ')}). Le plan est construit, mais ${compromis.length
         ? `il a dû faire des compromis : ${compromis.join(' ; ')}.` : 'il reste peu de marge : le moindre changement peut forcer des compromis.'} Pour un plan plus fidèle à la méthode, relâchez une contrainte (moins de doublés, une longueur maximale plus haute, plus de jours de course ou de volume, moins de compétitions).`] : [];
-    return { semaines, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses: [...aCourses, ...aZones] };
+    return { semaines, cal, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses: [...aCourses, ...aZones] };
   }
 
   /* ---------- Rendu ---------- */
@@ -813,7 +831,7 @@
       + `<span class="ligne-fiche"><span class="sous">⏳ Durée du plan</span> ${fm.plan}</span>`
       + (lacunes.length ? `<span class="prerequis" style="grid-column:1/-1">⚠ Prérequis : ${lacunes.join(' ; ')}</span>` : '');
 
-    const { semaines, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses } = construire(doc, c), hor = horizon();
+    const { semaines, cal, court, plafond, avecSL, exces, cycle, aClub, aLimite, aNuit, aCycleC, aComplexe, aCourses } = construire(doc, c), hor = horizon();
     const nD = nbDoubles(), total = state.seances + nD;
     const pl = (n, mot) => `<strong>${n}</strong> ${mot}${n > 1 ? 's' : ''}`;
     $('pl-resumeSemaine').innerHTML = `<div class="grand">${total}<small>séance${total > 1 ? 's' : ''} / semaine</small></div><ul>`
@@ -831,7 +849,7 @@
       `<details class="mini"><summary>🧩 Règles communes à tous les plans</summary><ul class="note">${REGLES_COMMUNES.map(p => `<li>${p}</li>`).join('')}</ul></details></div>`;
 
     const alertes = [];
-    if (exces >= 1) alertes.push(`Beaucoup d'intensité pour le nombre de séances de qualité : jusqu'à ${fD(exces)} d'effort par semaine n'ont pas pu être placés (${doc.blocsMax} blocs par séance au plus). Ajoutez des jours de course ou baissez la part d'intensité.`);
+    if (exces >= 1) alertes.push(`Effort coupé : jusqu'à ${fD(exces)} d'effort d'intensité par semaine n'ont pas pu être placés (${doc.maxQ} séances de qualité au plus par semaine, ${doc.blocsMax} blocs par séance au plus${doc.repartition ? ', effort d\'un bloc plafonné selon son temps limite' : ''}). Baissez la part d'intensité ou ajoutez des jours de course.`);
     if (court) alertes.push(`${state.volType === 'max' ? 'Volume maxi incompatible avec' : 'Volume juste pour'} ${total} séances par semaine : les footings sont portés à ${RG.efMin} min, le volume réel dépasse donc ${volRef()} certaines semaines.${nD ? ' Réduisez le nombre de doublés.' : ''}`);
     if (plafond) alertes.push(`Volume élevé pour ${total} séances par semaine : les footings sont limités à ${doc.footingMax ? `${doc.footingMax} min (durée maximale conseillée par la méthode)` : zones ? 'la durée maximale d\'une séance' : 'la durée de la sortie longue'}, le volume réel reste sous ${volRef()} certaines semaines. ${doc.joursMax ? `La méthode prévoit ${doc.joursMax} jours de course : baissez plutôt le volume hebdomadaire.` : 'Ajoutez des jours de course ou des doublés.'}`);
     const manque = zones ? [] : prerequis(doc, c);
@@ -844,6 +862,8 @@
     if (c.profil && c.course && c.tObj > 300) alertes.push(`Objectif hors du modèle : le chrono prédit sur ${c.label.toLowerCase()} dépasse 5 h, durée au-delà de laquelle l'indice d'endurance n'est plus valable. Les allures de course du plan sont indicatives : envisagez la course-marche (méthode Galloway) ou un objectif plus court.`);
     aLimite.forEach(a => alertes.push(a));
     aClub.forEach(a => alertes.push(a));
+    const nJoursCoches = state.jourCourse.map((b, k) => b || state.jourQualite[k] || state.jourDoubles[k]).filter(Boolean).length;
+    if (state.horizon === 'date' && nJoursCoches > state.seances) alertes.push(`Jours choisis : ${nJoursCoches} jours cochés pour ${state.seances} jours de course par semaine. Seuls ${state.seances} sont utilisés (les autres restent des jours de repos), augmentez les jours de course ou décochez-en.`);
     aCourses.forEach(a => alertes.push(a));
     const aCycle = K.cycle.alertes(); // cycle menstruel : l'alerte santé figure aussi dans les alertes du plan
     aCycle.filter(a => /^Santé/.test(a)).forEach(a => alertes.push(a));
@@ -851,10 +871,16 @@
     aNuit.forEach(a => alertes.push(a));
     aComplexe.forEach(a => alertes.push(a));
     listeAlertes($('pl-alertes'), alertes);
-    const rapport = [...aComplexe, ...rapportSemaine(c), ...aLimite, ...aClub, ...aCycle, ...aCycleC, ...aNuit];
+    const rapport = [...aComplexe, ...rapportSemaine(c, cal), ...aLimite, ...aClub, ...aCycle, ...aCycleC, ...aNuit];
     // Difficulté (méthodes construites sur la répartition) : sous le volume minimal de l'objectif (RAPPORT), le temps de qualité est trop court pour que la longueur des
     // séries et des récupérations varie vraiment
-    $('pl-diffVolume').hidden = !(zones && c.heures < volumeMini(c));
+    $('pl-diffVolume').hidden = !(zones && sousVolume(c, cal));
+    // grille des jours (course, qualité, doublé : plan par date seulement ; club : toujours)
+    const grilleDate = state.horizon === 'date';
+    document.querySelectorAll('#pl-grille .dates-seul').forEach(r => { r.hidden = !grilleDate; });
+    document.querySelectorAll('#pl-grille input[data-r]').forEach(i => { i.checked = state[i.dataset.r][+i.dataset.k]; });
+    $('pl-grilleInfo').textContent = grilleDate ? '' : 'Plan en nombre de semaines : seule la ligne Club s\'applique. Choisissez « jusqu\'à la date de l\'objectif » pour fixer les jours.';
+    $('pl-ordreBloc').hidden = !zones; // ordre des blocs d'une séance de qualité : Spécifique LPN seulement
     K.limite.afficher(); // champ de la longueur maximale (étape 2)
     K.club.afficher(); // cases et note des séances du club (étape 2)
     K.cycle.afficher(); // champs du cycle menstruel (étape 2)
@@ -981,6 +1007,21 @@
   });
   $('pl-cycle').value = state.cycle;
   $('pl-cycle').addEventListener('change', e => { state.cycle = e.target.value; render(); });
+  // grille des jours : toute case cochée (qualité, doublé, club) coche le jour de course ; décocher le jour de course vide toute la colonne du jour
+  const CLUB_JOUR = { 'pl-club1': ['club1', 0], 'pl-club2': ['club2', 3] }; // séances du club : lundi, jeudi (leur écouteur est dans contraintes/club.js)
+  $('pl-grille').addEventListener('change', e => {
+    const club = CLUB_JOUR[e.target.id], r = club ? null : e.target.dataset.r, k = club ? club[1] : +e.target.dataset.k;
+    if (!club && !r) return;
+    if (r) state[r][k] = e.target.checked;
+    if (e.target.checked) state.jourCourse[k] = true;
+    else if (r === 'jourCourse') {
+      state.jourQualite[k] = false; state.jourDoubles[k] = false;
+      Object.values(CLUB_JOUR).forEach(([cle, j]) => { if (j === k) state[cle] = false; });
+    }
+    render();
+  });
+  $('pl-ordre').value = state.ordre;
+  $('pl-ordre').addEventListener('change', e => { state.ordre = e.target.value; render(); });
   // Liste déroulante des méthodes (listbox accessible : flèches, Entrée, Échap) ; les ronds de difficulté sont à droite de chaque ligne
   const btn = $('pl-methodeBtn'), liste = $('pl-methodeListe');
   const activer = (li) => { liste.querySelectorAll('li.actif').forEach(x => x.classList.remove('actif')); if (li) { li.classList.add('actif'); btn.setAttribute('aria-activedescendant', li.id); li.scrollIntoView({ block: 'nearest' }); } };
@@ -1430,6 +1471,18 @@
     [...libres.filter(j => !j[0].qualite), ...libres.filter(j => j[0].qualite)].slice(0, nD)
       .forEach((j, m) => j.push(footing(secD ? secD[m] : Math.min(dD, dF), c)));
   };
+  /** Plan par date : ramène les doublés sur les jours choisis (state.jourDoubles, lundi = 0) quand c'est possible. Un doublé (2e séance = footing simple) posé
+      sur un autre jour passe à un jour choisi qui n'a qu'une séance, qui n'est ni une course, ni une séance du club, ni le jour de la plus grosse séance de la
+      semaine ; sinon il reste où il est (choix automatique). Sans jour choisi : aucun effet. */
+  const surJours = (jours, dates) => {
+    const pref = state.jourDoubles;
+    if (!pref.some(Boolean)) return;
+    const wd = (k) => (new Date(dates[k]).getUTCDay() + 6) % 7, toutes = jours.flat(), max = Math.max(...toutes.map(x => x.duree)), tete = toutes.filter(x => x.duree === max);
+    const grosse = tete.length === 1 ? tete[0] : null;
+    const mobiles = jours.map((j, k) => k).filter(k => jours[k].length === 2 && jours[k][1].nom === 'Footing' && !jours[k][1].qualite && !jours[k][1].club && !pref[wd(k)]);
+    const cibles = jours.map((j, k) => k).filter(k => pref[wd(k)] && jours[k].length === 1 && !jours[k][0].club && jours[k][0].nom !== 'Course' && !jours[k].includes(grosse));
+    for (let i = 0; i < Math.min(mobiles.length, cibles.length); i++) jours[cibles[i]].push(jours[mobiles[i]].pop());
+  };
   /** Alertes : doublés peu utiles (en dessous de utiles séances par semaine, ou de volumeMin heures) */
   const alertes = ({ nD, total, c, utiles, volumeMin }) => {
     const a = [];
@@ -1458,9 +1511,10 @@
   /** Moment de la séance d'intensité (affiché s'il y a des doublés) */
   const afficher = () => {
     $('pl-momentBloc').hidden = !nombre();
+    $('pl-ligneDoubles').hidden = !nombre(); // ligne « Doublé » de la grille des jours (plan.js : cases, plan par date seulement)
   };
 
-  PlanCore.contrainte('doubles', { nombre, placer, alertes, moments, options, afficher });
+  PlanCore.contrainte('doubles', { nombre, placer, surJours, alertes, moments, options, afficher });
   options();
   $('pl-moment').value = state.moment;
   $('pl-moment').addEventListener('change', e => { state.moment = e.target.value; render(); });
@@ -1506,7 +1560,7 @@
   }
 
   /** Alertes : compatibilité avec l'objectif et le volume, puis effets sur le plan construit (lim : limite du contexte) */
-  const alertes = ({ c, lim, semaines, parLimite, coupe, trop, clubs }) => {
+  const alertes = ({ c, lim, semaines, parLimite, coupe, trop, clubs, nbQ }) => { // nbQ : séances de qualité au plus par semaine (Spécifique LPN seulement)
     const aLimite = [];
       const nD = nbDoubles(), capacite = (state.seances + nD) * lim.min, W = semaines.length;
       const nom = OBJECTIFS.find(([k]) => k === c.goal)[2], pour = `${c.course ? '' : "une allure proche d'"}un ${nom}`;
@@ -1519,7 +1573,7 @@
       else if (parLimite) aLimite.push(`La longueur maximale de ${lim.txt} plafonne la sortie longue et les footings : le volume réel reste sous ${volRef()} certaines semaines.`);
       const fixe = echauffement(c, 'Z5') + RETOUR;
       if (lim.min < fixe + 20) aLimite.push(`Avec ${lim.txt} au plus, l'échauffement et le retour au calme (${fixe} min) laissent très peu de place au travail de qualité.`);
-      else if (coupe >= 1) aLimite.push(`La longueur maximale de ${lim.txt} raccourcit les séances de qualité : l'effort retiré est reporté sur d'autres séances quand c'est possible, mais ≈ ${fD(coupe / W)} d'effort par semaine en moyenne n'a pas pu être replacé, le temps en intensité visé n'est pas atteint.`);
+      else if (coupe >= 1) aLimite.push(`La longueur maximale de ${lim.txt} raccourcit les séances de qualité : l'effort retiré est reporté sur d'autres séances quand c'est possible, mais ≈ ${fD(coupe / W)} d'effort par semaine en moyenne n'a pas pu être replacé${nbQ ? ` (${nbQ} séance${nbQ > 1 ? 's' : ''} de qualité au plus par semaine${nbQ === 1 ? ', 2 à partir de 5 séances' : ''}, récupérations à l'arrêt déjà utilisées si la limite est en km)` : ''}, le temps en intensité visé n'est pas atteint. Relevez la limite${nbQ === 1 ? ', ajoutez un jour de course' : ''} ou baissez la part d'intensité.`);
       if (trop) aLimite.push(`Certaines séances de qualité ne peuvent pas être raccourcies davantage (répétitions trop longues pour la limite) : jusqu'à ${fD(trop)}, au-dessus de la longueur maximale de ${lim.txt}. Relevez la limite ou choisissez une autre méthode.`);
       clubs.filter(k => k.duree > lim.min + 0.01).forEach(k => aLimite.push(`La séance du club du ${k.jour} (${fD(k.duree)}) dépasse la longueur maximale de ${lim.txt} : elle est gardée telle quelle.`));
     return aLimite;
@@ -2165,9 +2219,11 @@
     Z3: { nom: 'Allure soutenue', rep: [8, 20], recup: [0.3, 0.1], min: 5, seul: 15 },
     Z4: { nom: 'Seuil', rep: [4, 12], recup: [0.4, 0.15], min: 4, seul: 10 },
     Z5: { nom: 'VMA', rep: [1.5, 4], recup: [1, 0.6], min: 3, seul: 8 },
-    Z6: { nom: 'Vitesse', rep: [0.33, 1], recup: [3, 2], min: 4, seul: 5 }
+    Z6: { nom: 'Vitesse', rep: [0.33, 1], recup: [3, 2], min: 2, seul: 5 }
   };
   const ZI = Object.keys(FORMATS), BLOCS_MAX = 3, ENTRE_BLOCS = 3; // blocs par séance ; trot entre deux blocs (min)
+  const TLIM_REP = 1 / 2; // LPN : une répétition ne dépasse pas la moitié du temps limite à son allure (au-delà, trop dur : mieux vaut fractionner qu'allonger) ; les autres méthodes gardent TLIM_PART (2/3)
+  const CAP_TLIM = 2, REF_TLIM = 10; // plafond du temps d'effort d'un bloc : 2 × √(10 × temps limite) min (≈ 15 min à la VMA, ≈ 28 min à allure 5 km) : limite haute choisie par l'utilisateur
 
   /** Temps d'effort minimal d'un bloc à l'allure a (min/km) : 20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h (limite Z2/Z3).
       Loi de puissance du temps limite T entre ces trois points (T = 6 min à la VMA, 60 min à l'allure 1 h), prolongée au-delà avec la pente du segment voisin. */
@@ -2178,33 +2234,51 @@
   /** Seuil d'ignorance d'un bloc de la zone z : seuilBloc à l'allure la plus rapide de la zone (allure cible si spe, VMA pour Z5) ;
       sans profil, ou en Z6 (lignes droites sous ce seuil), valeur fixe de FORMATS */
   const minBloc = (c, z, spe) => (!c.profil || z === 'Z6' ? FORMATS[z].min
-    : seuilBloc(c, spe ? c.allureObj : z === 'Z5' ? 1000 / c.profil.V : c.zones[z].allureRapide));
+    : seuilBloc(c, spe ? c.allureObj : c.zones[z].allureRapide));
+  /** Allure moyenne (min/km) d'un bloc de la zone z (allure cible si spe, sinon milieu de la zone), comme dans blocZone */
+  const allureBloc = (c, z, spe) => moy(spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : plageZ(c, z));
+  /** Temps d'effort maximal (min) d'un bloc d'une séance : la difficulté ne dépend pas que du volume d'intensité, mais de la durée tenable à cette allure.
+      Plafond = CAP_TLIM × √(REF_TLIM × T), T = temps limite à l'allure du bloc : l'intensité plus faible permet plus de temps, mais moins que proportionnellement */
+  const capBloc = (c, z, spe) => CAP_TLIM * Math.sqrt(REF_TLIM * tlim(c, allureBloc(c, z, spe)));
   /** Bloc de m minutes d'effort dans la zone z, en répétitions (ou en continu) selon le niveau l ; spe : à l'allure cible */
-  function blocZone(c, z, m, l, spe) {
+  function blocZone(c, z, m, l, spe, st = 0) { // st : récupérations à l'arrêt (0 non, 1 en Z5 et Z6, 2 dans toutes les zones, 3 et le trot entre blocs, voir seanceZones), pour tenir la distance maximale
     // au moins 2 répétitions hors Z3 dès que le temps le permet (pas d'effort continu en Z4 à Z6 sur un bloc court)
-    // Z5 va de l'allure 1 h à la VMA : les répétitions se courent à 95 – 100 % de VMA (sans passer sous l'allure 1 h)
-    const vma5 = !spe && z === 'Z5' && c.profil;
-    const allure = c.profil && (spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : vma5 ? [1000 / c.profil.V, Math.min(1000 / (c.profil.V * 0.95), c.zones.Z5.allureLente)] : plageZ(c, z)), a = allure && moy(allure);
+    const allure = c.profil && (spe ? [c.allureObj * 0.99, c.allureObj * 1.01] : plageZ(c, z)), a = allure && moy(allure); // Z5 : entre l'allure 1 h et la VMA
     // un effort continu ne dépasse pas 2/3 du temps limite à l'allure courue (modèle : T = 6 × exp((v / VMA − 1) / k))
-    const cap = a ? TLIM_PART * tlim(c, a) : Infinity;
+    const cap = a ? TLIM_REP * tlim(c, a) : Infinity;
     const F = FORMATS[z], n = Math.max(z !== 'Z3' && m >= 2 * F.rep[0] ? 2 : 1, Math.round(m / Math.min(m, lerp(F.rep[0], F.rep[1], l))), Math.ceil(m / cap - 1e-9));
     const r = arrondi(m / n) > cap ? Math.floor(cap * 12) / 12 : arrondi(m / n);
     const rc = n > 1 ? arrondi(Math.max(0.5, r * lerp(F.recup[0], F.recup[1], l))) : 0;
-    const ou = spe ? `à allure ${c.nomObj}${a ? ` (${fA(c.allureObj)}, ${z})` : ''}` : vma5 ? `en Z5 (${fourchette(allure)}, 95 – 100 % de VMA)` : `en ${zt(c, z)}`;
-    return { z, spe, effort: n * r, recup: (n - 1) * rc, km: c.profil ? n * r / a + (n - 1) * rc / aZ(c, 'Z1') : null,
-      texte: n > 1 ? `${n} × ${fD(r)}${a ? ` (≈ ${Math.round(r / a * 10) * 100} m)` : ''} ${ou}, récupération ${fD(rc)} en trottinant (Z1)`
+    const ou = spe ? `à allure ${c.nomObj}${a ? ` (${fA(c.allureObj)}, ${z})` : ''}` : `en ${zt(c, z)}`;
+    const statique = n > 1 && (st >= 2 || (st >= 1 && (z === 'Z5' || z === 'Z6'))); // récupération à l'arrêt : 0 km, hors charge (ni Z1 ni effort)
+    return { z, spe, statique, effort: n * r, recup: (n - 1) * rc, km: c.profil ? n * r / a + (statique ? 0 : (n - 1) * rc / aZ(c, 'Z1')) : null,
+      texte: n > 1 ? `${n} × ${fD(r)}${a ? ` (≈ ${Math.round(r / a * 10) * 100} m)` : ''} ${ou}, récupération ${fD(rc)} ${statique ? 'à l\'arrêt' : 'en trottinant (Z1)'}`
         : `${fD(r)} en continu ${ou}${a ? ` (≈ ${(r / a).toFixed(1).replace('.', ',')} km)` : ''}`,
-      etapes: n > 1 ? [{ rep: n, etapes: [{ t: 'effort', duree: r, allure }, { t: 'recup', duree: rc }] }] : [{ t: 'effort', duree: r, allure }] };
+      etapes: n > 1 ? [{ rep: n, etapes: [{ t: 'effort', duree: r, allure }, statique ? { t: 'recup', duree: rc, nom: 'Récupération à l\'arrêt' } : { t: 'recup', duree: rc }] }] : [{ t: 'effort', duree: r, allure }] };
   }
-  /** Séance de qualité de un à trois blocs ([{ z, min, spe }]), du plus lent au plus rapide, 3 min de trot entre les blocs */
-  function seanceZones(c, blocs, l) {
-    const B = blocs.sort((a, b) => ZI.indexOf(a.z) - ZI.indexOf(b.z)).map(b => blocZone(c, b.z, b.min, l, b.spe)), entre = ENTRE_BLOCS * (B.length - 1);
+  /** Trot (min) après un bloc : réduit après un effort court en Z3 (≤ 6 min : 1 ; ≤ 12 min : 2) et en Z4 (≤ 4 min : 1 ; ≤ 8 min : 2), sinon ENTRE_BLOCS (hypothèse de conception) */
+  function trot(b) {
+    const seuils = { Z3: [6, 12], Z4: [4, 8] }[b.z];
+    return !seuils || b.effort > seuils[1] ? ENTRE_BLOCS : b.effort <= seuils[0] ? 1 : 2;
+  }
+  /** Ordre des blocs (déjà triés du plus lent au plus rapide) selon le réglage de l'utilisateur : progressif (tel quel), inversé, ou alterné (lent, rapide, moyen) */
+  function ordonner(a) {
+    if (PlanCore.state.ordre === 'inverse') return a.slice().reverse();
+    if (PlanCore.state.ordre !== 'alterne') return a;
+    const r = [];
+    for (let i = 0, j = a.length - 1; i <= j;) { r.push(a[i++]); if (i <= j) r.push(a[j--]); }
+    return r;
+  }
+  /** Séance de qualité de un à trois blocs ([{ z, min, spe }]), trot de 1 à 3 min entre les blocs (voir trot ; ordre : voir ordonner) */
+  function seanceZones(c, blocs, l, st = 0) {
+    const B = ordonner(blocs.sort((a, b) => ZI.indexOf(a.z) - ZI.indexOf(b.z))).map(b => blocZone(c, b.z, b.min, l, b.spe, st));
+    const tr = B.map(trot), entre = tr.slice(0, -1).reduce((a, t) => a + t, 0), arret = st >= 3; // trot après chaque bloc sauf le dernier ; arret : à l'arrêt (dernier recours)
     const somme = (f) => B.reduce((a, b) => a + f(b), 0), effort = somme(b => b.effort), principal = B.reduce((a, b) => (b.effort > a.effort ? b : a));
     const noms = [...new Set(B.map(b => (b.spe ? `Allure ${c.nomObj}` : FORMATS[b.z].nom)))];
-    const r = { travail: effort + somme(b => b.recup) + entre, effort, km: c.profil ? somme(b => b.km) + entre / aZ(c, 'Z1') : null,
-      parts: ajoute({ Z1: somme(b => b.recup) + entre }, ...B.map(b => ({ [b.z]: b.effort }))),
-      etapes: B.flatMap((b, k) => (k ? [{ t: 'recup', duree: ENTRE_BLOCS }, ...b.etapes] : b.etapes)),
-      texte: B.map(b => b.texte).join(` · ${ENTRE_BLOCS} min de trot · `) };
+    const r = { travail: effort + somme(b => b.recup) + entre, effort, km: c.profil ? somme(b => b.km) + (arret ? 0 : entre / aZ(c, 'Z1')) : null,
+      parts: ajoute({ Z1: somme(b => (b.statique ? 0 : b.recup)) + (arret ? 0 : entre) }, ...B.map(b => ({ [b.z]: b.effort }))),
+      etapes: B.flatMap((b, k) => (k ? [{ t: 'recup', duree: tr[k - 1], ...(arret ? { nom: 'Récupération à l\'arrêt' } : {}) }, ...b.etapes] : b.etapes)),
+      texte: B.map((b, k) => (k ? ` · ${tr[k - 1]} min ${arret ? 'à l\'arrêt' : 'de trot'} · ` : '') + b.texte).join('') };
     return enveloppe(c, 'ZONES', noms.join(' + '), principal.z, r);
   }
 
@@ -2241,7 +2315,8 @@
     }
     // longueur maximale d'une séance : une séance trop longue est raccourcie (blocs réduits ensemble) et l'effort retiré est reporté sur les
     // autres séances de qualité qui ont de la place, puis sur de nouvelles séances de qualité (jusqu'à maxS) ; coupe : effort qu'on n'a pas pu placer (min)
-    const copie = (b, k) => b.map(x => ({ ...x, min: x.min * k })), sz = (b) => seanceZones(c, copie(b, 1), l);
+    // récupérations à l'arrêt (distance maximale seulement) : d'abord en Z5 et Z6, puis dans toutes les zones, avant de raccourcir l'effort
+    const ST = c.limite && c.limite.km && c.profil ? 3 : 0, copie = (b, k) => b.map(x => ({ ...x, min: x.min * k })), sz = (b, st = ST) => seanceZones(c, copie(b, 1), l, st);
     const plusGrand = (ok, max) => { // plus grande valeur dans [0, max] pour laquelle ok(v) est vrai (dichotomie, ok décroissant)
       if (ok(max)) return max;
       let lo = 0, hi = max;
@@ -2250,10 +2325,17 @@
     };
     let coupe = 0, trop = 0; // trop : durée de la plus longue séance qui reste au-dessus de la limite
     const S = seances.map(b => b.map(x => ({ ...x }))), reportes = [];
+    // plafond du temps d'effort d'un bloc selon l'allure courue (voir capBloc) ; l'excédent est coupé et signalé (exces : alerte « Effort coupé »),
+    // pas reporté sur une autre séance (elle deviendrait aussi dure)
+    // dans une séance à plusieurs blocs, les parts de plafond s'additionnent (somme ≤ 1) : un bloc de seuil plein ne laisse pas la place d'un bloc plein de Z5
+    if (c.profil) S.forEach(b => {
+      const charge = b.reduce((a, x) => a + x.min / capBloc(c, x.z, x.spe), 0);
+      if (charge > 1) b.forEach(x => { exces += x.min * (1 - 1 / charge); x.min /= charge; });
+    });
     if (c.limite) {
       S.forEach(b => {
         if (!depasse(c, sz(b))) return;
-        const k = Math.max(0.05, plusGrand(k => !depasse(c, seanceZones(c, copie(b, k), l)), 1));
+        const k = Math.max(0.05, plusGrand(k => !depasse(c, seanceZones(c, copie(b, k), l, ST)), 1));
         b.forEach(x => { reportes.push({ ...x, min: x.min * (1 - k) }); x.min *= k; });
       });
       reportes.sort((a, b) => b.min - a.min);
@@ -2266,7 +2348,7 @@
             const meme = b.find(y => y.z === x.z && !!y.spe === !!x.spe);
             if (!meme && b.length >= BLOCS_MAX) return;
             const avec = (v) => (meme ? b.map(y => (y === meme ? { ...y, min: y.min + v } : { ...y })) : [...b.map(y => ({ ...y })), { ...x, min: v }]);
-            const v = plusGrand(t => !depasse(c, seanceZones(c, avec(t), l)), m);
+            const v = plusGrand(t => !depasse(c, seanceZones(c, avec(t), l, ST)), m);
             if (v >= minBloc(c, x.z, x.spe) && (!meilleur || v > meilleur.v)) meilleur = { i, v, meme };
           });
           if (meilleur) {
@@ -2274,7 +2356,7 @@
             if (meilleur.meme) meilleur.meme.min += meilleur.v; else b.push({ ...x, min: meilleur.v });
             m -= meilleur.v;
           } else if (S.length < maxS) { // nouvelle séance de qualité
-            const v = Math.max(minBloc(c, x.z, x.spe), plusGrand(t => !depasse(c, seanceZones(c, [{ ...x, min: t }], l)), m));
+            const v = Math.max(minBloc(c, x.z, x.spe), plusGrand(t => !depasse(c, seanceZones(c, [{ ...x, min: t }], l, ST)), m));
             S.push([{ ...x, min: Math.min(v, m) }]);
             m -= Math.min(v, m);
           } else break;
@@ -2283,7 +2365,7 @@
       }
     }
     const q = S.map(b => {
-      const x = sz(b);
+      const x = [0, 1, 2, 3].filter(s => s <= ST).map(s => sz(b, s)).find(y => !depasse(c, y)) || sz(b); // niveau d'arrêt le plus faible qui tient
       if (c.limite && depasse(c, x)) trop = Math.max(trop, x.duree);
       return x;
     });
@@ -2292,7 +2374,7 @@
 
   // Spécifique LPN : choisit une allure à optimiser (l'allure cible) et construit le plan sur la répartition du volume par zone (ajustable)
   const LPN = { id: 'zones', nom: 'Spécifique LPN', titre: 'Spécifique LPN', ordre: 0, parDefaut: true, blocsMax: BLOCS_MAX, bloc: true,
-    fiche: { public: 'Optimiser une allure spécifique selon des critères paramétrables, après des cycles de préparation générale', plan: '4 à 24 semaines', mise: 'moyenne', h: 0, j: 0 }, recupZ1: true, maxQ: 3, repartition: true,
+    fiche: { public: 'Optimiser une allure spécifique selon des critères paramétrables, après des cycles de préparation générale', plan: '4 à 24 semaines', mise: 'moyenne', h: 0, j: 0 }, recupZ1: true, maxQ: 2, repartition: true,
     regles: { echauffement: (c, zone) => (c.limite ? 15 : 20) + (ECHAUFFEMENT_Z[zone] || 0), slMax: SL_MAX, efMin: EF_MIN, efLeger: EF_LEGER,
       filtreClub: true, chargeObjectif: OBJECTIF_CHARGE, equilibreZones: true, dechargeQ: DECHARGE_Q, doublesUtiles: DOUBLES_SEANCES, sansSortieLongue: true, volumeKm: true,
       z1Lendemain: true, alterner: true, volumeFacile: (x) => volumeFacileLPN(x) },
@@ -2301,15 +2383,24 @@
     semaine: semaineZones, phases: [{ nom: 'Travail des zones', f: 1, q: [], sl: 'SL' }],
     resume: "Chaque semaine reprend la répartition par zone ci-dessus : le temps d'intensité de chaque zone (Z3 à Z6) forme des séances de qualité, la zone de l'allure cible étant courue à cette allure. Pas de sortie longue imposée : la spécificité de la distance passe d'abord par le volume de la semaine. Le reste du volume va aux séances faciles : une séance longue facile, les autres de même durée. La difficulté règle la longueur des répétitions et des récupérations, pas le temps d'intensité.",
     principes: [
-      "Intensité : temps d'effort d'une zone = volume de la semaine × part de la zone, découpé en blocs regroupés en séances de qualité (1 à 3 blocs, zones voisines ensemble) ; Z6 sous 4 min devient des lignes droites de 20 s. Z5 se court à 95 – 100 % de VMA.",
-      "Répétitions : jamais plus des 2/3 du temps limite à leur allure (T = 6 × exp((v / VMA − 1) / k)) ; un bloc trop court pour son allure (20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h) est ignoré.",
+      "Temps d'effort par zone : pour chaque zone de Z3 à Z6, volume de la semaine × part de la zone dans la répartition.",
+      "Nombre de séances de qualité : 1 jusqu'à 4 séances par semaine, 2 au plus à partir de 5 séances.",
+      "Blocs : le temps de chaque zone forme un bloc ; les plus gros ouvrent une séance, les autres s'ajoutent à une séance (zone voisine d'abord), 3 blocs au plus par séance ; un bloc est coupé en deux s'il reste une séance libre et qu'il est assez long.",
+      "Z5 : zone entre l'allure 1 h et la VMA, courue entre ces deux allures ; la zone de l'allure cible est courue à cette allure.",
+      "Z6 : au-delà de la VMA ; sous 2 min d'effort dans la semaine, elle devient des lignes droites de 20 s après un footing, au-delà elle forme des blocs spécifiques.",
+      "Trot entre blocs : 3 min de trot (Z1), ramené à 1 min après un effort de Z3 jusqu'à 6 min ou de Z4 jusqu'à 4 min, et à 2 min jusqu'à 12 min en Z3 ou 8 min en Z4.",
+      "Effort qui ne tient pas (trop de blocs, séances en nombre limité, plafond d'un bloc, longueur maximale) : coupé et signalé par l'alerte « Effort coupé ».",
+      "Répétitions : jamais plus de la moitié du temps limite à leur allure (T = 6 × exp((v / VMA − 1) / k)) : au-delà c'est trop dur, mieux vaut fractionner qu'allonger ; un bloc trop court pour son allure (20 s à la VMA, 1 min à l'allure 1 h, 3 min à 80 % de l'allure 1 h) est ignoré.",
       "Échauffement selon la zone principale : 20 min en Z5 (15 min si une longueur maximale de séance est fixée), 5 min de plus en Z6, 5 de moins en Z4, 10 de moins en Z3 ; retour au calme 10 min.",
       "Séances de qualité placées en premier, sans être allongées au-delà du nécessaire ; pour le semi et le marathon, tout le temps de la zone de l'allure cible se court à cette allure dans les séances de qualité.",
       "Pas de sortie longue imposée : la spécificité de la distance passe d'abord par le volume de la semaine. Les séances faciles (Z1 et Z2, 2es séances des doublés comprises) se partagent le volume restant : m = durée moyenne, une séance longue facile de 4/3 × m (le dernier jour), les autres à parts égales ; 20 min au moins, la longueur maximale de séance au plus.",
       "Lendemain d'une séance de qualité : jour de repos ou séance facile ; la Z1 qui reste à faire (cible de Z1 moins la Z1 des séances de qualité) est courue ces jours-là.",
       "Autres séances faciles : le reste du volume, en durées qui varient de 5 min d'une séance à l'autre (20 min au moins). Volume saisi en km : la somme des km des séances vaut ce volume.",
-      "Longueur maximale de séance : une séance de qualité trop longue est raccourcie, et l'effort retiré est reporté sur une autre séance de qualité ou sur une nouvelle.",
-      "Doublés : la 2e séance est un footing pris sur le volume facile, jamais le dernier jour de la semaine ; utiles à partir de 5 séances par semaine, ils libèrent des jours de repos.",
+      "Plafond d'un bloc : le temps d'effort d'un bloc ne dépasse pas 2 × √(10 × T) minutes, T étant le temps limite à son allure (≈ 15 min à la VMA, ≈ 28 min à allure 5 km, ≈ 40 min à allure 10 km). Dans une séance à plusieurs blocs, les parts de plafond s'additionnent (somme au plus égale à 1) : sinon les blocs sont réduits proportionnellement.",
+      "Longueur maximale de séance : une séance de qualité qui la dépasse est d'abord allégée en kilomètres si la limite est en km (récupérations à l'arrêt, durée inchangée), puis raccourcie ; l'effort retiré est reporté sur une autre séance de qualité qui a de la place, sans dépasser le nombre de séances de qualité autorisé, sinon coupé (alerte).",
+      "Récupérations à l'arrêt (limite en km dépassée seulement) : dans l'ordre, récupérations de Z5 et Z6, puis de Z3 et Z4, puis trot entre blocs ; même durée, 0 km, retirées de la charge (ni Z1 ni effort). Une séance qui tient sous la limite garde ses récupérations trottées.",
+      "Ordre des blocs d'une séance : réglable (étape 3), progressif du plus lent au plus rapide (par défaut), inversé, ou alterné (lent, rapide, moyen). Hypothèse de conception : aucune étude ne compare ces ordres en course à pied.",
+      "Doublés : la 2e séance est un footing pris sur le volume facile ; utiles à partir de 5 séances par semaine, ils libèrent des jours de repos.",
       "Décharge : les séances de qualité restent, avec la moitié du travail d'une semaine de charge. Semaine de l'objectif : charge ramenée à 50 %, même nombre de séances. Affûtage et course finale seulement si le plan va jusqu'à la date de l'objectif.",
       "Séances du club : intégrées une semaine seulement si elles tiennent dans la répartition (leur Z2 dans le Z1 + Z2 prévu, leur Z5 dans le Z5 prévu) ; sinon, séance du plan à la place et note sous la semaine.",
       "Compétitions : leur temps en zone est déduit de la répartition de leur semaine ; s'il dépasse, les autres semaines compensent (jusqu'à la moitié de leur temps dans la zone), sinon une alerte le signale.",

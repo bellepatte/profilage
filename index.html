@@ -252,6 +252,18 @@
   .seances .date .nuit { display: block; font-style: normal; font-size: .85rem; line-height: 1.2; margin-top: 3px; }
   .nuit-travail .onglets { margin: 6px 0; display: inline-flex; flex-wrap: wrap; }
   .nuit-travail .soirs { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  .champs > .grille-semaine { grid-column: 1 / -1; min-width: 0; }
+  .grille-semaine table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .grille-semaine th, .grille-semaine td { text-align: center; padding: 6px 2px; font-size: .85em; font-weight: 400; border-bottom: 1px solid var(--bord); }
+  .grille-semaine thead th { color: var(--discret); text-transform: uppercase; font-size: .72em; letter-spacing: .05em; }
+  .grille-semaine tbody th { text-align: left; width: 22%; font-weight: 600; color: var(--texte); white-space: nowrap; }
+  .grille-semaine tbody tr:last-child th, .grille-semaine tbody tr:last-child td { border-bottom: 0; }
+  .grille-semaine td input { width: 20px; height: 20px; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+  .grille-semaine td.vide { color: var(--bord); }
+  .grille-semaine .pastille-club { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .8em; cursor: pointer; }
+  .grille-semaine #pl-grilleInfo:empty { display: none; }
+  .grille-semaine #pl-grilleInfo { margin: 6px 0 0; }
+  @media (max-width: 520px) { .grille-semaine tbody th { width: 26%; font-size: .78em; } .grille-semaine td input { width: 18px; height: 18px; } }
   .nuit-travail .champs { margin: 6px 0 4px; }
   .cycle-mens > div > .sous { margin: 8px 0 0; }
   .seances .corps { padding: 8px 0; display: grid; }
@@ -564,11 +576,11 @@
   <section class="carte etape pas-imprimer" data-etape="2" hidden>
     <div class="etape-tete"><span class="ico" aria-hidden="true">📅</span><h2>Comment s'organise votre semaine ?</h2>
       <span class="aide" tabindex="0" aria-label="Aide : semaine"><span aria-hidden="true">?</span><span role="tooltip">Jours de course : de 3 à 7 par semaine. Un doublé est un jour à deux séances (la seconde est un footing). Le cumul de plusieurs sports n'est pas géré par cet outil : soyez vigilant sur vos capacités de récupération si vous êtes dans ce cas.</span></span></div>
+    <ul class="alertes" id="pl-alerteSemaine" style="margin-bottom: 12px" hidden></ul>
     <div class="semaine-haut">
       <div class="champs">
         <h4 class="groupe">🏃 Fréquence et volume</h4>
         <label>Jours de course par semaine <select id="pl-seances"></select></label>
-        <label>Doublés (jours à deux séances) <select id="pl-doubles"></select></label>
         <label><span>Volume par semaine<span class="aide" tabindex="0" aria-label="Aide : volume"><span aria-hidden="true">?</span><span role="tooltip">Une semaine prise comme base d'un plan doit être, au plus, à peine plus chargée que les semaines précédentes. Dans le doute, gardez le même volume. En km, la somme des distances des séances vaut ce volume. Sans case cochée, c'est une cible : la moyenne des semaines de charge. Maxi : la semaine la plus chargée (compétitions comprises) vaut ce volume. Mini : la semaine de charge la plus légère vaut ce volume. Le cycle (charge, décharge, affûtage) est décalé d'autant ; décharge et affûtage restent allégés.</span></span></span>
           <div class="rang">
             <input id="eq-volume" type="text" inputmode="text" autocomplete="off" placeholder="ex. 5h30 ou 40" aria-label="Volume par semaine">
@@ -576,6 +588,24 @@
           </div>
         </label>
         <div class="cases-volume"><label class="case"><input type="checkbox" id="pl-volMax"> <span>Volume maxi</span></label><label class="case"><input type="checkbox" id="pl-volMin"> <span>Volume mini</span></label></div>
+        <h4 class="groupe">🔀 Doublés <span class="sous">(deux séances le même jour)</span></h4>
+        <label>Nombre de jours à deux séances <select id="pl-doubles"></select></label>
+        <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
+          <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
+        </label>
+        <h4 class="groupe">📆 Jours préférentiels <span class="sous">(facultatif : rien de coché = choix automatique)</span><span class="aide" tabindex="0" aria-label="Aide : jours de la semaine"><span aria-hidden="true">?</span><span role="tooltip">Cochez les jours où vous voulez courir, faire de la qualité ou un doublé ; une qualité ou un doublé coché ajoute le jour de course. Ce sont des préférences : le cycle menstruel, le travail de nuit et les compétitions (aucune qualité à moins de 3 jours d'une course) passent avant, et un doublé n'est jamais forcé sur une course, une séance du club ou le jour de la plus grosse séance. Le club (lundi : PPG, jeudi : piste) occupe un jour de course. Plan par date seulement, sauf le club.<span id="pl-clubNote" hidden><br><br>Le plan intègre les séances du club (lundi : PPG dont footing, comptée comme 40 min en Z2 ; jeudi : séance piste, équivalente à 1 h en Z2 + 15 min à VMA, comptée comme une séance de qualité) chaque semaine quand elles sont compatibles avec le temps prévu dans chaque zone : elles comptent alors dans le volume, occupent leur jour de course et réduisent d'autant les séances du plan. Dans Spécifique LPN, une semaine où elles feraient dépasser la répartition par zone, la séance du club est remplacée par une séance du plan, avec une note sous la semaine.</span></span></span></h4>
+        <div class="grille-semaine" id="pl-grille">
+          <div class="tableau"><table>
+            <thead><tr><th></th><th scope="col">Lun</th><th scope="col">Mar</th><th scope="col">Mer</th><th scope="col">Jeu</th><th scope="col">Ven</th><th scope="col">Sam</th><th scope="col">Dim</th></tr></thead>
+            <tbody>
+              <tr class="dates-seul"><th scope="row">Course</th><td><input type="checkbox" data-r="jourCourse" data-k="0" aria-label="Course le lundi"></td><td><input type="checkbox" data-r="jourCourse" data-k="1" aria-label="Course le mardi"></td><td><input type="checkbox" data-r="jourCourse" data-k="2" aria-label="Course le mercredi"></td><td><input type="checkbox" data-r="jourCourse" data-k="3" aria-label="Course le jeudi"></td><td><input type="checkbox" data-r="jourCourse" data-k="4" aria-label="Course le vendredi"></td><td><input type="checkbox" data-r="jourCourse" data-k="5" aria-label="Course le samedi"></td><td><input type="checkbox" data-r="jourCourse" data-k="6" aria-label="Course le dimanche"></td></tr>
+              <tr class="dates-seul"><th scope="row">Qualité</th><td><input type="checkbox" data-r="jourQualite" data-k="0" aria-label="Qualité le lundi"></td><td><input type="checkbox" data-r="jourQualite" data-k="1" aria-label="Qualité le mardi"></td><td><input type="checkbox" data-r="jourQualite" data-k="2" aria-label="Qualité le mercredi"></td><td><input type="checkbox" data-r="jourQualite" data-k="3" aria-label="Qualité le jeudi"></td><td><input type="checkbox" data-r="jourQualite" data-k="4" aria-label="Qualité le vendredi"></td><td><input type="checkbox" data-r="jourQualite" data-k="5" aria-label="Qualité le samedi"></td><td><input type="checkbox" data-r="jourQualite" data-k="6" aria-label="Qualité le dimanche"></td></tr>
+              <tr class="dates-seul" id="pl-ligneDoubles"><th scope="row">Doublé</th><td><input type="checkbox" data-r="jourDoubles" data-k="0" aria-label="Doublé le lundi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="1" aria-label="Doublé le mardi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="2" aria-label="Doublé le mercredi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="3" aria-label="Doublé le jeudi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="4" aria-label="Doublé le vendredi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="5" aria-label="Doublé le samedi"></td><td><input type="checkbox" data-r="jourDoubles" data-k="6" aria-label="Doublé le dimanche"></td></tr>
+              <tr><th scope="row">Club</th><td><label class="pastille-club"><input type="checkbox" id="pl-club1" aria-label="Séance de PPG du club le lundi"><span>PPG</span></label></td><td class="vide">·</td><td class="vide">·</td><td><label class="pastille-club"><input type="checkbox" id="pl-club2" aria-label="Séance piste du club le jeudi"><span>Piste</span></label></td><td class="vide">·</td><td class="vide">·</td><td class="vide">·</td></tr>
+            </tbody>
+          </table></div>
+          <p class="sous" id="pl-grilleInfo"></p>
+        </div>
         <h4 class="groupe">📏 Contraintes</h4>
         <label><span>Longueur maximale d'une séance <span class="sous">(facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : longueur maximale"><span aria-hidden="true">?</span><span role="tooltip">Aucune séance du plan (hors compétitions et séances du club) ne dépasse cette durée ou cette distance ; une distance est convertie en durée à l'allure moyenne de la zone 2. Minimum 20 min.</span></span></span>
           <div class="rang">
@@ -583,17 +613,9 @@
             <div class="onglets" id="pl-limiteU"><button type="button" class="onglet" data-u="min">min</button><button type="button" class="onglet" data-u="km">km</button></div>
           </div>
         </label>
-        <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
-          <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
-        </label>
       </div>
       <div class="semaine-resume" id="pl-resumeSemaine" aria-live="polite"></div>
     </div>
-    <fieldset class="club">
-      <legend>👥 Séances au club <span class="sous">(chaque semaine si compatible avec le plan)</span><span class="aide" id="pl-clubNote" tabindex="0" aria-label="Aide : séances au club" hidden><span aria-hidden="true">?</span><span role="tooltip">Le plan intègre ces séances chaque semaine quand elles sont compatibles avec le temps prévu dans chaque zone : elles comptent alors dans le volume, occupent leur jour de course et réduisent d'autant les séances du plan. Dans Spécifique LPN, une semaine où elles feraient dépasser la répartition par zone, la séance du club est remplacée par une séance du plan, avec une note sous la semaine.</span></span></legend>
-      <label class="case"><input type="checkbox" id="pl-club1"> <span><strong>Lundi</strong> : séance de PPG dont footing <span class="sous">· comptée comme 40 min en Z2 pour la charge</span></span></label>
-      <label class="case"><input type="checkbox" id="pl-club2"> <span><strong>Jeudi</strong> : séance piste <span class="sous">· charge moyenne équivalente à 1 h en Z2 + 15 min à VMA (compte comme une séance de qualité)</span></span></label>
-    </fieldset>
     <fieldset class="club cycle-mens">
       <legend>🌙 Cycle menstruel <span class="sous">(facultatif)</span><span class="aide" tabindex="0" aria-label="Aide : cycle menstruel"><span aria-hidden="true">?</span><span role="tooltip">Les études ne trouvent qu'un effet très faible de la phase du cycle sur la performance (au plus une légère baisse pendant les règles), avec des preuves de faible qualité : la réponse est propre à chacune. Le plan ne change donc ni le volume ni l'intensité selon la phase. Il affiche la phase estimée de chaque jour (plan par date) et, si vous le demandez, évite de placer les séances de qualité les jours où vous êtes moins bien. Ces données restent dans votre navigateur (et dans le fichier si vous enregistrez) : rien n'est envoyé.</span></span></legend>
       <label class="case"><input type="checkbox" id="pl-reglesActif"> <span>Tenir compte de mon cycle</span></label>
@@ -625,7 +647,6 @@
         </div>
       </div>
     </fieldset>
-    <ul class="alertes" id="pl-alerteSemaine" hidden></ul>
     <div class="etape-nav"><button type="button" class="lien" data-aller="1">← Objectif</button><button type="button" class="sec" data-aller="3">Mon plan →</button></div>
   </section>
 
@@ -747,6 +768,10 @@
       <input id="pl-difficulte" type="range" min="1" max="10" step="1">
       <div class="extremes sous"><span>Séries courtes, récupérations longues</span><span>Séries longues, récupérations courtes</span></div>
       <p class="note" id="pl-diffVolume" hidden>⚠️ Avec ce volume, le temps de qualité de la semaine est trop court pour que ce réglage change vraiment les séances : le faible volume ne permet pas cet ajustement. L'axe de progression principal est d'augmenter le volume.</p>
+      <label id="pl-ordreBloc" hidden>Ordre des blocs dans une séance de qualité
+        <span class="aide" tabindex="0" aria-label="Aide : ordre des blocs"><span aria-hidden="true">?</span><span role="tooltip">Quand une séance réunit plusieurs zones (par exemple Z3, Z4 et Z5), dans quel ordre les courir. Progressif : du plus lent au plus rapide, comme dans les séances combinées de Daniels et McMillan. Inversé : du plus rapide au plus lent. Alterné : lent, rapide, moyen. Aucune étude n'a comparé ces ordres en course à pied : c'est un choix d'entraînement.</span></span>
+        <select id="pl-ordre"><option value="progressif">Progressif (lent → rapide)</option><option value="inverse">Inversé (rapide → lent)</option><option value="alterne">Alterné (lent, rapide, moyen)</option></select>
+      </label>
       <details class="mini"><summary>👁️ Exemple de séance de la première semaine</summary><p class="note" id="pl-diffNote"></p></details>
     </div>
 
