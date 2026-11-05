@@ -1,5 +1,5 @@
 /* Contrainte : doublés (deux séances le même jour, étape 2, toutes méthodes). Nombre de doublés (6 au plus, autant que de jours de course),
-   jours qui les reçoivent (jours à une seule séance : faciles d'abord, puis de qualité), moment de la séance d'intensité, alertes. La durée de
+   jours qui les reçoivent (jours à une seule séance : faciles d'abord, puis de qualité), moment de la séance de qualité, alertes. La durée de
    la 2e séance est fixée par la méthode. Chargée après plan.js ; le moteur l'appelle par PlanCore.contraintes.doubles. */
 (function () {
   'use strict';
@@ -40,7 +40,7 @@
     if (nD && !utiles && c.heures < volumeMin) a.push(`Les doublés servent surtout à absorber un gros volume : sous ≈ ${volumeMin} h par semaine, des séances simples un peu plus longues apportent autant, avec plus de récupération.`);
     return a;
   };
-  /** Séances d'un jour avec leur moment : un doublé place la séance d'intensité selon state.moment ;
+  /** Séances d'un jour avec leur moment : un doublé place la séance de qualité selon state.moment ;
       deux séances de même nature (double seuil, deux footings) restent matin / soir */
   const moments = (j) => {
     if (j.length < 2) return [['', j[0]]];
@@ -58,7 +58,7 @@
     if (sel.options.length !== max + 1) sel.innerHTML = Array.from({ length: max + 1 }, (_, n) => `<option value="${n}">${n ? `${n} jour${n > 1 ? 's' : ''}` : 'Aucun'}</option>`).join('');
     sel.value = state.doubles;
   };
-  /** Moment de la séance d'intensité (affiché s'il y a des doublés) */
+  /** Moment de la séance de qualité (affiché s'il y a des doublés) */
   const afficher = () => {
     $('pl-momentBloc').hidden = !nombre();
     $('pl-ligneDoubles').hidden = !nombre(); // ligne « Doublé » de la grille des jours (plan.js : cases, plan par date seulement)

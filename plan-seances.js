@@ -21,7 +21,7 @@
     const t = arr5(duree), km = c.profil ? t / moy(ALLURES[cle].min(c)) : null;
     return { travail: t, km, texte: `${fD(t)} en continu${km ? ` (≈ ${km.toFixed(1).replace('.', ',')} km)` : ''} ${al(c, cle)}`, etapes: [{ t: 'effort', duree: t, allure: plageA(c, cle) }] };
   }
-  const tRef = (c) => Math.max(c.tObj, 60); // échelle des séances à allure objectif longues (Hanson, Canova)
+  const tRef = (c) => Math.max(c.tObj, 60); // échelle des séances longues à l'allure de l'objectif (Hanson, Canova)
   // Allure spécifique (allure de l'objectif) : durée d'une fraction et volume total, en part du temps de course prédit
   const SPE = { '5k': { rep: [0.1, 0.25], tot: [0.6, 1.2] }, '10k': { rep: [0.08, 0.2], tot: [0.4, 0.8] },
     semi: { rep: [0.06, 0.15], tot: [0.35, 0.7] }, marathon: { rep: [0.04, 0.1], tot: [0.15, 0.35] } };
@@ -56,6 +56,8 @@
       const p = SPE[c.goal], T = c.tObj;
       return fractions(c, series(l, s, p.rep.map(x => x * T), p.tot.map(x => Math.min(90, x * T)), [0.5, 0.2], 1), 'obj', 'en trottinant');
     } },
+    // Semaine du marathon (FIN_MARATHON, plan.js) : un seul rappel court à l'allure de l'objectif, 21 min d'effort, séance de 60 min au plus
+    RAPPEL: { nom: 'Rappel à l\'allure de l\'objectif', zone: 'obj', gen: (l, s, c) => fractions(c, { r: 7, n: 3, rc: 2, travail: 25 }, 'obj', 'en trottinant') },
     VITESSE: { nom: 'Vitesse (R)', zone: 'Z6', gen: (l, s, c) => fractions(c, series(l, s, [0.5, 1.25], [4, 8], [3, 2]), 'r', 'en marchant ou en trottinant (récupération complète)') },
     COTES: { nom: 'Côtes', zone: 'Z5', gen: (l, s, c) => {
       const S = series(l, s, [0.5, 1.5], [5, 12], [2.5, 1.5]);

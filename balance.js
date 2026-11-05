@@ -298,7 +298,7 @@
 
     $('eq-zoneNote').textContent = !profil
       ? "Renseignez votre profil pour centrer l'intensité sur l'allure cible."
-      : `${label} ≈ ${fmtPct(pct * 100)} de l'allure 1 h (${Z[iObj].id}) : le volume d'intensité est réparti autour de cette zone.`;
+      : `${label} ≈ ${fmtPct(pct * 100)} de l'allure 1 h (${Z[iObj].id}) : le temps d'intensité est réparti autour de cette zone.`;
 
     const b = biaisIE();
     $('eq-biais').textContent = !profil ? '' : b <= -1 / 3

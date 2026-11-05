@@ -590,7 +590,7 @@
         <div class="cases-volume"><label class="case"><input type="checkbox" id="pl-volMax"> <span>Volume maxi</span></label><label class="case"><input type="checkbox" id="pl-volMin"> <span>Volume mini</span></label></div>
         <h4 class="groupe">🔀 Doublés <span class="sous">(deux séances le même jour)</span></h4>
         <label>Nombre de jours à deux séances <select id="pl-doubles"></select></label>
-        <label id="pl-momentBloc" hidden>Séance d'intensité les jours de doublé
+        <label id="pl-momentBloc" hidden>Séance de qualité les jours de doublé
           <select id="pl-moment"><option value="matin">Le matin</option><option value="midi">À midi</option><option value="soir">Le soir</option><option value="indifferent">Sans importance</option></select>
         </label>
         <h4 class="groupe">📆 Jours préférentiels <span class="sous">(facultatif : rien de coché = choix automatique)</span><span class="aide" tabindex="0" aria-label="Aide : jours de la semaine"><span aria-hidden="true">?</span><span role="tooltip">Cochez les jours où vous voulez courir, faire de la qualité ou un doublé ; une qualité ou un doublé coché ajoute le jour de course. Ce sont des préférences : le cycle menstruel, le travail de nuit et les compétitions (aucune qualité à moins de 3 jours d'une course) passent avant, et un doublé n'est jamais forcé sur une course, une séance du club ou le jour de la plus grosse séance. Le club (lundi : PPG, jeudi : piste) occupe un jour de course. Plan par date seulement, sauf le club.<span id="pl-clubNote" hidden><br><br>Le plan intègre les séances du club (lundi : PPG dont footing, comptée comme 40 min en Z2 ; jeudi : séance piste, équivalente à 1 h en Z2 + 15 min à VMA, comptée comme une séance de qualité) chaque semaine quand elles sont compatibles avec le temps prévu dans chaque zone : elles comptent alors dans le volume, occupent leur jour de course et réduisent d'autant les séances du plan. Dans Spécifique LPN, une semaine où elles feraient dépasser la répartition par zone, la séance du club est remplacée par une séance du plan, avec une note sous la semaine.</span></span></span></h4>
@@ -754,7 +754,7 @@
                 <td>Simple et régulier, facile à tenir. Adapté aux débutants, aux reprises, aux petits volumes et aux plans courts. Pas de pic de charge brutal.</td>
                 <td>Aucune semaine de récupération prévue : la fatigue s'accumule sur un plan long, surtout à fort volume. Progression plus lente, moins de marge en cas d'imprévu ou de fatigue extérieure.</td></tr>
               <tr><td><strong>Charge puis décharge</strong></td>
-                <td>Alternance classique : la semaine allégée (70 % du volume, une séance de qualité en moins ; Spécifique LPN : travail de qualité allégé de moitié) permet d'assimiler le travail et limite le risque de blessure et de surmenage. Progression par paliers (+ 6 % par semaine de charge).</td>
+                <td>Alternance classique : la semaine de décharge (70 % du volume, une séance de qualité en moins ; Spécifique LPN : travail de qualité allégé de moitié) permet d'assimiler le travail et limite le risque de blessure et de surmenage. Progression par paliers (+ 6 % par semaine de charge).</td>
                 <td>Plan un peu plus complexe, volume moyen plus faible. Peu utile sur moins de 6 semaines. Une semaine de décharge peut donner l'impression de perdre le rythme, et les semaines de charge sont plus chargées que la moyenne.</td></tr>
             </tbody>
           </table>
@@ -781,7 +781,7 @@
   <!-- Étape 4 : séances -->
   <section class="carte etape" data-etape="4" hidden>
     <div class="etape-tete"><span class="ico pas-imprimer" aria-hidden="true">📋</span><h2>Votre plan</h2>
-      <span class="aide pas-imprimer" tabindex="0" aria-label="Aide : plan"><span aria-hidden="true">?</span><span role="tooltip">Plans calculés à partir de votre profil ; les méthodes d'entraîneurs sont inspirées de leurs principes publiés, ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances difficiles deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</span></span></div>
+      <span class="aide pas-imprimer" tabindex="0" aria-label="Aide : plan"><span aria-hidden="true">?</span><span role="tooltip">Plans calculés à partir de votre profil ; les méthodes d'entraîneurs sont inspirées de leurs principes publiés, ce ne sont pas leurs plans officiels. Progression, cycles et durées sont des choix de conception, à adapter à vos sensations. Évitez deux séances de qualité deux jours de suite ; en cas de douleur ou de fatigue persistante, allégez.</span></span></div>
     <ul class="alertes" id="pl-alertes" hidden></ul>
     <div class="chiffres" id="pl-chiffres"></div>
     <div class="volumes" id="pl-volumes" role="img" aria-label="Temps de course prévu par semaine"></div>
@@ -800,7 +800,7 @@
     <p class="note legende-cycle" id="pl-legendeNuit" hidden>🌃 nuit de travail le soir · 🛌 sortie de nuit (lendemain matin) : séances de qualité et sortie longue (ou footing long) placées ailleurs si possible.</p>
     <p class="note legende-cycle" id="pl-legendeCycle" hidden>🌙 Pastille sous la date : <i class="cyc regles"></i> règles · <i class="cyc folliculaire"></i> phase folliculaire · <i class="cyc ovulation"></i> ovulation (estimée) · <i class="cyc luteale"></i> phase lutéale · <i class="cyc folliculaire sensible"></i> cerclée : jour sensible (qualité évitée si possible). Repères estimés à partir de vos saisies.</p>
     <div id="pl-liste"></div>
-    <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances d'intensité. Tableau par zone : durée de chaque zone sur tout le plan (échauffements et récupérations comptés en Z1 – Z2), distance = durée / allure médiane de la zone, donc un peu différente du total ci-dessus (qui court les fractions à leur allure).</span></span></summary>
+    <details class="recap sous-volet"><summary>📋 Tableau récapitulatif<span class="aide" tabindex="0" aria-label="Aide : récapitulatif"><span aria-hidden="true">?</span><span role="tooltip">Distances estimées avec l'allure moyenne de chaque zone ; qualité : travail et récupérations des séances de qualité. Tableau par zone : durée de chaque zone sur tout le plan (échauffements et récupérations comptés en Z1 – Z2), distance = durée / allure médiane de la zone, donc un peu différente du total ci-dessus (qui court les fractions à leur allure).</span></span></summary>
       <div class="tableau"><table><thead id="pl-recapTete"></thead><tbody id="pl-recap"></tbody><tfoot id="pl-recapTotal"></tfoot></table></div>
       <h4 class="groupe">⏱️ Temps de travail par zone</h4>
       <div class="tableau"><table><thead id="pl-recapZonesTete"></thead><tbody id="pl-recapZones"></tbody><tfoot id="pl-recapZonesTotal"></tfoot></table></div>
@@ -818,7 +818,7 @@
 <script src="ffa.js?v=20261029a"></script>
 <script src="balance.js?v=20261029a"></script>
 <script src="plan.bundle.js?v=20261030b"></script>
-<script src="export.js?v=20261029a"></script>
+<script src="export.js?v=20261105a"></script>
 <script src="sauvegarde.js?v=20261029a"></script>
 <script>
 (function () {
@@ -1203,13 +1203,12 @@
 })();
 </script>
 <footer class="page" id="references">
-  <p class="note">Modèle basé sur l'indice d'endurance de Péronnet et Thibault, valable pour des efforts de 5 min à 5 h.
-    <span class="aide" tabindex="0" aria-label="Pourquoi 5 h au maximum ?" aria-describedby="aide-5h">?<span role="tooltip" id="aide-5h"><strong>Pourquoi 5 h au maximum ?</strong> Sur les efforts longs, la performance dépend de bien plus que de la condition physique : gestion de l'allure, alimentation et hydratation, choix du matériel, préparation physique et mentale. Une erreur sur un seul de ces points peut déjà coûter cher, et plusieurs erreurs se cumulent. Sur les distances courtes, ces effets restent faibles. Pour que ces écarts ne faussent pas l'indice d'endurance, le modèle de cet outil limite l'effort à 5 h.</span></span></p>
   <details class="sources">
     <summary><h2>📚 Sources et études</h2> <span class="sous">· études et ouvrages sur lesquels s'appuie l'outil</span></summary>
     <h3>Modèle d'endurance, prédictions et fiabilité</h3>
     <ul class="note">
-      <li>Péronnet F., Thibault G., <a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology 67(1), 1989 : modèle de l'indice d'endurance (% de VMA selon la durée).</li>
+      <li>Péronnet F., Thibault G., <a href="https://doi.org/10.1152/jappl.1989.67.1.453" target="_blank" rel="noopener"><cite>Mathematical analysis of running performance and world running records</cite></a>, Journal of Applied Physiology 67(1), 1989 : modèle de l'indice d'endurance (% de VMA selon la durée), base de l'outil, appliqué ici aux efforts de 5 min à 5 h.
+    <span class="aide" tabindex="0" aria-label="Pourquoi 5 h au maximum ?" aria-describedby="aide-5h">?<span role="tooltip" id="aide-5h"><strong>Pourquoi 5 h au maximum ?</strong> Sur les efforts longs, la performance dépend de bien plus que de la condition physique : gestion de l'allure, alimentation et hydratation, choix du matériel, préparation physique et mentale. Une erreur sur un seul de ces points peut déjà coûter cher, et plusieurs erreurs se cumulent. Sur les distances courtes, ces effets restent faibles. Pour que ces écarts ne faussent pas l'indice d'endurance, le modèle de cet outil limite l'effort à 5 h.</span></span></li>
       <li>Vickers A. J., Vertosick E. A., <a href="https://doi.org/10.1186/s13102-016-0052-y" target="_blank" rel="noopener"><cite>An empirical study of race times in recreational endurance runners</cite></a>, BMC Sports Science, Medicine and Rehabilitation 8:26, 2016 : coefficients du profil d'entraînement (volume, âge, sexe), durée médiane du semi (1 h 39 hommes, 1 h 56 femmes) et prédictions fiables jusqu'au semi, à la base des seuils de fiabilité.</li>
       <li>Riegel P. S., <a href="https://www.jstor.org/stable/27850427" target="_blank" rel="noopener"><cite>Athletic records and human endurance</cite></a>, American Scientist 69(3), 1981 : loi de puissance des temps de course, référence de comparaison pour l'extrapolation.</li>
     </ul>

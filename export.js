@@ -61,25 +61,139 @@
     return '﻿' + [ENTETE, ...lignes(d)].map(l => l.map(champ).join(';')).join('\r\n') + '\r\n';
   }
 
-  /** Classeur .xlsx minimal (chaînes en ligne, sans styles) : feuilles Plan, Répartition, Paramètres */
-  function xlsx(d) {
+  /* ---------- Excel (.xlsx mis en forme) ---------- */
+
+  // Styles : polices, fonds et cellules (index des cellXfs par nom). Couleurs de la charte (zones Z1 – Z6 en teinte claire, bandeaux de semaine)
+  const POLICES = ['', '<b/>', '<b/><color rgb="FFFFFFFF"/>', '<i/><color rgb="FF4A5568"/>', '<b/><sz val="14"/><color rgb="FF0E6EE0"/>', '<color rgb="FF4A5568"/>'];
+  const FONDS = { entete: 'E3F0FF', Charge: '1583FF', Décharge: '2F9E8F', Affûtage: '6B7F99', Compétition: 'C62828', qualite: 'F4F8FD',
+    Z1: 'E1E5EB', Z2: 'DCE9F7', Z3: 'D5ECE9', Z4: 'DEECDB', Z5: 'F9ECCC', Z6: 'F7DDD5' };
+  const NOMS_FONDS = Object.keys(FONDS);
+  const XF = []; const S = {};
+  const style = (nom, { police = 0, fond = null, bord = 0, fmt = 0, align = '' } = {}) => { S[nom] = XF.length; XF.push({ police, fond: fond ? NOMS_FONDS.indexOf(fond) + 2 : 0, bord, fmt, align }); };
+  const HAUT = 'vertical="top" wrapText="1"';
+  style('defaut');
+  style('titre', { police: 4 });
+  style('sous', { police: 3, align: 'vertical="top" wrapText="1"' });
+  style('entete', { police: 1, fond: 'entete', bord: 1, align: 'vertical="center" wrapText="1"' });
+  ['Charge', 'Décharge', 'Affûtage', 'Compétition'].forEach(t => style('sem' + t, { police: 2, fond: t, align: 'vertical="center"' }));
+  style('note', { police: 3, align: HAUT });
+  for (const q of ['', 'Q']) { // séance simple, séance de qualité (fond léger)
+    const fond = q ? 'qualite' : null;
+    style('txt' + q, { fond, bord: 1, align: HAUT });
+    style('gras' + q, { police: 1, fond, bord: 1, align: HAUT });
+    style('min' + q, { fond, bord: 1, fmt: 1, align: 'vertical="top"' });
+    style('km' + q, { fond, bord: 1, fmt: 164, align: 'vertical="top"' });
+  }
+  style('etape', { police: 5, fond: 'qualite', bord: 1, align: 'vertical="top" indent="1"' });
+  ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6'].forEach(z => style(z, { police: 1, fond: z, bord: 1, align: 'horizontal="center" vertical="top"' }));
+  style('label', { police: 1, bord: 1, align: HAUT });
+  style('nombre', { bord: 1, fmt: 164, align: 'vertical="top"' });
+  const STYLES = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts>` +
+    `<fonts count="${POLICES.length}">${POLICES.map(p => `<font>${p}${p.includes('<sz') ? '' : '<sz val="11"/>'}<name val="Calibri"/></font>`).join('')}</fonts>` +
+    `<fills count="${NOMS_FONDS.length + 2}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${
+      NOMS_FONDS.map(n => `<fill><patternFill patternType="solid"><fgColor rgb="FF${FONDS[n]}"/><bgColor indexed="64"/></patternFill></fill>`).join('')}</fills>` +
+    `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFD5DBE3"/></bottom><diagonal/></border></borders>` +
+    `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${XF.length}">${XF.map(x =>
+      `<xf numFmtId="${x.fmt}" fontId="${x.police}" fillId="${x.fond}" borderId="${x.bord}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${x.align ? `<alignment ${x.align}/>` : ''}</xf>`).join('')}</cellXfs>` +
+    `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+
+  const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+  const fDate = (iso) => { const t = new Date(iso + 'T00:00:00Z'); return `${JOURS[t.getUTCDay()]} ${String(t.getUTCDate()).padStart(2, '0')}/${String(t.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const fDuree = (m) => { m = Math.round(m); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
+  const fKm = (k) => String(Math.round(k * 10) / 10).replace('.', ',');
+  const ALLURE = / ?\(([<>] )?(\d+:\d{2}(?:–\d+:\d{2})?) \/km(?:, Z[1-6])?\)/; // « (4:32–5:07 /km) », « (3:57 /km, Z5) », « (< 3:26 /km) »
+  /** Parties d'une séance de qualité, d'après sa description (« Échauffement … · bloc · 2 min de trot · bloc · retour au calme … ») :
+      [{ etape, contenu, zone, allure }] ; null pour une séance simple */
+  const parties = (x) => {
+    if (!/^Échauffement/.test(x.description) || !x.description.includes(' · ')) return null; // compétition (échauffement puis course) : une seule ligne
+    let n = 0;
+    const morceaux = x.description.replace(/\.$/, '').split(' · ');
+    return morceaux.map((m, i) => {
+      const etape = i === 0 ? 'Échauffement' : /^retour au calme/i.test(m) ? 'Retour au calme'
+        : /^\d+ min (de trot|à l'arrêt)$/.test(m) ? 'Entre deux blocs' : `Bloc ${++n}`;
+      const a = m.match(ALLURE), allure = a ? `${a[1] || ''}${a[2]} /km` : '', zone = (m.match(/\b(Z[1-6])\b/) || [])[1] || (etape.startsWith('Bloc') ? x.zone : '');
+      return { etape, contenu: m.replace(ALLURE, '').replace(/^(Échauffement|retour au calme) /i, '').replace(/^./, c => c.toUpperCase()), zone, allure };
+    }).map((p, _, a) => (a.filter(q => q.etape.startsWith('Bloc')).length === 1 && p.etape === 'Bloc 1' ? { ...p, etape: 'Bloc' } : p));
+  };
+
+  /** Feuille : lignes [{ c: [cellules], ht, fusion }] ; cellule = valeur ou { v, s } (s : nom de style) ; largeurs des colonnes, lignes figées */
+  function feuille({ lignes: L, largeurs, figer = 0 }) {
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const col = (i) => (i >= 26 ? col(Math.floor(i / 26) - 1) : '') + String.fromCharCode(65 + (i % 26));
-    const feuille = (rows) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${
-      rows.map((r, i) => `<row r="${i + 1}">${r.map((v, j) => (v === null || v === undefined || v === '' ? ''
-        : typeof v === 'number' ? `<c r="${col(j)}${i + 1}"><v>${v}</v></c>`
-        : `<c r="${col(j)}${i + 1}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`)).join('')}</row>`).join('')}</sheetData></worksheet>`;
-    const feuilles = [['Plan', [ENTETE, ...lignes(d)]], ['Répartition', [['Zone', 'Répartition visée (%)', 'Plan (%)'], ...d.repartition.map(r => [r.zone, r.cible, r.plan])]],
-      ['Paramètres', parametres(d)]];
+    const fusions = [];
+    const rows = L.map((l, i) => {
+      const r = i + 1;
+      if (l.fusion) fusions.push(`A${r}:${col(largeurs.length - 1)}${r}`);
+      // hauteur : estimée d'après le texte le plus long rapporté à la largeur de sa colonne (Excel ne l'ajuste pas à l'ouverture)
+      const lignesTexte = Math.max(1, ...l.c.map((x, j) => { const v = x && typeof x === 'object' ? x.v : x; return typeof v === 'string' ? Math.ceil(v.length / ((l.fusion ? largeurs.reduce((a, b) => a + b, 0) : largeurs[j]) * 1.1)) : 1; }));
+      const ht = l.ht || (lignesTexte > 1 ? lignesTexte * 15 : 0);
+      return `<row r="${r}"${ht ? ` ht="${ht}" customHeight="1"` : ''}>${l.c.map((x, j) => {
+        const { v, s } = x && typeof x === 'object' ? x : { v: x, s: null };
+        const att = `r="${col(j)}${r}"${s ? ` s="${S[s]}"` : ''}`;
+        return v === null || v === undefined || v === '' ? (s ? `<c ${att}/>` : '')
+          : typeof v === 'number' ? `<c ${att}><v>${v}</v></c>` : `<c ${att} t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+      }).join('')}</row>`;
+    }).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` +
+      `<sheetViews><sheetView workbookViewId="0" showGridLines="0">${figer ? `<pane ySplit="${figer}" topLeftCell="A${figer + 1}" activePane="bottomLeft" state="frozen"/>` : ''}</sheetView></sheetViews>` +
+      `<sheetFormatPr defaultRowHeight="15"/><cols>${largeurs.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` +
+      `<sheetData>${rows}</sheetData>${fusions.length ? `<mergeCells count="${fusions.length}">${fusions.map(f => `<mergeCell ref="${f}"/>`).join('')}</mergeCells>` : ''}` +
+      `<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  }
+  const zoneCell = (z, q = '') => ({ v: z, s: /^Z[1-6]$/.test(z) ? z : 'txt' + q });
+
+  /** Feuille Plan : bandeau par semaine (type, phase, dates, temps, distance, notes), une ligne par séance, et pour une séance de qualité
+      une sous-ligne par partie (échauffement, blocs de travail, transitions, retour au calme) avec sa zone et son allure */
+  function feuillePlan(d) {
+    const C = d.contexte, L = [];
+    const vide = (n) => Array(n).fill('');
+    L.push({ c: [{ v: d.titre, s: 'titre' }], fusion: true, ht: 24 });
+    L.push({ c: [{ v: [C.allure, `${C.semaines} semaines`, `${C.jours} jours de course par semaine`, C.doubles ? `${C.doubles} doublé${C.doubles > 1 ? 's' : ''}` : '',
+      `volume ${{ max: 'maxi', min: 'mini' }[C.typeVolume] || 'de référence'} ${fDuree(C.volumeH * 60)} par semaine`, /^cycle/i.test(C.cycle) ? C.cycle : `cycle ${C.cycle}`, C.limite ? `longueur maximale ${C.limite}` : ''].filter(Boolean).join(' · '), s: 'sous' }], fusion: true });
+    L.push({ c: [] });
+    L.push({ c: ['Jour', 'Moment', 'Séance', 'Zone', 'Durée (min)', 'Distance (km)', 'Partie', 'Déroulé', 'Allure'].map(v => ({ v, s: 'entete' })), ht: 30 });
+    for (const s of d.semaines) {
+      const dates = s.debut ? ` · du ${fDate(s.debut)} au ${fDate(s.fin)}` : '';
+      const type = FONDS[s.type] ? s.type : 'Charge';
+      L.push({ c: [{ v: `Semaine ${s.numero} · ${s.type}${s.phase ? ` · ${s.phase}` : ''}${dates} · ${fDuree(s.tempsMin)}${s.km ? ` · ≈ ${fKm(s.km)} km` : ''}`, s: 'sem' + type }, ...vide(8).map(() => ({ v: '', s: 'sem' + type }))], ht: 22, fusion: true });
+      (s.notes || []).forEach(n => L.push({ c: [{ v: n, s: 'note' }], fusion: true }));
+      for (const j of s.jours) j.seances.forEach((x, k) => {
+        const P = parties(x), q = P ? 'Q' : '';
+        L.push({ c: [{ v: k ? '' : j.date ? fDate(j.date) : `Jour ${j.jour}`, s: 'gras' + q }, { v: x.moment, s: 'txt' + q }, { v: x.nom, s: 'gras' + q }, zoneCell(x.zone, q),
+          { v: x.dureeMin, s: 'min' + q }, { v: x.km ?? '', s: 'km' + q }, { v: '', s: 'txt' + q }, { v: P ? '' : x.description, s: 'txt' + q }, { v: '', s: 'txt' + q }] });
+        (P || []).forEach(p => L.push({ c: [...vide(3).map(() => ({ v: '', s: 'txtQ' })), zoneCell(p.zone, 'Q'), ...vide(2).map(() => ({ v: '', s: 'txtQ' })),
+          { v: p.etape, s: 'etape' }, { v: p.contenu, s: 'txtQ' }, { v: p.allure, s: 'txtQ' }] }));
+      });
+      L.push({ c: [] });
+    }
+    return feuille({ lignes: L, largeurs: [12, 11, 36, 7, 9, 10, 18, 70, 16], figer: 4 });
+  }
+  /** Feuille Semaines : une ligne par semaine (récapitulatif) */
+  function feuilleSemaines(d) {
+    const qual = (s) => s.jours.reduce((a, j) => a + j.seances.filter(x => parties(x)).length, 0);
+    const L = [{ c: ['Semaine', 'Type', 'Phase', 'Début', 'Fin', 'Temps', 'Distance (km)', 'Séances', 'Séances de qualité', 'Notes'].map(v => ({ v, s: 'entete' })), ht: 30 },
+      ...d.semaines.map(s => ({ c: [{ v: s.numero, s: 'label' }, { v: s.type, s: 'txt' }, { v: s.phase || '', s: 'txt' }, { v: s.debut ? fDate(s.debut) : '', s: 'txt' }, { v: s.fin ? fDate(s.fin) : '', s: 'txt' },
+        { v: fDuree(s.tempsMin), s: 'txt' }, { v: s.km ?? '', s: 'nombre' }, { v: s.jours.reduce((a, j) => a + j.seances.length, 0), s: 'min' }, { v: qual(s), s: 'min' }, { v: (s.notes || []).join(' '), s: 'txt' }] }))];
+    return feuille({ lignes: L, largeurs: [9, 12, 22, 11, 11, 10, 12, 9, 11, 70], figer: 1 });
+  }
+  const feuilleRepartition = (d) => feuille({ lignes: [{ c: ['Zone', 'Répartition visée (%)', 'Plan (%)'].map(v => ({ v, s: 'entete' })), ht: 30 },
+    ...d.repartition.map(r => ({ c: [zoneCell(r.zone), { v: r.cible, s: 'nombre' }, { v: r.plan, s: 'nombre' }] }))], largeurs: [10, 14, 12], figer: 1 });
+  const feuilleParametres = (d) => feuille({ lignes: parametres(d).map(([k, v]) => ({ c: [{ v: k, s: 'label' }, { v, s: 'txt' }] })), largeurs: [30, 60] });
+
+  /** Classeur .xlsx (chaînes en ligne, styles) : feuilles Plan, Semaines, Répartition, Paramètres */
+  function xlsx(d) {
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const feuilles = [['Plan', feuillePlan(d)], ['Semaines', feuilleSemaines(d)], ['Répartition', feuilleRepartition(d)], ['Paramètres', feuilleParametres(d)]];
     const xml = (s) => enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${s}`);
-    const NS = 'http://schemas.openxmlformats.org', REL = `${NS}/officeDocument/2006/relationships`;
+    const NS = 'http://schemas.openxmlformats.org', REL = `${NS}/officeDocument/2006/relationships`, n = feuilles.length;
     return zip([
-      { nom: '[Content_Types].xml', donnees: xml(`<Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${
+      { nom: '[Content_Types].xml', donnees: xml(`<Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${
         feuilles.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`) },
       { nom: '_rels/.rels', donnees: xml(`<Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`) },
-      { nom: 'xl/workbook.xml', donnees: xml(`<workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${REL}"><sheets>${feuilles.map(([n], i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`) },
-      { nom: 'xl/_rels/workbook.xml.rels', donnees: xml(`<Relationships xmlns="${NS}/package/2006/relationships">${feuilles.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`) },
-      ...feuilles.map(([, rows], i) => ({ nom: `xl/worksheets/sheet${i + 1}.xml`, donnees: enc.encode(feuille(rows)) }))
+      { nom: 'xl/workbook.xml', donnees: xml(`<workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${REL}"><sheets>${feuilles.map(([nom], i) => `<sheet name="${esc(nom)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`) },
+      { nom: 'xl/_rels/workbook.xml.rels', donnees: xml(`<Relationships xmlns="${NS}/package/2006/relationships">${feuilles.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${n + 1}" Type="${REL}/styles" Target="styles.xml"/></Relationships>`) },
+      { nom: 'xl/styles.xml', donnees: xml(STYLES) },
+      ...feuilles.map(([, contenu], i) => ({ nom: `xl/worksheets/sheet${i + 1}.xml`, donnees: enc.encode(contenu) }))
     ]);
   }
 
